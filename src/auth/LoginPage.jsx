@@ -1,80 +1,135 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { login } from '../services/login';
+import Logo from '../assets/Login.png';
 
 const LoginPage = ({ onLogin, onSwitchToRegister }) => {
+  const [step, setStep] = useState(0);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!username || !password) {
-      setError('Username and password are required');
+  const validateStep = () => {
+    if (step === 0) return username.trim().length >= 3;
+    if (step === 1) return password.length >= 6;
+    return false;
+  };
+
+  const nextStep = async () => {
+    if (!validateStep()) {
+      setError('Please fill in valid information.');
       return;
     }
     setError('');
-    onLogin({ username }); // Simulate successful login (replace with API call)
+
+    if (step === 0) {
+      setStep(1);
+    } else {
+      setLoading(true);
+      try {
+        const result = await login(username, password);
+        if (result.success || result.token) {
+          onLogin(result);
+          navigate('/home', {
+            state: { success: 'Login successful!' },
+          });
+        } else {
+          setError('Login failed. Please check your credentials.');
+        }
+      } catch (err) {
+        setError('Login failed. Please check your credentials.');
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      nextStep();
+    }
   };
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100 flex items-center justify-center px-4 sm:px-6">
-      <div className="w-full max-w-xs sm:max-w-sm md:max-w-md bg-white p-6 sm:p-8 rounded-2xl shadow-2xl transform transition-all duration-300 hover:shadow-3xl">
-        <h2 className="text-2xl sm:text-3xl font-extrabold text-center text-gray-900 mb-6 sm:mb-8 tracking-tight">
-          VoIP Login
-        </h2>
-        {error && (
-          <div
-            className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm sm:text-base animate-fade-in"
-            role="alert"
-          >
-            {error}
-          </div>
-        )}
-        <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
-          <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-              Username
-            </label>
-            <input
-              id="username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value.trim())}
-              className="mt-1 w-full p-3 sm:p-4 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-gray-50 transition-all duration-200 hover:border-blue-300 text-sm sm:text-base"
-              placeholder="Enter your username"
-              aria-required="true"
-              required
-              autoFocus
-            />
-          </div>
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full p-3 sm:p-4 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-gray-50 transition-all duration-200 hover:border-blue-300 text-sm sm:text-base"
-              placeholder="Enter your password"
-              aria-required="true"
-              required
-            />
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100 flex items-center justify-center px-4">
+      <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-8 w-full max-w-md transition-all duration-500 overflow-hidden">
+        {/* Static Header */}
+        <div className="flex flex-col items-center mb-4">
+          <img
+            src={Logo}
+            alt="Logo"
+            className="w-24 h-24 sm:w-28 sm:h-28 rounded-full object-contain mb-2"
+          />
+          <h3 className="text-center text-sm font-bold">
+            THE INSTITUTE OF FINANCE MANAGEMENT
+          </h3>
+          <h2 className="text-xl sm:text-2xl font-extrabold text-center text-gray-900 mt-1">
+            VoIP Login
+          </h2>
+        </div>
+
+        <form className="space-y-4">
+          {[
+            {
+              label: 'Username',
+              type: 'text',
+              value: username,
+              onChange: setUsername,
+              placeholder: 'Enter your username',
+            },
+            {
+              label: 'Password',
+              type: 'password',
+              value: password,
+              onChange: setPassword,
+              placeholder: 'Enter your password',
+            },
+          ].map((field, index) => (
+            <div
+              key={index}
+              className={`overflow-hidden transition-all duration-500 ${
+                step === index ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
+              }`}
+            >
+              <label className="block text-sm font-medium">{field.label}</label>
+              <input
+                type={field.type}
+                value={field.value}
+                onChange={(e) => field.onChange(e.target.value)}
+                placeholder={field.placeholder}
+                onKeyDown={handleKeyDown}
+                autoFocus={step === index}
+                disabled={loading}
+                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-400 bg-gray-50"
+              />
+            </div>
+          ))}
+
+          {error && (
+            <p className="text-red-600 text-center text-sm animate-pulse">{error}</p>
+          )}
+
           <button
-            type="submit"
-            className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-3 sm:p-4 rounded-lg hover:from-blue-600 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all duration-200 transform hover:scale-105 text-sm sm:text-base font-semibold"
-            aria-label="Log in"
+            type="button"
+            onClick={nextStep}
+            disabled={loading}
+            className={`w-full mt-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-3 rounded-lg hover:from-blue-600 hover:to-indigo-700 font-semibold focus:ring-2 focus:ring-blue-400 transition-all duration-200 transform ${
+              loading ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
           >
-            Log In
+            {step === 0 ? 'Next' : loading ? 'Logging In...' : 'Login'}
           </button>
         </form>
-        <p className="mt-4 text-center text-sm text-gray-600">
+
+        <p className="mt-6 text-center text-sm text-gray-600">
           Don't have an account?{' '}
           <button
             onClick={onSwitchToRegister}
             className="text-blue-500 hover:text-blue-700 font-medium focus:outline-none focus:underline"
-            aria-label="Switch to register"
+            disabled={loading}
           >
             Register
           </button>

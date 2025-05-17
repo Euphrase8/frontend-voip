@@ -5,9 +5,8 @@ import HomePage from './pages/HomePage';
 import ContactsPage from './pages/ContactsPage';
 import CallLogsPage from './pages/CallLogsPage';
 import CallingPage from './pages/CallingPage';
-import Sidebar from './components/sidebar';
 import Loader from './components/loader';
-import TopNav from './components/TopNav';
+import DashboardPage from './pages/DashboardPage';
 
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -102,10 +101,8 @@ const App = () => {
     <div className="min-h-screen w-full bg-gray-100">
       {isLoggedIn ? (
         <div className="flex w-full h-screen">
-          <Sidebar user={user} onLogout={handleLogout} onNavigate={navigate} activePage={currentPage} />
           <div className="flex-1 flex flex-col w-full">
-            <TopNav user={user} callStatus={callStatus} />
-            {currentPage === 'home' && <HomePage onCall={startCall} />}
+            {currentPage === 'home' && <DashboardPage onCall={startCall} />}
             {currentPage === 'contacts' && <ContactsPage onCall={startCall} />}
             {currentPage === 'callLogs' && <CallLogsPage />}
             {currentPage === 'calling' && (

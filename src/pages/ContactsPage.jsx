@@ -16,7 +16,7 @@ const Contact = ({ contact, onCall }) => {
   };
 
   return (
-    <div className="flex items-center justify-between p-3 sm:p-4 bg-white rounded-xl shadow-md mb-3 transform transition-all duration-200 hover:shadow-lg animate-fade-in">
+    <div className="flex items-center justify-between p-3 sm:p-4  rounded-xl shadow-md mb-3 transform transition-all duration-200 hover:shadow-lg animate-fade-in">
       <div className="flex items-center space-x-3 sm:space-x-4">
         
         <Avatar alt={`${contact.name}'s avatar`} src="/static/images/avatar/2.jpg" 
@@ -51,17 +51,18 @@ const Contact = ({ contact, onCall }) => {
 };
 
 const ContactsPage = ({ onCall }) => (
-  <div className="flex-1 p-4 sm:p-6 bg-gradient-to-br from-gray-100 to-blue-50 overflow-y-auto">
+  <div className="">
     <div className="max-w-4xl mx-auto">
-      <h2 className="text-lg sm:text-xl font-semibold mb-4 text-gray-800 flex items-center space-x-2">
+      <h2 className="text-lg sm:text-xl font-semibold mb-4 text-gray-300 flex items-center space-x-2">
         <span className="animate-bounce">📇</span>
         <span>Contacts</span>
       </h2>
-      <div className="space-y-3">
-        {contacts.map((contact) => (
-          <Contact key={contact.id} contact={contact} onCall={onCall} />
-        ))}
-      </div>
+      <div className="space-y-3 bg-white/80 backdrop-blur-md p-4 sm:p-6 rounded-2xl shadow-sm max-h-96 overflow-y-auto">
+  {contacts.map((contact) => (
+    <Contact key={contact.id} contact={contact} onCall={onCall} />
+  ))}
+</div>
+
     </div>
   </div>
 );
