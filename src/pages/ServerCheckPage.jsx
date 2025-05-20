@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from 'react';
 import {
   Button,
   CircularProgress,
@@ -6,79 +6,80 @@ import {
   Box,
   Card,
   CardContent,
-} from "@mui/material";
-import { CheckCircle, Error, ArrowForward } from "@mui/icons-material";
-import { useNavigate } from "react-router-dom";
-import axios from "axios";
-import Logo from "../assets/Login.png";
-import TopNav from "../components/TopNav";
+} from '@mui/material';
+import { CheckCircle, Error, ArrowForward } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import Logo from '../assets/Login.png';
 
-const API_URL = "http://192.168.1.164:8080";
-const WS_URL = "ws://192.168.1.194:8088/ws";
+const API_URL = 'http://192.168.1.164:8080';
+const WS_URL = 'ws://192.168.1.194:8088/ws';
 
 const ServerCheckPage = ({ onSwitchToLogin, onSwitchToRegister }) => {
   const navigate = useNavigate();
+
+  // Dark mode with persistence
+  const [darkMode, setDarkMode] = useState(false);
+
+  useEffect(() => {
+    const savedMode = localStorage.getItem('darkMode') === 'true';
+    setDarkMode(savedMode);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('darkMode', darkMode);
+  }, [darkMode]);
+
+  const toggleDarkMode = () => setDarkMode((prev) => !prev);
+
+  // Server check states
   const [checks, setChecks] = useState({
-    backend: { status: "pending", message: "Checking backend API..." },
-    websocket: { status: "pending", message: "Checking Asterisk WebSocket..." },
-    webrtc: { status: "pending", message: "Checking WebRTC support..." },
+    backend: { status: 'pending', message: 'Checking backend API...' },
+    websocket: { status: 'pending', message: 'Checking Asterisk WebSocket...' },
+    webrtc: { status: 'pending', message: 'Checking WebRTC support...' },
   });
   const [isChecking, setIsChecking] = useState(true);
 
-  // Dark mode state & toggle function
-  const [darkMode, setDarkMode] = useState(false);
-  const toggleDarkMode = () => setDarkMode((prev) => !prev);
-
   useEffect(() => {
     const performChecks = async () => {
+      // Backend API check
       try {
         await axios.get(`${API_URL}/health`, { timeout: 5000 });
         setChecks((prev) => ({
           ...prev,
-          backend: { status: "success", message: "Backend API is reachable" },
+          backend: { status: 'success', message: 'Backend API is reachable' },
         }));
       } catch (error) {
         setChecks((prev) => ({
           ...prev,
           backend: {
-            status: "error",
+            status: 'error',
             message: `Backend API unreachable: ${error.message}`,
           },
         }));
       }
 
+      // WebSocket check
       try {
         const ws = new WebSocket(WS_URL);
         ws.onopen = () => {
           setChecks((prev) => ({
             ...prev,
-            websocket: {
-              status: "success",
-              message: "Asterisk WebSocket connected",
-            },
+            websocket: { status: 'success', message: 'Asterisk WebSocket connected' },
           }));
           ws.close();
         };
         ws.onerror = () => {
           setChecks((prev) => ({
             ...prev,
-            websocket: {
-              status: "error",
-              message: "Asterisk WebSocket connection failed",
-            },
+            websocket: { status: 'error', message: 'Asterisk WebSocket connection failed' },
           }));
         };
         setTimeout(() => {
-          if (
-            ws.readyState !== WebSocket.OPEN &&
-            ws.readyState !== WebSocket.CLOSED
-          ) {
+          if (ws.readyState !== WebSocket.OPEN && ws.readyState !== WebSocket.CLOSED) {
             setChecks((prev) => ({
               ...prev,
-              websocket: {
-                status: "error",
-                message: "Asterisk WebSocket timeout",
-              },
+              websocket: { status: 'error', message: 'Asterisk WebSocket timeout' },
             }));
             ws.close();
           }
@@ -86,13 +87,11 @@ const ServerCheckPage = ({ onSwitchToLogin, onSwitchToRegister }) => {
       } catch (error) {
         setChecks((prev) => ({
           ...prev,
-          websocket: {
-            status: "error",
-            message: `WebSocket error: ${error.message}`,
-          },
+          websocket: { status: 'error', message: `WebSocket error: ${error.message}` },
         }));
       }
 
+      // WebRTC support check
       try {
         const hasWebRTC = !!(
           navigator.mediaDevices &&
@@ -102,19 +101,14 @@ const ServerCheckPage = ({ onSwitchToLogin, onSwitchToRegister }) => {
         setChecks((prev) => ({
           ...prev,
           webrtc: {
-            status: hasWebRTC ? "success" : "error",
-            message: hasWebRTC
-              ? "WebRTC is supported"
-              : "WebRTC is not supported",
+            status: hasWebRTC ? 'success' : 'error',
+            message: hasWebRTC ? 'WebRTC is supported' : 'WebRTC is not supported',
           },
         }));
       } catch (error) {
         setChecks((prev) => ({
           ...prev,
-          webrtc: {
-            status: "error",
-            message: `WebRTC check failed: ${error.message}`,
-          },
+          webrtc: { status: 'error', message: `WebRTC check failed: ${error.message}` },
         }));
       }
 
@@ -124,180 +118,126 @@ const ServerCheckPage = ({ onSwitchToLogin, onSwitchToRegister }) => {
     performChecks();
   }, []);
 
-  const allChecksPassed = Object.values(checks).every(
-    (check) => check.status === "success"
-  );
+  const allChecksPassed = Object.values(checks).every((check) => check.status === 'success');
 
   return (
-    <Box
-      sx={{
-        position: "fixed",
-        inset: 0,
-        display: "flex",
-        flexDirection: "column",
-        bgcolor: darkMode ? "grey.900" : "background.default",
-        color: darkMode ? "grey.100" : "text.primary",
-        transition: "all 0.3s ease",
-      }}
+    <div
+      className={`min-h-screen flex flex-col ${
+        darkMode
+          ? 'bg-gray-900 text-white transition-colors duration-500'
+          : 'bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100 text-gray-900 transition-colors duration-500'
+      }`}
     >
-      <TopNav
-        username={null}
-        onLogin={onSwitchToLogin}
-        darkMode={darkMode}
-        toggleDarkMode={toggleDarkMode}
-      />
-
-      <Box
-        sx={{
-          flexGrow: 1,
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          px: 2,
-        }}
+      {/* Top Navigation */}
+      <nav
+        className={`flex justify-between items-center px-6 py-3 ${
+          darkMode ? 'bg-gray-800' : 'bg-white shadow-md'
+        } transition-colors duration-500`}
       >
-        <Card
-          sx={{
-            width: "100%",
-            maxWidth: 600,
-            borderRadius: 3,
-            boxShadow: 6,
-            p: 4,
-            bgcolor: darkMode ? "grey.800" : "background.paper",
-            color: darkMode ? "grey.100" : "text.primary",
-            transition: "all 0.3s ease",
-          }}
+        <div className="flex items-center space-x-3">
+          <img src={Logo} alt="Logo" className="w-10 h-10 rounded-full object-contain" />
+          <h1 className="text-xl font-bold select-none">VoIP System</h1>
+        </div>
+        <button
+          onClick={toggleDarkMode}
+          aria-label="Toggle Dark Mode"
+          className="px-3 py-1 rounded-full border border-gray-400 focus:outline-none hover:bg-gray-300 dark:hover:bg-gray-700 dark:border-gray-600 transition-colors duration-300"
         >
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              mb: 3,
-            }}
-          >
+          {darkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
+        </button>
+      </nav>
+
+      {/* Main Content */}
+      <div className="flex-grow flex items-center justify-center px-4">
+        <div
+          className={`rounded-2xl shadow-2xl p-8 w-full max-w-md ${
+            darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'
+          } transition-colors duration-500`}
+        >
+          {/* Header Section */}
+          <div className="flex flex-col items-center mb-6">
             <img
               src={Logo}
               alt="Logo"
-              style={{ width: 112, height: 112, borderRadius: "50%", marginBottom: 8 }}
+              className="w-24 h-24 rounded-full object-contain mb-2"
             />
-            <Typography
-              variant="h6"
-              sx={{
-                fontWeight: "bold",
-                textAlign: "center",
-                color: darkMode ? "primary.light" : "primary.main",
-              }}
+            <h3
+              className={`text-sm font-bold text-center ${
+                darkMode ? 'text-gray-300' : 'text-gray-700'
+              }`}
             >
-              The Institute of Finance Management
-            </Typography>
-            <Typography
-              variant="h4"
-              sx={{ mt: 1, fontWeight: "extrabold", textAlign: "center" }}
-            >
+              THE INSTITUTE OF FINANCE MANAGEMENT
+            </h3>
+            <h2 className="text-2xl font-extrabold text-center mt-1">
               VoIP SYSTEM CHECK
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{
-                mt: 1,
-                textAlign: "center",
-                color: darkMode ? "grey.400" : "grey.600",
-              }}
+            </h2>
+            <p
+              className={`text-xs text-center mt-1 ${
+                darkMode ? 'text-gray-400' : 'text-gray-500'
+              }`}
             >
               Secure VoIP Communication
-            </Typography>
-          </Box>
+            </p>
+          </div>
 
-          <CardContent>
-            {Object.entries(checks).map(([key, { status, message }]) => (
-              <Box
-                key={key}
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  mb: 2,
-                  color:
-                    status === "error"
-                      ? "error.main"
-                      : status === "success"
-                      ? "success.main"
-                      : "text.primary",
-                }}
-              >
-                {status === "pending" && (
-                  <CircularProgress
-                    size={24}
-                    sx={{ mr: 2, color: darkMode ? "grey.100" : "grey.700" }}
-                  />
-                )}
-                {status === "success" && (
-                  <CheckCircle sx={{ mr: 2, color: "success.main" }} />
-                )}
-                {status === "error" && <Error sx={{ mr: 2, color: "error.main" }} />}
-                <Typography
-                  sx={{
-                    color: darkMode ? "grey.100" : "text.primary",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  {message}
-                </Typography>
-              </Box>
-            ))}
-
-            {isChecking ? (
+          {/* Checks */}
+          {Object.entries(checks).map(([key, { status, message }]) => (
+            <div key={key} className="flex items-center mb-4">
+              {status === 'pending' && (
+                <CircularProgress size={24} className="mr-2" color={darkMode ? 'inherit' : 'primary'} />
+              )}
+              {status === 'success' && (
+                <CheckCircle className="text-green-500 mr-2" />
+              )}
+              {status === 'error' && (
+                <Error className="text-red-500 mr-2" />
+              )}
               <Typography
-                sx={{ textAlign: "center", mt: 3, color: darkMode ? "grey.300" : "grey.700" }}
+                className={`${darkMode ? 'text-white' : 'text-gray-900'}`}
+                variant="body1"
               >
-                Performing system checks...
+                {message}
               </Typography>
-            ) : allChecksPassed ? (
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  mt: 4,
-                }}
+            </div>
+          ))}
+
+          {/* Actions */}
+          {isChecking ? (
+            <Typography
+              variant="body2"
+              className="text-center mt-4"
+              color={darkMode ? 'textSecondary' : 'textSecondary'}
+            >
+              Performing system checks...
+            </Typography>
+          ) : allChecksPassed ? (
+            <div className="flex justify-between mt-6">
+              <Button
+                variant="contained"
+                startIcon={<ArrowForward />}
+                className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white"
+                onClick={() => onSwitchToLogin()}
               >
-                <Button
-                  variant="contained"
-                  startIcon={<ArrowForward />}
-                  onClick={() => onSwitchToLogin()}
-                  sx={{
-                    background: "linear-gradient(90deg, #3b82f6, #4f46e5)",
-                    color: "white",
-                    "&:hover": {
-                      background: "linear-gradient(90deg, #2563eb, #4338ca)",
-                    },
-                  }}
-                >
-                  Login
-                </Button>
-                <Button
-                  variant="outlined"
-                  onClick={() => onSwitchToRegister()}
-                  sx={{
-                    borderColor: darkMode ? "primary.light" : "primary.main",
-                    color: darkMode ? "primary.light" : "primary.main",
-                    "&:hover": {
-                      backgroundColor: darkMode ? "rgba(59,130,246,0.1)" : "rgba(59,130,246,0.05)",
-                      borderColor: darkMode ? "primary.light" : "primary.main",
-                    },
-                  }}
-                >
-                  Register
-                </Button>
-              </Box>
-            ) : (
-              <Typography sx={{ textAlign: "center", mt: 3, color: "error.main" }}>
-                Please resolve errors before proceeding.
-              </Typography>
-            )}
-          </CardContent>
-        </Card>
-      </Box>
-    </Box>
+                Login
+              </Button>
+              <Button
+                variant="outlined"
+                className={`border-blue-500 text-blue-500 hover:bg-blue-50 ${
+                  darkMode ? 'dark:border-blue-400 dark:text-blue-400' : ''
+                }`}
+                onClick={() => onSwitchToRegister()}
+              >
+                Register
+              </Button>
+            </div>
+          ) : (
+            <Typography className="text-center text-red-500 mt-4">
+              Please resolve errors before proceeding.
+            </Typography>
+          )}
+        </div>
+      </div>
+    </div>
   );
 };
 
