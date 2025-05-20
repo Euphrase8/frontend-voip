@@ -1,11 +1,15 @@
+// src/services/login.js
 import axios from "axios";
 
-const API_URL = "http://192.168.1.164:8080"; // Make sure backend allows CORS from your frontend
+const API_URL = "http://192.168.1.164:8080";
 
-// Get token from localStorage
+// Retrieve token from localStorage
 export const getToken = () => localStorage.getItem("token");
 
-// Login function
+// Retrieve extension from localStorage
+export const getExtension = () => localStorage.getItem("extension");
+
+// Perform login and store token & extension
 export const login = async (username, password) => {
   try {
     const response = await axios.post(`${API_URL}/login`, {
@@ -13,15 +17,19 @@ export const login = async (username, password) => {
       password,
     });
 
-    // Ensure response contains token
     if (response.data && response.data.token) {
-      const { token } = response.data;
+      const { token, message, extension } = response.data;
+
+      // Save to localStorage
       localStorage.setItem("token", token);
+      localStorage.setItem("extension", extension);
 
       return {
         success: true,
         token,
-        user: response.data.user || null, // Optional user info
+        extension,
+        message: message || "Login successful",
+        user: response.data,
       };
     } else {
       return {
@@ -32,11 +40,9 @@ export const login = async (username, password) => {
   } catch (error) {
     let message = "Login failed. Please try again.";
 
-    if (error.response) {
-      // Server responded with a status outside 2xx
+    if (error.response && error.response.data) {
       message = error.response.data.message || "Invalid credentials";
     } else if (error.request) {
-      // No response from server
       message = "No response from server. Check your connection.";
     } else {
       message = error.message;

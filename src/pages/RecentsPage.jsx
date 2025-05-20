@@ -1,5 +1,6 @@
+// src/pages/RecentsPage.jsx
 import React from 'react';
-import CallLog from './CallLogsPage';
+import CallLog from '../pages/CallLogsPage';
 
 const RecentsPage = ({ callLogs }) => (
   <div className="">

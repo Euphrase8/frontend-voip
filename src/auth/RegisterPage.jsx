@@ -1,16 +1,18 @@
-import React, { useState } from "react";
-import Logo from "../assets/Login.png";
-import { register } from "../services/register";
+import React, { useState } from 'react';
+import { TextField, Button, Select, MenuItem, FormControl, InputLabel, Tooltip } from '@mui/material';
+import { HowToReg as RegisterIcon } from '@mui/icons-material';
+import { register } from '../services/register';
+import Logo from '../assets/Login.png';
 
 const RegisterPage = ({ onSwitchToLogin }) => {
   const [step, setStep] = useState(0);
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState("user");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState('user');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
+  const [notification, setNotification] = useState(null);
 
   const validateStep = () => {
     switch (step) {
@@ -19,7 +21,7 @@ const RegisterPage = ({ onSwitchToLogin }) => {
       case 1:
         return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
       case 2:
-        return role === "user" || role === "admin";
+        return ['admin', 'emergency', 'faculty', 'student'].includes(role);
       case 3:
         return password.length >= 6;
       case 4:
@@ -31,32 +33,39 @@ const RegisterPage = ({ onSwitchToLogin }) => {
 
   const nextStep = async () => {
     if (!validateStep()) {
-      setError("Please fill in valid information.");
+      setNotification({ message: 'Please fill in valid information.', type: 'error' });
+      setTimeout(() => setNotification(null), 3000);
       return;
     }
-
-    setError("");
+    setError('');
+    setNotification(null);
 
     if (step < 4) {
       setStep(step + 1);
     } else {
-      // Final step: call API
       try {
         const res = await register(username, email, password, role);
-        setSuccess(res.message || "Registration successful!");
-        setTimeout(() => {
-          onSwitchToLogin();
-        }, 1500);
+        if (res.success) {
+          setNotification({ 
+            message: `${res.message}. Assigned extension: ${res.extension}`, 
+            type: 'success' 
+          });
+          setTimeout(() => {
+            onSwitchToLogin();
+          }, 3000);
+        } else {
+          setNotification({ message: res.message, type: 'error' });
+          setTimeout(() => setNotification(null), 3000);
+        }
       } catch (err) {
-        setError(
-          err.response?.data?.message || "Registration failed. Try again."
-        );
+        setNotification({ message: 'Registration failed. Try again.', type: 'error' });
+        setTimeout(() => setNotification(null), 3000);
       }
     }
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === "Enter") {
+    if (e.key === 'Enter') {
       e.preventDefault();
       nextStep();
     }
@@ -80,6 +89,17 @@ const RegisterPage = ({ onSwitchToLogin }) => {
           </h2>
         </div>
 
+        {/* Notification Toast */}
+        {notification && (
+          <div
+            className={`fixed top-20 right-4 z-50 p-3 rounded-lg shadow-lg animate-[fadeInUp_0.6s_ease-out_forwards] ${
+              notification.type === 'success' ? 'bg-green-500/80' : 'bg-red-500/80'
+            }`}
+          >
+            <span className="text-sm font-medium text-white">{notification.message}</span>
+          </div>
+        )}
+
         {/* Form Inputs */}
         <form className="space-y-4">
           {[
@@ -102,7 +122,7 @@ const RegisterPage = ({ onSwitchToLogin }) => {
               value: role,
               onChange: setRole,
               type: "select",
-              options: ["user", "admin"],
+              options: ['admin', 'emergency', 'faculty', 'student'],
             },
             {
               label: "Password",
@@ -127,51 +147,52 @@ const RegisterPage = ({ onSwitchToLogin }) => {
             >
               <label className="block text-sm font-medium">{field.label}</label>
               {field.type === "select" ? (
-                <select
-                  value={field.value}
-                  onChange={(e) => field.onChange(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-400"
-                  autoFocus={step === index}
-                >
-                  {field.options.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt.charAt(0).toUpperCase() + opt.slice(1)}
-                    </option>
-                  ))}
-                </select>
+                <FormControl fullWidth>
+                  <InputLabel>{field.label}</InputLabel>
+                  <Select
+                    value={field.value}
+                    onChange={(e) => field.onChange(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    autoFocus={step === index}
+                    label={field.label}
+                  >
+                    {field.options.map((opt) => (
+                      <MenuItem key={opt} value={opt}>
+                        {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               ) : (
-                <input
+                <TextField
                   type={field.type}
                   value={field.value}
                   onChange={(e) => field.onChange(e.target.value)}
                   placeholder={field.placeholder}
                   onKeyDown={handleKeyDown}
                   autoFocus={step === index}
-                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-400"
+                  fullWidth
+                  variant="outlined"
+                  className="w-full"
+                  InputProps={{
+                    className: "p-3 rounded-lg focus:ring-2 focus:ring-blue-400",
+                  }}
                 />
               )}
             </div>
           ))}
 
-          {/* Messages */}
-          {error && (
-            <p className="text-red-600 text-center text-sm animate-pulse">{error}</p>
-          )}
-          {success && (
-            <p className="text-green-600 text-center text-sm animate-pulse">
-              {success}
-            </p>
-          )}
-
           {/* Submit */}
-          <button
+          <Button
             type="button"
             onClick={nextStep}
-            className="w-full mt-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-3 rounded-lg hover:from-blue-600 hover:to-indigo-700 font-semibold focus:ring-2 focus:ring-blue-400"
+            variant="contained"
+            fullWidth
+            className="mt-4 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white p-3 font-semibold"
+            startIcon={<RegisterIcon />}
           >
             {step < 4 ? "Next" : "Register"}
-          </button>
+          </Button>
         </form>
 
         <p className="mt-6 text-center text-sm text-gray-600">

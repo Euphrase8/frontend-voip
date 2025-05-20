@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login } from '../services/login';
+import { connectWebSocket } from '../services/websocketservice';
 import Logo from '../assets/Login.png';
 
 const LoginPage = ({ onLogin, onSwitchToRegister }) => {
   const [step, setStep] = useState(0);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [notification, setNotification] = useState(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -19,10 +20,10 @@ const LoginPage = ({ onLogin, onSwitchToRegister }) => {
 
   const nextStep = async () => {
     if (!validateStep()) {
-      setError('Please fill in valid information.');
+      setNotification({ message: 'Please fill in valid information.', type: 'error' });
+      setTimeout(() => setNotification(null), 3000);
       return;
     }
-    setError('');
 
     if (step === 0) {
       setStep(1);
@@ -30,16 +31,27 @@ const LoginPage = ({ onLogin, onSwitchToRegister }) => {
       setLoading(true);
       try {
         const result = await login(username, password);
-        if (result.success || result.token) {
-          onLogin(result);
-          navigate('/home', {
-            state: { success: 'Login successful!' },
+        if (result.success) {
+          setNotification({ message: `${result.message} (Ext: ${result.user.extension})`, type: 'success' });
+
+          // Connect WebSocket after successful login
+          connectWebSocket(result.user.extension, (data) => {
+            if (data.type === 'incoming-call') {
+              alert(`Incoming call from ${data.from} (Priority: ${data.priority})`);
+            }
           });
+
+          setTimeout(() => {
+            onLogin(result.user);
+            navigate('/dashboard', { state: { success: result.message }, user: result.user });
+          }, 1000);
         } else {
-          setError('Login failed. Please check your credentials.');
+          setNotification({ message: result.message, type: 'error' });
+          setTimeout(() => setNotification(null), 3000);
         }
-      } catch (err) {
-        setError('Login failed. Please check your credentials.');
+      } catch {
+        setNotification({ message: 'Login failed. Please check your credentials.', type: 'error' });
+        setTimeout(() => setNotification(null), 3000);
       } finally {
         setLoading(false);
       }
@@ -47,88 +59,61 @@ const LoginPage = ({ onLogin, onSwitchToRegister }) => {
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      nextStep();
-    }
+    if (e.key === 'Enter') nextStep();
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100 flex items-center justify-center px-4">
-      <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-8 w-full max-w-md transition-all duration-500 overflow-hidden">
-        {/* Static Header */}
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100 px-4">
+      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
         <div className="flex flex-col items-center mb-4">
-          <img
-            src={Logo}
-            alt="Logo"
-            className="w-24 h-24 sm:w-28 sm:h-28 rounded-full object-contain mb-2"
-          />
-          <h3 className="text-center text-sm font-bold">
-            THE INSTITUTE OF FINANCE MANAGEMENT
-          </h3>
-          <h2 className="text-xl sm:text-2xl font-extrabold text-center text-gray-900 mt-1">
-            VoIP Login
-          </h2>
+          <img src={Logo} alt="Logo" className="w-24 h-24 rounded-full object-contain mb-2" />
+          <h3 className="text-sm font-bold text-center">THE INSTITUTE OF FINANCE MANAGEMENT</h3>
+          <h2 className="text-2xl font-extrabold text-gray-900 text-center">VoIP Login</h2>
         </div>
 
-        <form className="space-y-4">
-          {[
-            {
-              label: 'Username',
-              type: 'text',
-              value: username,
-              onChange: setUsername,
-              placeholder: 'Enter your username',
-            },
-            {
-              label: 'Password',
-              type: 'password',
-              value: password,
-              onChange: setPassword,
-              placeholder: 'Enter your password',
-            },
-          ].map((field, index) => (
-            <div
-              key={index}
-              className={`overflow-hidden transition-all duration-500 ${
-                step === index ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
-              }`}
-            >
-              <label className="block text-sm font-medium">{field.label}</label>
-              <input
-                type={field.type}
-                value={field.value}
-                onChange={(e) => field.onChange(e.target.value)}
-                placeholder={field.placeholder}
-                onKeyDown={handleKeyDown}
-                autoFocus={step === index}
-                disabled={loading}
-                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-400 bg-gray-50"
-              />
-            </div>
-          ))}
-
-          {error && (
-            <p className="text-red-600 text-center text-sm animate-pulse">{error}</p>
-          )}
-
-          <button
-            type="button"
-            onClick={nextStep}
-            disabled={loading}
-            className={`w-full mt-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-3 rounded-lg hover:from-blue-600 hover:to-indigo-700 font-semibold focus:ring-2 focus:ring-blue-400 transition-all duration-200 transform ${
-              loading ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
+        {[{ label: 'Username', value: username, set: setUsername, type: 'text' },
+          { label: 'Password', value: password, set: setPassword, type: 'password' }]
+          .map((field, index) => (
+          <div
+            key={index}
+            className={`transition-all duration-500 ${step === index ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'} overflow-hidden`}
           >
-            {step === 0 ? 'Next' : loading ? 'Logging In...' : 'Login'}
-          </button>
-        </form>
+            <label className="block text-sm font-medium">{field.label}</label>
+            <input
+              type={field.type}
+              value={field.value}
+              onChange={(e) => field.set(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="w-full p-3 border rounded-lg bg-gray-50"
+              autoFocus={step === index}
+              disabled={loading}
+              placeholder={`Enter your ${field.label.toLowerCase()}`}
+            />
+          </div>
+        ))}
+
+        {notification && (
+          <p className={`mt-2 text-center text-sm ${notification.type === 'error' ? 'text-red-600' : 'text-green-600'}`}>
+            {notification.message}
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={nextStep}
+          disabled={loading}
+          className={`w-full mt-4 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition ${
+            loading ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
+        >
+          {step === 0 ? 'Next' : loading ? 'Logging In...' : 'Login'}
+        </button>
 
         <p className="mt-6 text-center text-sm text-gray-600">
           Don't have an account?{' '}
           <button
             onClick={onSwitchToRegister}
-            className="text-blue-500 hover:text-blue-700 font-medium focus:outline-none focus:underline"
+            className="text-blue-500 hover:underline"
             disabled={loading}
           >
             Register

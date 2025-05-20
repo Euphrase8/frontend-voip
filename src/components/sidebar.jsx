@@ -1,60 +1,44 @@
-import React from 'react';
+import { Phone, Favorite, Contacts, History, Call } from "@mui/icons-material";
 
-const Sidebar = ({ user, onLogout, onNavigate, activePage }) => (
-  <div className="fixed w-8 sm:w-64 bg-gray-900 text-white h-screen p-2 sm:p-4 flex flex-col z-10">
-    <div className="mb-4 sm:mb-6">
-      <h2 className="text-lg sm:text-xl font-bold hidden sm:block">VoIP App</h2>
-      <p className="text-xs sm:text-sm text-gray-400 truncate">{user.username}</p>
-    </div>
-    <nav className="flex-1">
-      <ul className="space-y-1 sm:space-y-2">
-        <li>
-          <button
-            onClick={() => onNavigate('home')}
-            className={`w-full text-left p-1 sm:p-2 rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-base ${
-              activePage === 'home' ? 'bg-gray-700' : ''
-            }`}
-            aria-label="Navigate to Home"
-          >
-            <span className="block sm:hidden animate-pulse">🏠</span>
-            <span className="hidden sm:block">Home</span>
-          </button>
-        </li>
-        <li>
-          <button
-            onClick={() => onNavigate('contacts')}
-            className={`w-full text-left p-1 sm:p-2 rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-base ${
-              activePage === 'contacts' ? 'bg-gray-700' : ''
-            }`}
-            aria-label="Navigate to Contacts"
-          >
-            <span className="block sm:hidden animate-pulse">📇</span>
-            <span className="hidden sm:block">Contacts</span>
-          </button>
-        </li>
-        <li>
-          <button
-            onClick={() => onNavigate('callLogs')}
-            className={`w-full text-left p-1 sm:p-2 rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-base ${
-              activePage === 'callLogs' ? 'bg-gray-700' : ''
-            }`}
-            aria-label="Navigate to Call Logs"
-          >
-            <span className="block sm:hidden animate-pulse">📜</span>
-            <span className="hidden sm:block">Call Logs</span>
-          </button>
-        </li>
-      </ul>
-    </nav>
-    <button
-      onClick={onLogout}
-      className="mt-auto bg-red-500 text-white p-1 sm:p-2 rounded-lg hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 text-xs sm:text-base"
-      aria-label="Log out"
+const Sidebar = ({ currentPage, onNavigate, darkMode }) => {
+  const navItems = [
+    { id: "keypad", label: "Keypad", icon: <Phone /> },
+    { id: "favorites", label: "Favorites", icon: <Favorite /> },
+    { id: "contacts", label: "Contacts", icon: <Contacts /> },
+    { id: "calllogs", label: "Call Logs", icon: <History /> },
+    { id: "callings", label: "Register", icon: <Call /> }, // New item for Calling page
+  ];
+
+  return (
+    <div
+      className={`hidden md:flex fixed top-0 bottom-0 left-0 w-64 flex-col glass-effect p-4 overflow-y-auto z-40 ${
+        darkMode ? "bg-gray-900" : "bg-blue-100"
+      } shadow-xl animate-[fadeInUp_0.8s_ease-out_forwards]`}
     >
-      <span className="block sm:hidden animate-pulse">🚪</span>
-      <span className="hidden sm:block">Logout</span>
-    </button>
-  </div>
-);
+      <h2 className={`text-lg font-bold mb-4 ${darkMode ? "text-white" : "text-blue-900"}`}>
+        Dashboard
+      </h2>
+      <div className="space-y-2">
+        {navItems.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => onNavigate(item.id)}
+            className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-all transform hover:scale-105 min-h-[44px] ${
+              currentPage === item.id
+                ? "bg-blue-600 text-white"
+                : darkMode
+                ? "text-white hover:bg-gray-700"
+                : "text-black hover:bg-blue-200"
+            }`}
+            aria-label={`Navigate to ${item.label}`}
+          >
+            {item.icon}
+            <span className="text-sm font-medium">{item.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 export default Sidebar;
