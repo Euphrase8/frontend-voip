@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { TextField } from '@mui/material';
 import { Phone } from '@mui/icons-material';
 import { call } from '../services/call';
+import CallingPage from './CallingPage';
 
 const HomePage = ({ darkMode = false }) => {
-  const navigate = useNavigate();
   const [extension, setExtension] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showCallingPage, setShowCallingPage] = useState(false);
   const [notification, setNotification] = useState(null);
 
   const initiateCall = useCallback(async (ext) => {
@@ -18,14 +18,7 @@ const HomePage = ({ darkMode = false }) => {
     try {
       await call(ext);
       setNotification({ message: `Dialing ${ext}...`, type: 'info' });
-      // Navigate to /calling with contact and callStatus
-      navigate('/calling', {
-        state: {
-          contact: { name: `Extension ${ext}`, extension: ext, avatar: 'https://via.placeholder.com/40/cccccc/fff?text=?' },
-          callStatus: 'Dialing...',
-          isOutgoing: true,
-        },
-      });
+      setShowCallingPage(true);
       setTimeout(() => setNotification(null), 3000);
     } catch (err) {
       setError('Failed to initiate call. Please try again.');
@@ -34,7 +27,7 @@ const HomePage = ({ darkMode = false }) => {
     } finally {
       setLoading(false);
     }
-  }, [navigate]);
+  }, []);
 
   const handleCall = useCallback(() => {
     if (!extension || !/^\d{4}$/.test(extension)) {
@@ -87,7 +80,25 @@ const HomePage = ({ darkMode = false }) => {
     setError('');
   };
 
+  const handleEndCall = () => {
+    setExtension('');
+    setShowCallingPage(false);
+    setNotification({ message: 'Call ended', type: 'success' });
+    setTimeout(() => setNotification(null), 3000);
+  };
+
   const keypadButtons = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
+
+  if (showCallingPage) {
+    return (
+      <CallingPage
+        contact={{ name: `Extension ${extension}`, extension }}
+        callStatus="Dialing..."
+        onEndCall={handleEndCall}
+        darkMode={darkMode}
+      />
+    );
+  }
 
   return (
     <div className="relative w-full max-w-[90vw] xs:max-w-[85vw] sm:max-w-[80vw] md:max-w-md mx-auto overflow-hidden">
@@ -149,11 +160,12 @@ const HomePage = ({ darkMode = false }) => {
             className="glass-effect rounded-lg"
             InputProps={{
               className: `text-center text-xs xs:text-sm sm:text-base ${
-                darkMode ? 'bg-white-800/50 text-white' : 'bg-blue-100/80 text-black'
+                darkMode ? 'bg-gray-800/50 text-white' : 'bg-blue-100/80 text-black'
               }`,
               'aria-label': 'Current extension',
             }}
           />
+          {/* Dial Indicator */}
           {extension && (
             <div className="absolute top-1/2 right-2 xs:right-4 transform -translate-y-1/2 flex space-x-1">
               {[...extension].map((_, i) => (

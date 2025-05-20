@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import ServerCheckPage from './pages/ServerCheckPage';
 import LoginPage from './auth/LoginPage';
 import RegisterPage from './auth/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
@@ -11,14 +12,16 @@ import Loader from './components/loader';
 import { connectWebSocket, closeWebSocket } from './services/websocketservice';
 import { handleIncomingCall } from './services/IncomingCallService';
 import VoipPhone from './components/VoipPhone';
+import SipClient from './components/SipClient';
 
 const ProtectedRoute = ({ user, children }) => {
-  return user ? children : <Navigate to="/login" replace />;
+  return user ? children : <Navigate to="/check" replace />;
 };
 
 const App = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
+  const [sipPassword, setSipPassword] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
@@ -31,8 +34,10 @@ const App = () => {
   useEffect(() => {
     const token = localStorage.getItem('token');
     const extension = localStorage.getItem('extension');
-    if (token && extension) {
+    const storedSipPassword = localStorage.getItem('sipPassword');
+    if (token && extension && storedSipPassword) {
       setUser({ username: 'User', extension });
+      setSipPassword(storedSipPassword);
       connectWebSocket(extension, handleWebSocketMessage, (status) => {
         setNotification({
           message: `WebSocket ${status}`,
@@ -68,20 +73,35 @@ const App = () => {
     }
   };
 
-  const handleRegister = (result) => {
-    if (result.success) {
-      navigate('/login', { state: { success: result.message } });
-    }
+  const handleRegister = (extension, sipPassword) => {
+    localStorage.setItem('extension', extension);
+    localStorage.setItem('sipPassword', sipPassword);
+    setUser({ username: 'User', extension });
+    setSipPassword(sipPassword);
+    connectWebSocket(extension, handleWebSocketMessage, (status) => {
+      setNotification({
+        message: `WebSocket ${status}`,
+        type: status === 'connected' ? 'success' : status === 'error' || status === 'disconnected' ? 'error' : 'info',
+      });
+      setTimeout(() => setNotification(null), 3000);
+    }).catch((error) => {
+      console.error('WebSocket connection failed:', error);
+      setNotification({ message: 'Failed to connect WebSocket', type: 'error' });
+      setTimeout(() => setNotification(null), 3000);
+    });
+    navigate('/dashboard', { state: { success: 'Registered successfully' } });
   };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('extension');
+    localStorage.removeItem('sipPassword');
     setUser(null);
+    setSipPassword(null);
     setDarkMode(false);
     setIncomingCall(null);
     closeWebSocket();
-    navigate('/login', { state: { success: 'Logged out successfully' } });
+    navigate('/check', { state: { success: 'Logged out successfully' } });
   };
 
   const toggleDarkMode = () => {
@@ -160,7 +180,23 @@ const App = () => {
           onReject={() => handleRejectCall(incomingCall)}
         />
       )}
+      {user?.extension && sipPassword && (
+        <SipClient
+          extension={user.extension}
+          sipPassword={sipPassword}
+        />
+      )}
       <Routes>
+        <Route
+          path="/check"
+          element={
+            <ServerCheckPage
+              onSwitchToLogin={() => navigate('/login')}
+              onSwitchToRegister={() => navigate('/register')}
+              darkMode={darkMode}
+            />
+          }
+        />
         <Route
           path="/login"
           element={
@@ -215,7 +251,8 @@ const App = () => {
           element={
             <ProtectedRoute user={user}>
               <VoipPhone
-                // extension={user.extension}
+                extension={user?.extension || ''}
+                sipPassword={sipPassword}
                 darkMode={darkMode}
                 toggleDarkMode={toggleDarkMode}
                 setIsLoading={setIsLoading}
@@ -243,12 +280,12 @@ const App = () => {
                 darkMode={darkMode}
                 toggleDarkMode={toggleDarkMode}
                 setIsLoading={setIsLoading}
-                contacts={contacts} // Pass contacts for call lookup
+                contacts={contacts}
               />
             </ProtectedRoute>
           }
         />
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={<Navigate to="/check" replace />} />
       </Routes>
       {isLoading && <Loader />}
     </div>

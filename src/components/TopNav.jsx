@@ -6,103 +6,127 @@ import {
   MenuItem,
   Switch,
   Tooltip,
+  Button,
+  Box,
 } from "@mui/material";
-import { Dialpad, LightMode, DarkMode } from "@mui/icons-material";
+import { Dialpad, LightMode, DarkMode, Login } from "@mui/icons-material";
 
 const TopNav = ({
   username,
   extension,
   callStatus,
   onLogout,
+  onLogin,
   darkMode,
   toggleDarkMode,
   onQuickDial,
-  contacts,
+  contacts = [],
 }) => {
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
+  const isLoggedIn = Boolean(username);
 
   const handleMenuOpen = (event) => setAnchorEl(event.currentTarget);
   const handleMenuClose = () => setAnchorEl(null);
 
   return (
-    <div
-      className={`fixed top-0 left-0 md:left-64 right-0 z-30 h-14 sm:h-16 flex items-center justify-between px-2 sm:px-4 glass-effect ${
-        darkMode ? "bg-gray-800 text-white" : "bg-blue-50 text-black"
-      } shadow-md`}
+    <Box
+      sx={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 30,
+        height: { xs: 56, sm: 64 },
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        px: 2,
+        backdropFilter: "blur(8px)",
+        boxShadow: 2,
+        backgroundColor: darkMode ? "#111827" : "#ffffff",
+        color: darkMode ? "#ffffff" : "#000000",
+        transition: "all 0.3s ease",
+      }}
     >
-      {/* User Info */}
-      <div className="flex items-center space-x-2 overflow-hidden">
-        <Avatar
-          alt={username}
-          src="/static/images/avatar/1.jpg"
-          className="w-8 h-8 sm:w-10 sm:h-10 border-2 border-blue-400"
+      {/* Logo / Title Area */}
+      <div className="text-lg font-bold tracking-wide flex items-center">
+        <img
+          src="/favicon.ico"
+          alt="Logo"
+          className="w-8 h-8 mr-2 rounded-full border"
         />
-        <div className="text-xs sm:text-sm truncate">
-          <div className="font-semibold truncate">
-            {username} {extension && `(Ext: ${extension})`}
-          </div>
-          {callStatus && (
-            <div className="text-yellow-400 animate-pulse truncate">
-              {callStatus}
+        <span className="hidden sm:inline">VoIP System</span>
+      </div>
+
+      {/* User Controls or Login */}
+      {isLoggedIn ? (
+        <div className="flex items-center space-x-2">
+          {/* Avatar and Info */}
+          <div className="flex items-center space-x-2 overflow-hidden max-w-[200px]">
+            <Avatar
+              alt={username}
+              src="/static/images/avatar/1.jpg"
+              className="w-8 h-8 border-2 border-blue-400"
+            />
+            <div className="text-xs sm:text-sm truncate leading-tight">
+              <div className="font-semibold truncate">
+                {username} {extension && `(Ext: ${extension})`}
+              </div>
+              <div className="text-gray-400">
+                {callStatus || "Idle"}
+              </div>
             </div>
-          )}
-        </div>
-      </div>
+          </div>
 
-      {/* Controls */}
-      <div className="flex items-center space-x-1 sm:space-x-2">
-        {/* Quick Dial */}
-        <Tooltip title="Quick Dial">
-          <IconButton
-            onClick={handleMenuOpen}
-            className={darkMode ? "text-white" : "text-blue-800"}
-            aria-label="Open quick dial menu"
-            size="small"
-          >
-            <Dialpad fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <Menu anchorEl={anchorEl} open={open} onClose={handleMenuClose}>
-          {contacts.map((contact) => (
-            <MenuItem
-              key={contact.id}
-              onClick={() => {
-                onQuickDial(contact);
-                handleMenuClose();
-              }}
+          {/* Quick Dial Button */}
+          <Tooltip title="Quick Dial">
+            <IconButton
+              size="small"
+              color="primary"
+              onClick={onQuickDial}
+              aria-label="Quick Dial"
             >
-              {contact.name} (Ext: {contact.extension})
-            </MenuItem>
-          ))}
-        </Menu>
+              <Dialpad />
+            </IconButton>
+          </Tooltip>
 
-        {/* Theme Toggle */}
-        <Tooltip title={darkMode ? "Light Mode" : "Dark Mode"}>
-          <Switch
-            checked={darkMode}
-            onChange={toggleDarkMode}
-            icon={<LightMode fontSize="small" />}
-            checkedIcon={<DarkMode fontSize="small" />}
-            size="small"
-          />
-        </Tooltip>
+          {/* Dark Mode Toggle */}
+          <Tooltip title="Toggle Dark Mode">
+            <Switch
+              checked={darkMode}
+              onChange={toggleDarkMode}
+              color="default"
+              inputProps={{ "aria-label": "dark mode toggle" }}
+            />
+          </Tooltip>
 
-        {/* Logout */}
-        <Tooltip title="Logout">
-          <button
-            onClick={onLogout}
-            className={`px-2 py-1 text-xs rounded-md font-semibold min-w-[64px] transition hover:scale-105 ${
-              darkMode
-                ? "bg-red-600 hover:bg-red-700 text-white"
-                : "bg-red-500 hover:bg-red-600 text-white"
-            }`}
-          >
+          {/* Logout Button */}
+          <Button variant="outlined" size="small" onClick={onLogout}>
             Logout
-          </button>
-        </Tooltip>
-      </div>
-    </div>
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center space-x-2">
+          <Tooltip title="Toggle Dark Mode">
+            <Switch
+              checked={darkMode}
+              onChange={toggleDarkMode}
+              color="default"
+              inputProps={{ "aria-label": "dark mode toggle" }}
+            />
+          </Tooltip>
+          <Button
+            variant="contained"
+            startIcon={<Login />}
+            onClick={onLogin}
+            size="small"
+          >
+            Login
+          </Button>
+        </div>
+      )}
+    </Box>
   );
 };
 

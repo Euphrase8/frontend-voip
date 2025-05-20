@@ -1,20 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Avatar, Tooltip, Button } from '@mui/material';
 import { Call, CallEnd } from '@mui/icons-material';
+import { handleIncomingCall } from '../services/IncomingCallService';
 
 const IncomingCallPage = ({
   callData,
   contacts,
   user,
   darkMode = false,
-  onAccept,
-  onReject,
 }) => {
+  const navigate = useNavigate();
   const [notification, setNotification] = useState(null);
   const [timeLeft, setTimeLeft] = useState(30);
   const [isLoading, setIsLoading] = useState(false);
   const audioContextRef = useRef(null);
   const timerRef = useRef(null);
+  const callHandlerRef = useRef(null);
 
   // Find caller details
   const caller = contacts.find((c) => c.extension === callData.from) || {
@@ -24,6 +26,35 @@ const IncomingCallPage = ({
   };
 
   useEffect(() => {
+    // Initialize handleIncomingCall
+    handleIncomingCall(
+      callData,
+      user,
+      (stream, peerConnection) => {
+        // On accept, navigate to /calling
+        navigate('/calling', {
+          state: {
+            contact: caller,
+            callStatus: 'Connected',
+            isOutgoing: false,
+            stream,
+            peerConnection,
+          },
+        });
+      },
+      () => {
+        // On reject, clear incoming call
+        setNotification({ message: 'Call rejected', type: 'info' });
+        setTimeout(() => setNotification(null), 3000);
+      }
+    ).then((handler) => {
+      callHandlerRef.current = handler;
+    }).catch((error) => {
+      console.error('Failed to initialize incoming call:', error);
+      setNotification({ message: 'Failed to handle incoming call', type: 'error' });
+      setTimeout(() => setNotification(null), 3000);
+    });
+
     // Start ringtone
     audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
     const oscillator = audioContextRef.current.createOscillator();
@@ -64,15 +95,17 @@ const IncomingCallPage = ({
         clearInterval(timerRef.current);
       }
     };
-  }, []);
+  }, [callData, user, contacts, navigate]);
 
   const handleAccept = async () => {
+    if (!callHandlerRef.current) return;
     setIsLoading(true);
     try {
-      await onAccept();
+      await callHandlerRef.current.acceptCall();
       setNotification({ message: 'Call accepted', type: 'success' });
       setTimeout(() => setNotification(null), 3000);
     } catch (error) {
+      console.error('Error accepting call:', error);
       setNotification({ message: `Failed to answer call: ${error.message}`, type: 'error' });
       setTimeout(() => setNotification(null), 3000);
     } finally {
@@ -81,12 +114,12 @@ const IncomingCallPage = ({
   };
 
   const handleReject = async () => {
+    if (!callHandlerRef.current) return;
     setIsLoading(true);
     try {
-      await onReject();
-      setNotification({ message: 'Call rejected', type: 'info' });
-      setTimeout(() => setNotification(null), 3000);
+      await callHandlerRef.current.rejectCall();
     } catch (error) {
+      console.error('Error rejecting call:', error);
       setNotification({ message: `Failed to reject call: ${error.message}`, type: 'error' });
       setTimeout(() => setNotification(null), 3000);
     } finally {
@@ -145,7 +178,7 @@ const IncomingCallPage = ({
               From: {caller.name} (Ext: {caller.extension})
             </p>
             <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-300'} mt-1`}>
-              Priority: {callData.priority}
+              Priority: {callData.priority || 'Normal'}
             </p>
             <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-300'} mt-1`}>
               Time Left: {timeLeft}s

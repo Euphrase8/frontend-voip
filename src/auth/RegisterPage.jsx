@@ -4,7 +4,7 @@ import { HowToReg as RegisterIcon } from '@mui/icons-material';
 import { register } from '../services/register';
 import Logo from '../assets/Login.png';
 
-const RegisterPage = ({ onSwitchToLogin }) => {
+const RegisterPage = ({ onSwitchToLogin, onRegister }) => {
   const [step, setStep] = useState(0);
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -21,7 +21,7 @@ const RegisterPage = ({ onSwitchToLogin }) => {
       case 1:
         return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
       case 2:
-        return ['admin', 'emergency', 'faculty', 'student'].includes(role);
+        return ['user', 'admin', 'faculty', 'emergency'].includes(role);
       case 3:
         return password.length >= 6;
       case 4:
@@ -47,9 +47,11 @@ const RegisterPage = ({ onSwitchToLogin }) => {
         const res = await register(username, email, password, role);
         if (res.success) {
           setNotification({ 
-            message: `${res.message}. Assigned extension: ${res.extension}`, 
+            message: `${res.message}. Extension: ${res.extension}, SIP Password: ${res.sipPassword}`, 
             type: 'success' 
           });
+          // Pass extension and sipPassword to parent
+          onRegister(res.extension, res.sipPassword);
           setTimeout(() => {
             onSwitchToLogin();
           }, 3000);
@@ -122,7 +124,7 @@ const RegisterPage = ({ onSwitchToLogin }) => {
               value: role,
               onChange: setRole,
               type: "select",
-              options: ['admin', 'emergency', 'faculty', 'student'],
+              options: ['user', 'admin', 'faculty', 'emergency'],
             },
             {
               label: "Password",

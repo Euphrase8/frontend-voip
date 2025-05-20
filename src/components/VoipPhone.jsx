@@ -1,106 +1,98 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Button, TextField, Tooltip } from '@mui/material';
+import { Call, CallEnd } from '@mui/icons-material';
+import { hangup } from '../services/hang';
+import { sendWebSocketMessage } from '../services/websocketservice';
 import JsSIP from 'jssip';
 
-const VoipPhone = ({ extension, password, setIsLoading, darkMode, initialTargetExtension = '', onCallStatusChange }) => {
+const VoipPhone = ({
+  extension = '',
+  password = 'user_password',
+  setIsLoading,
+  darkMode,
+  initialTargetExtension = '',
+  onCallStatusChange,
+  incomingStream,
+  incomingPeerConnection,
+}) => {
   const [targetExtension, setTargetExtension] = useState(initialTargetExtension);
-  const [status, setStatus] = useState('Disconnected');
+  const [status, setStatus] = useState(extension ? 'Disconnected' : 'No extension provided');
   const [callStatus, setCallStatus] = useState('');
   const uaRef = useRef(null);
   const callRef = useRef(null);
   const wsRef = useRef(null);
   const audioRef = useRef(null);
 
-  const setupWebSocket = useCallback(() => {
-    if (!extension) return;
+  useEffect(() => {
+    if (incomingStream && incomingPeerConnection && audioRef.current) {
+      audioRef.current.srcObject = incomingStream;
+      audioRef.current.play().catch((error) => {
+        console.error('Error playing incoming audio:', error);
+      });
+      setStatus('Connected');
+      setCallStatus('Call connected');
+      onCallStatusChange('Call connected');
+    }
+  }, [incomingStream, incomingPeerConnection, onCallStatusChange]);
 
-    const wsUrl = `ws://192.168.1.x:8080/ws?extension=${encodeURIComponent(extension)}`; // Replace with your backend IP
+  const setupWebSocket = useCallback(() => {
+    if (!extension || incomingStream) return; // Skip for incoming calls
+    const wsUrl = `ws://192.168.1.164:8080/ws?extension=${encodeURIComponent(extension)}`;
     wsRef.current = new WebSocket(wsUrl);
 
-    wsRef.current.onopen = () => setStatus('WebSocket Connected');
+    wsRef.current.onopen = () => {
+      console.log('WebSocket connected for VoIP');
+      setStatus('WebSocket connected');
+    };
+
     wsRef.current.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === 'incoming-call') {
-          setCallStatus(`Incoming call from ${msg.from} (Channel: ${msg.channel})`);
-          if (window.confirm(`Accept call from ${msg.from}?`)) {
-            answerCall(msg.channel);
-          }
-        }
-      } catch (error) {
-        setStatus(`WebSocket Message Error: ${error.message}`);
+      const message = JSON.parse(event.data);
+      console.log('WebSocket message:', message);
+      if (message.type === 'call-status') {
+        setCallStatus(message.status);
+        onCallStatusChange(message.status);
       }
     };
-    wsRef.current.onerror = () => setStatus('WebSocket Error');
-    wsRef.current.onclose = () => setStatus('WebSocket Disconnected');
-  }, [extension]);
 
-  useEffect(() => {
-    if (extension) {
-      setupWebSocket();
-    }
+    wsRef.current.onclose = () => {
+      console.log('WebSocket disconnected');
+      setStatus('WebSocket disconnected');
+    };
 
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
+      if (wsRef.current) wsRef.current.close();
     };
-  }, [extension, setupWebSocket]);
+  }, [extension, onCallStatusChange, incomingStream]);
 
   useEffect(() => {
-    setTargetExtension(initialTargetExtension);
-  }, [initialTargetExtension]);
+    if (incomingStream) return; // Skip SIP setup for incoming calls
+    JsSIP.debug.enable('JsSIP:*');
+    const socket = new JsSIP.WebSocketInterface('wss://192.168.1.164:8089/ws');
+    const configuration = {
+      sockets: [socket],
+      uri: `sip:${extension}@192.168.1.164`,
+      password,
+      register: true,
+    };
+
+    uaRef.current = new JsSIP.UA(configuration);
+
+    uaRef.current.on('connected', () => setStatus('Connected'));
+    uaRef.current.on('disconnected', () => setStatus('Disconnected'));
+    uaRef.current.on('registered', () => setStatus('Registered'));
+    uaRef.current.on('unregistered', () => setStatus('Unregistered'));
+    uaRef.current.on('registrationFailed', (e) => setStatus(`Registration failed: ${e.cause}`));
+
+    uaRef.current.start();
+
+    return () => {
+      if (uaRef.current) uaRef.current.stop();
+    };
+  }, [extension, password]);
 
   useEffect(() => {
-    onCallStatusChange(callStatus);
-  }, [callStatus, onCallStatusChange]);
-
-  const register = useCallback(() => {
-    if (!extension || !password) {
-      setStatus('Please enter extension and password');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const socket = new JsSIP.WebSocketInterface('ws://192.168.1.194:8088/ws'); // Asterisk WebSocket
-      const configuration = {
-        sockets: [socket],
-        uri: `sip:${extension}@192.168.1.194`,
-        password,
-        display_name: `Extension ${extension}`,
-        register: true,
-      };
-
-      uaRef.current = new JsSIP.UA(configuration);
-
-      uaRef.current.on('connected', () => setStatus('Connected to Asterisk'));
-      uaRef.current.on('registered', () => setStatus(`Registered as ${extension}`));
-      uaRef.current.on('registrationFailed', (data) => setStatus(`Registration failed: ${data.cause}`));
-      uaRef.current.on('newRTCSession', (data) => {
-        callRef.current = { session: data.session };
-        data.session.on('failed', (e) => {
-          setCallStatus(`Call failed: ${e.cause}`);
-          callRef.current = null;
-        });
-        data.session.on('ended', () => {
-          setCallStatus('Call ended');
-          callRef.current = null;
-        });
-        data.session.on('accepted', () => setCallStatus('Call connected'));
-        data.session.on('addstream', (e) => {
-          if (audioRef.current) {
-            audioRef.current.srcObject = e.stream;
-          }
-        });
-      });
-
-      uaRef.current.start();
-    } catch (error) {
-      setStatus(`Registration error: ${error.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [extension, password, setIsLoading]);
+    setupWebSocket();
+  }, [setupWebSocket]);
 
   const makeCall = useCallback(async () => {
     if (!uaRef.current || !uaRef.current.isRegistered()) {
@@ -114,17 +106,35 @@ const VoipPhone = ({ extension, password, setIsLoading, darkMode, initialTargetE
 
     setIsLoading(true);
     try {
-      const response = await fetch('http://192.168.1.x:8080/protected/call/initiate', {
+      const response = await fetch('http://192.168.1.164:8080/protected/call/initiate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
         body: JSON.stringify({ target_extension: targetExtension }),
         credentials: 'include',
       });
       const data = await response.json();
       if (response.ok) {
         setCallStatus(`Call initiated to ${targetExtension} (Channel: ${data.channel})`);
-        uaRef.current.call(`sip:${targetExtension}@192.168.1.194`, {
+        callRef.current = uaRef.current.call(`sip:${targetExtension}@192.168.1.164`, {
           mediaConstraints: { audio: true, video: false },
+          eventHandlers: {
+            progress: () => setCallStatus('Dialing...'),
+            failed: (e) => {
+              setCallStatus(`Call failed: ${e.cause}`);
+              onCallStatusChange(`Call failed: ${e.cause}`);
+            },
+            ended: () => {
+              setCallStatus('Call ended');
+              onCallStatusChange('Call ended');
+            },
+            confirmed: () => {
+              setCallStatus('Call connected');
+              onCallStatusChange('Call connected');
+            },
+          },
         });
       } else {
         setCallStatus(`Failed to initiate call: ${data.error}`);
@@ -134,113 +144,77 @@ const VoipPhone = ({ extension, password, setIsLoading, darkMode, initialTargetE
     } finally {
       setIsLoading(false);
     }
-  }, [targetExtension, setIsLoading]);
+  }, [targetExtension, setIsLoading, onCallStatusChange]);
 
-  const answerCall = useCallback(async (channel) => {
-    setIsLoading(true);
-    try {
-      const response = await fetch('http://192.168.1.x:8080/protected/call/answer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel }),
-        credentials: 'include',
-      });
-      const data = await response.json();
-      if (response.ok) {
-        setCallStatus('Call answered');
-        if (callRef.current?.session) {
-          callRef.current.session.answer({
-            mediaConstraints: { audio: true, video: false },
-          });
-        }
-      } else {
-        setCallStatus(`Failed to answer call: ${data.error}`);
-      }
-    } catch (error) {
-      setCallStatus(`Error answering call: ${error.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [setIsLoading]);
-
-  const hangup = useCallback(async () => {
-    if (!callRef.current) {
-      setCallStatus('No active call to hang up');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      callRef.current.session.terminate();
-      const response = await fetch('http://192.168.1.x:8080/protected/call/hangup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel: callRef.current.session?.connection?.remote_identity?.uri?.user || '' }),
-        credentials: 'include',
-      });
-      const data = await response.json();
-      if (response.ok) {
-        setCallStatus('Call hung up');
-      } else {
-        setCallStatus(`Failed to hang up: ${data.error}`);
-      }
-    } catch (error) {
-      setCallStatus(`Error hanging up: ${error.message}`);
-    } finally {
+  const endCall = useCallback(async () => {
+    if (callRef.current) {
+      callRef.current.terminate();
       callRef.current = null;
-      setIsLoading(false);
     }
-  }, [setIsLoading]);
+    if (incomingStream) {
+      incomingStream.getTracks().forEach((track) => track.stop());
+    }
+    if (incomingPeerConnection) {
+      incomingPeerConnection.close();
+    }
+    try {
+      await hangup(`PJSIP/${extension}`);
+      await sendWebSocketMessage({
+        type: 'hangup',
+        to: targetExtension,
+        from: extension,
+      });
+      setCallStatus('Call ended');
+      onCallStatusChange('Call ended');
+    } catch (error) {
+      console.error('Error ending call:', error);
+    }
+  }, [extension, targetExtension, onCallStatusChange, incomingStream, incomingPeerConnection]);
 
   return (
-    <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'} shadow-md mb-4 animate-[fadeInUp_1.8s_ease-out_forwards]`}>
-      <h2 className="text-xl font-semibold mb-4">VoIP Phone</h2>
-      <p><strong>Status:</strong> {status}</p>
-      <p><strong>Call Status:</strong> {callStatus}</p>
-      <div className="flex flex-col gap-4 mt-4">
-        <input
-          type="text"
-          placeholder="Extension (e.g., 1001)"
-          value={extension}
-          disabled
-          className={`p-2 rounded border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'}`}
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          disabled
-          className={`p-2 rounded border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'}`}
-        />
-        <button
-          onClick={register}
-          className={`p-2 rounded ${darkMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'} text-white`}
-        >
-          Register
-        </button>
-        <input
-          type="text"
-          placeholder="Target Extension (e.g., 1002)"
-          value={targetExtension}
-          onChange={(e) => setTargetExtension(e.target.value)}
-          className={`p-2 rounded border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'}`}
-        />
-        <div className="flex gap-4">
-          <button
-            onClick={makeCall}
-            className={`p-2 rounded flex-1 ${darkMode ? 'bg-green-600 hover:bg-green-700' : 'bg-green-500 hover:bg-green-600'} text-white`}
-          >
-            Call
-          </button>
-          <button
-            onClick={hangup}
-            className={`p-2 rounded flex-1 ${darkMode ? 'bg-red-600 hover:bg-red-700' : 'bg-red-500 hover:bg-red-600'} text-white`}
-          >
-            Hang Up
-          </button>
-        </div>
-      </div>
-      <audio ref={audioRef} id="remoteAudio" autoPlay />
+    <div className="animate-[fadeInUp_1.8s_ease-out_forwards]">
+      <audio ref={audioRef} autoPlay />
+      {!incomingStream && (
+        <>
+          <div className="flex space-x-3 mb-4">
+            <TextField
+              label="Target Extension"
+              value={targetExtension}
+              onChange={(e) => setTargetExtension(e.target.value)}
+              variant="outlined"
+              fullWidth
+              className="glass-effect"
+              InputProps={{
+                className: darkMode ? 'text-white' : 'text-black',
+              }}
+              disabled={!!callRef.current}
+            />
+            <Tooltip title={callRef.current ? 'End Call' : 'Make Call'}>
+              <Button
+                variant="contained"
+                onClick={callRef.current ? endCall : makeCall}
+                className={`min-w-[100px] ${
+                  callRef.current
+                    ? 'bg-gradient-to-r from-red-700 to-red-900 hover:from-red-800 hover:to-red-950'
+                    : 'bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800'
+                } text-white`}
+                startIcon={callRef.current ? <CallEnd /> : <Call />}
+                aria-label={callRef.current ? 'End the call' : 'Make a call'}
+              >
+                {callRef.current ? 'End' : 'Call'}
+              </Button>
+            </Tooltip>
+          </div>
+          <div className="text-center">
+            <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              SIP Status: {status}
+            </p>
+            <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              Call Status: {callStatus}
+            </p>
+          </div>
+        </>
+      )}
     </div>
   );
 };

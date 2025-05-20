@@ -28,23 +28,30 @@ export const handleIncomingCall = async (callData, user, onAccept, onReject) => 
           candidate: event.candidate,
         }).catch((error) => {
           console.error('Failed to send ICE candidate:', error);
-          throw new Error('Signaling error');
         });
       }
+    };
+
+    // Handle incoming tracks
+    peerConnection.ontrack = (event) => {
+      stream = event.streams[0];
+      onAccept(stream, peerConnection);
     };
 
     // Monitor connection state
     peerConnection.onconnectionstatechange = () => {
       const state = peerConnection.connectionState;
       if (state === 'failed' || state === 'disconnected') {
-        throw new Error('Call connection failed');
+        console.error('Call connection state:', state);
+        cleanup();
+        onReject();
       }
     };
 
     // Accept call
     const acceptCall = async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
         stream.getTracks().forEach((track) => peerConnection.addTrack(track, stream));
 
         const answer = await peerConnection.createAnswer();
@@ -57,7 +64,7 @@ export const handleIncomingCall = async (callData, user, onAccept, onReject) => 
           answer,
         });
 
-        onAccept(stream, peerConnection);
+        // onAccept is called via ontrack
       } catch (error) {
         console.error('Error accepting call:', error);
         cleanup();
