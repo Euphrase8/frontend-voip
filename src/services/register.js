@@ -20,27 +20,43 @@ export const register = async (username, email, password, role) => {
     let message = "Registration failed. Please try again.";
 
     if (error.response) {
-      switch (error.response.data.error) {
-        case "Invalid role":
-          message = "Selected role is invalid. Choose user, admin, faculty, or emergency.";
-          break;
-        case "Extension already exists":
-          message = "This extension is already registered. Try a different username.";
-          break;
-        case "Invalid extension format":
-          message = "Internal error: Invalid extension format. Contact support.";
-          break;
-        case "SSH configuration missing":
-          message = "Server configuration error. Contact support.";
-          break;
-        case "Failed to update Asterisk configuration":
-          message = "Failed to configure VoIP settings. Try again later.";
-          break;
-        case "Could not create user":
-          message = "Failed to save user data. Try again.";
-          break;
-        default:
-          message = error.response.data.error || "Invalid registration details.";
+      const status = error.response.status;
+      const errorMsg = error.response.data.error || error.response.data.message;
+
+      if (status === 400) {
+        switch (errorMsg) {
+          case "Invalid input":
+          case "Invalid username":
+          case "Invalid email":
+            message = "Invalid username or email. Please check your input.";
+            break;
+          case "Duplicate username":
+          case "Duplicate email":
+            message = "Username or email already registered. Try a different one.";
+            break;
+          case "Invalid role":
+            message = "Invalid role. Choose user, admin, faculty, or emergency.";
+            break;
+          default:
+            message = errorMsg || "Invalid registration details.";
+        }
+      } else if (status === 500) {
+        switch (errorMsg) {
+          case "Database error":
+          case "Could not create user":
+            message = "Failed to save user data. Try again later.";
+            break;
+          case "Failed to update Asterisk configuration":
+            message = "Failed to configure VoIP settings. Try again later.";
+            break;
+          case "SSH configuration missing":
+            message = "Server configuration error. Contact support.";
+            break;
+          default:
+            message = errorMsg || "Server error during registration.";
+        }
+      } else {
+        message = errorMsg || "Unexpected registration error.";
       }
     } else if (error.request) {
       message = "No response from server. Check your network connection.";

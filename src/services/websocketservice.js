@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 let socket = null;
 let reconnectAttempts = 0;
 let maxReconnectAttempts = 5;
@@ -6,11 +8,12 @@ let connectionTimeout = null;
 let isConnected = false;
 let onStatusChange = null;
 
-const WS_URL = 'ws://192.168.1.164:8080/ws';
+const API_URL = 'http://192.168.1.164:8080';
+const DEFAULT_WS_URL = 'ws://192.168.1.194:8088/ws';
 const CONNECTION_TIMEOUT = 10000;
 const MAX_RECONNECT_DELAY = 30000;
 
-export const connectWebSocket = (extension, onMessage, statusCallback) => {
+export const connectWebSocket = async (extension, onMessage, statusCallback) => {
   if (!extension) {
     console.error('Extension is required for WebSocket connection.');
     return Promise.reject(new Error('Missing extension'));
@@ -24,14 +27,34 @@ export const connectWebSocket = (extension, onMessage, statusCallback) => {
   onStatusChange = statusCallback;
   updateStatus('connecting');
 
-  const wsUrl = `${WS_URL}?extension=${extension}`;
-  socket = new WebSocket(wsUrl);
+  // Fetch WebSocket port from /health API
+  let wsUrl = DEFAULT_WS_URL;
+  try {
+    const response = await axios.post(`${API_URL}/health`, {
+      kali_ip: '192.168.1.194',
+      ssh_port: '22',
+      ssh_user: 'kali',
+      ssh_password: 'kali',
+    }, { timeout: 10000 });
+    if (response.data.status === 'success' && response.data.ports.websocket) {
+      wsUrl = `ws://192.168.1.194:${response.data.ports.websocket}/ws`;
+    } else {
+      console.warn('Using default WebSocket URL; /health API did not return valid port.');
+    }
+  } catch (error) {
+    console.error('Failed to fetch WebSocket port from /health:', error.message);
+    console.warn('Falling back to default WebSocket URL:', wsUrl);
+  }
+
+  // Append extension to WebSocket URL
+  const finalWsUrl = `${wsUrl}?extension=${extension}`;
+  socket = new WebSocket(finalWsUrl);
 
   return new Promise((resolve, reject) => {
     // Start a connection timeout timer
     connectionTimeout = setTimeout(() => {
       if (!isConnected) {
-        console.error('WebSocket connection timed out.');
+        console.error('WebSocket connection timed out for URL:', finalWsUrl);
         safeCloseSocket();
         updateStatus('disconnected');
         reject(new Error('Connection timeout'));
@@ -39,7 +62,7 @@ export const connectWebSocket = (extension, onMessage, statusCallback) => {
     }, CONNECTION_TIMEOUT);
 
     socket.onopen = () => {
-      console.log('✅ WebSocket connection established for extension:', extension);
+      console.log('✅ WebSocket connection established for extension:', extension, 'at', finalWsUrl);
       clearTimeout(connectionTimeout);
       reconnectAttempts = 0;
       isConnected = true;
@@ -58,7 +81,7 @@ export const connectWebSocket = (extension, onMessage, statusCallback) => {
     };
 
     socket.onerror = (error) => {
-      console.error('🚨 WebSocket error:', error);
+      console.error('🚨 WebSocket error for URL:', finalWsUrl, error);
       isConnected = false;
       updateStatus('error');
       safeCloseSocket();
@@ -66,7 +89,7 @@ export const connectWebSocket = (extension, onMessage, statusCallback) => {
     };
 
     socket.onclose = () => {
-      console.log('🔌 WebSocket connection closed.');
+      console.log('🔌 WebSocket connection closed for URL:', finalWsUrl);
       isConnected = false;
       safeCloseSocket();
       updateStatus('disconnected');

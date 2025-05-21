@@ -13,7 +13,6 @@ import axios from 'axios';
 import Logo from '../assets/Login.png';
 
 const API_URL = 'http://192.168.1.164:8080';
-const WS_URL = 'ws://192.168.1.194:8088/ws';
 
 const ServerCheckPage = ({ onSwitchToLogin, onSwitchToRegister }) => {
   const navigate = useNavigate();
@@ -44,50 +43,67 @@ const ServerCheckPage = ({ onSwitchToLogin, onSwitchToRegister }) => {
     const performChecks = async () => {
       // Backend API check
       try {
-        await axios.get(`${API_URL}/health`, { timeout: 5000 });
-        setChecks((prev) => ({
-          ...prev,
-          backend: { status: 'success', message: 'Backend API is reachable' },
-        }));
+        const response = await axios.post(
+          `${API_URL}/health`,
+          {
+            kali_ip: '192.168.1.194',
+            ssh_port: '22',
+            ssh_user: 'kali',
+            ssh_password: 'kali',
+          },
+          { timeout: 10000 }
+        );
+        if (response.data.status === 'success') {
+          setChecks((prev) => ({
+            ...prev,
+            backend: {
+              status: 'success',
+              message: response.data.message || 'Asterisk is running and configured',
+            },
+          }));
+          const websocketPort = response.data.ports.websocket || 8088;
+
+          try {
+            const ws = new WebSocket(`ws://192.168.1.194:${websocketPort}/ws`);
+            ws.onopen = () => {
+              setChecks((prev) => ({
+                ...prev,
+                websocket: { status: 'success', message: 'Asterisk WebSocket connected' },
+              }));
+              ws.close();
+            };
+            ws.onerror = () => {
+              setChecks((prev) => ({
+                ...prev,
+                websocket: { status: 'error', message: 'Asterisk WebSocket connection failed' },
+              }));
+            };
+            setTimeout(() => {
+              if (ws.readyState !== WebSocket.OPEN && ws.readyState !== WebSocket.CLOSED) {
+                setChecks((prev) => ({
+                  ...prev,
+                  websocket: { status: 'error', message: 'Asterisk WebSocket timeout' },
+                }));
+                ws.close();
+              }
+            }, 5000);
+          } catch (error) {
+            setChecks((prev) => ({
+              ...prev,
+              websocket: { status: 'error', message: `WebSocket error: ${error.message}` },
+            }));
+          }
+        } else {
+          throw new Error('Health check failed');
+        }
       } catch (error) {
         setChecks((prev) => ({
           ...prev,
           backend: {
             status: 'error',
-            message: `Backend API unreachable: ${error.message}`,
+            message: `Backend API error: ${error.response?.data?.message || error.message}`,
           },
-        }));
-      }
-
-      // WebSocket check
-      try {
-        const ws = new WebSocket(WS_URL);
-        ws.onopen = () => {
-          setChecks((prev) => ({
-            ...prev,
-            websocket: { status: 'success', message: 'Asterisk WebSocket connected' },
-          }));
-          ws.close();
-        };
-        ws.onerror = () => {
-          setChecks((prev) => ({
-            ...prev,
-            websocket: { status: 'error', message: 'Asterisk WebSocket connection failed' },
-          }));
-        };
-        setTimeout(() => {
-          if (ws.readyState !== WebSocket.OPEN && ws.readyState !== WebSocket.CLOSED) {
-            setChecks((prev) => ({
-              ...prev,
-              websocket: { status: 'error', message: 'Asterisk WebSocket timeout' },
-            }));
-            ws.close();
-          }
-        }, 5000);
-      } catch (error) {
-        setChecks((prev) => ({
-          ...prev,
-          websocket: { status: 'error', message: `WebSocket error: ${error.message}` },
+          websocket: { status: 'error', message: 'WebSocket check skipped due to backend failure' },
         }));
       }
 
