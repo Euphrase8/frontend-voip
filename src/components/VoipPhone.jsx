@@ -67,7 +67,7 @@ const VoipPhone = ({
   useEffect(() => {
     if (incomingStream) return; // Skip SIP setup for incoming calls
     JsSIP.debug.enable('JsSIP:*');
-    const socket = new JsSIP.WebSocketInterface('wss://192.168.1.164:8089/ws');
+    const socket = new JsSIP.WebSocketInterface('wss://192.168.1.164:8088/ws');
     const configuration = {
       sockets: [socket],
       uri: `sip:${extension}@192.168.1.164`,
@@ -112,7 +112,7 @@ const VoipPhone = ({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
-        body: JSON.stringify({ target_extension: targetExtension }),
+        body: JSON.stringify({ extension: targetExtension }),
         credentials: 'include',
       });
       const data = await response.json();

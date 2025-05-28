@@ -1,182 +1,285 @@
 import axios from 'axios';
+import { getToken } from './login';
+import { MD5 } from 'crypto-js';
 
-let socket = null;
-let reconnectAttempts = 0;
-let maxReconnectAttempts = 5;
-let reconnectTimeout = null;
-let connectionTimeout = null;
+const WS_URL = 'ws://192.168.1.194:8088/ws';
+const API_URL = 'http://192.168.1.164:8080';
+let ws = null;
 let isConnected = false;
 let onStatusChange = null;
+let currentExtension = null;
+let reconnectAttempts = 0;
+let authAttempts = 0;
+const maxReconnectAttempts = 3;
+const maxAuthAttempts = 3;
+const reconnectDelay = 10000;
+let keepAliveInterval = null;
+let lastNonce = null;
 
-const API_URL = 'http://192.168.1.164:8080';
-const DEFAULT_WS_URL = 'ws://192.168.1.194:8088/ws';
-const CONNECTION_TIMEOUT = 10000;
-const MAX_RECONNECT_DELAY = 30000;
+const checkBackendHealth = async () => {
+  try {
+    const token = getToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await axios.post(
+      `${API_URL}/health`,
+      {
+        kali_ip: '192.168.1.194',
+        ssh_port: '22',
+        ssh_user: 'kali',
+        ssh_password: 'kali',
+      },
+      { headers, timeout: 5000 }
+    );
+    console.log('[websocketservice.js] Health check passed:', response.data);
+    return true;
+  } catch (error) {
+    console.warn('[websocketservice.js] Health check failed:', error.message);
+    return false;
+  }
+};
+
+const computeDigestResponse = (username, password, realm, method, uri, nonce) => {
+  try {
+    if (!MD5) throw new Error('MD5 module not available');
+    const ha1 = MD5(`${username}:${realm}:${password}`).toString();
+    const ha2 = MD5(`${method}:${uri}`).toString();
+    const response = MD5(`${ha1}:${nonce}:${ha2}`).toString();
+    console.log('[websocketservice.js] Computed digest response:', response);
+    return response;
+  } catch (error) {
+    console.error('[websocketservice.js] Error computing digest response:', error);
+    return '';
+  }
+};
+
+const startKeepAlive = () => {
+  if (keepAliveInterval) clearInterval(keepAliveInterval);
+  keepAliveInterval = setInterval(() => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send('PING');
+      console.debug('[websocketservice.js] Sent keep-alive PING');
+      sendSipOptions(currentExtension);
+    } else {
+      console.warn('[websocketservice.js] Keep-alive failed: WebSocket not open');
+      clearInterval(keepAliveInterval);
+    }
+  }, 15000);
+};
+
+const sendSipOptions = (extension) => {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  try {
+    const callId = `call-${Math.random().toString(36).substr(2, 9)}`;
+    const cseq = Math.floor(Math.random() * 10000);
+    const sipMessage = [
+      `OPTIONS sip:${extension}@192.168.1.194:8088 SIP/2.0`,
+      `Via: SIP/2.0/WS 192.168.1.126:8088;branch=z9hG4bK${Math.random().toString(36).substr(2, 9)}`,
+      `From: <sip:${extension}@192.168.1.194>;tag=${Math.random().toString(36).substr(2, 9)}`,
+      `To: <sip:${extension}@192.168.1.194>`,
+      `Call-ID: ${callId}`,
+      `CSeq: ${cseq} OPTIONS`,
+      `Content-Length: 0`,
+      `Max-Forwards: 70`,
+      `\r\n`,
+    ].join('\r\n');
+    ws.send(sipMessage);
+    console.log(`[websocketservice.js] Sent SIP OPTIONS for ${extension}`);
+  } catch (error) {
+    console.error('[websocketservice.js] Error sending SIP OPTIONS:', error);
+  }
+};
+
+const sendSipRegister = (extension) => {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  try {
+    const callId = `call-${Math.random().toString(36).substr(2, 9)}`;
+    const cseq = Math.floor(Math.random() * 10000);
+    const sipMessage = [
+      `REGISTER sip:192.168.1.194:8088 SIP/2.0`,
+      `Via: SIP/2.0/WS 192.168.1.126:8088;branch=z9hG4bK${Math.random().toString(36).substr(2, 9)}`,
+      `From: <sip:${extension}@192.168.1.194>;tag=${Math.random().toString(36).substr(2, 9)}`,
+      `To: <sip:${extension}@192.168.1.194>`,
+      `Call-ID: ${callId}`,
+      `CSeq: ${cseq} REGISTER`,
+      `Contact: <sip:${extension}@192.168.1.194:8088;transport=ws>`,
+      `Content-Length: 0`,
+      `Max-Forwards: 70`,
+      `\r\n`,
+    ].join('\r\n');
+    ws.send(sipMessage);
+    console.log(`[websocketservice.js] Sent SIP REGISTER for ${extension}`);
+  } catch (error) {
+    console.error('[websocketservice.js] Error sending SIP REGISTER:', error);
+  }
+};
 
 export const connectWebSocket = async (extension, onMessage, statusCallback) => {
-  if (!extension) {
-    console.error('Extension is required for WebSocket connection.');
-    return Promise.reject(new Error('Missing extension'));
+  if (!extension || !/^\d{4,6}$/.test(extension)) {
+    console.error('[websocketservice.js] Invalid extension:', extension);
+    return Promise.reject(new Error('Invalid extension'));
   }
 
-  if (socket && socket.readyState === WebSocket.OPEN) {
-    console.log('WebSocket already connected for extension:', extension);
-    return Promise.resolve(socket);
+  if (ws && ws.readyState === WebSocket.OPEN && currentExtension === extension) {
+    console.log(`[websocketservice.js] WebSocket already connected for extension: ${extension}`);
+    if (statusCallback) statusCallback('connected');
+    return ws;
   }
 
-  onStatusChange = statusCallback;
+  onStatusChange = statusCallback || (() => {});
+  currentExtension = extension;
   updateStatus('connecting');
 
-  // Fetch WebSocket port from /health API
-  let wsUrl = DEFAULT_WS_URL;
-  try {
-    const response = await axios.post(`${API_URL}/health`, {
-      kali_ip: '192.168.1.194',
-      ssh_port: '22',
-      ssh_user: 'kali',
-      ssh_password: 'kali',
-    }, { timeout: 10000 });
-    if (response.data.status === 'success' && response.data.ports.websocket) {
-      wsUrl = `ws://192.168.1.194:${response.data.ports.websocket}/ws`;
-    } else {
-      console.warn('Using default WebSocket URL; /health API did not return valid port.');
-    }
-  } catch (error) {
-    console.error('Failed to fetch WebSocket port from /health:', error.message);
-    console.warn('Falling back to default WebSocket URL:', wsUrl);
+  if (!await checkBackendHealth()) {
+    console.warn('[websocketservice.js] Proceeding despite health check failure');
+    updateStatus('warning');
   }
 
-  // Append extension to WebSocket URL
-  const finalWsUrl = `${wsUrl}?extension=${extension}`;
-  socket = new WebSocket(finalWsUrl);
+  const connect = () => new Promise((resolve, reject) => {
+    ws = new WebSocket(`${WS_URL}?extension=${extension}`, ['sip']);
+    ws.binaryType = 'arraybuffer';
 
-  return new Promise((resolve, reject) => {
-    // Start a connection timeout timer
-    connectionTimeout = setTimeout(() => {
-      if (!isConnected) {
-        console.error('WebSocket connection timed out for URL:', finalWsUrl);
-        safeCloseSocket();
-        updateStatus('disconnected');
-        reject(new Error('Connection timeout'));
-      }
-    }, CONNECTION_TIMEOUT);
-
-    socket.onopen = () => {
-      console.log('✅ WebSocket connection established for extension:', extension, 'at', finalWsUrl);
-      clearTimeout(connectionTimeout);
-      reconnectAttempts = 0;
+    ws.onopen = () => {
+      console.log(`[websocketservice.js] WebSocket connected for extension: ${extension}`);
       isConnected = true;
+      reconnectAttempts = 0;
+      authAttempts = 0;
       updateStatus('connected');
-      resolve(socket);
+      sendSipRegister(extension);
+      startKeepAlive();
+      resolve(ws);
     };
 
-    socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        console.log('📩 WebSocket message received:', data);
-        if (onMessage) onMessage(data);
-      } catch (error) {
-        console.error('❌ Error parsing WebSocket message:', error, event.data);
-      }
-    };
-
-    socket.onerror = (error) => {
-      console.error('🚨 WebSocket error for URL:', finalWsUrl, error);
-      isConnected = false;
-      updateStatus('error');
-      safeCloseSocket();
-      attemptReconnect(extension, onMessage, reject);
-    };
-
-    socket.onclose = () => {
-      console.log('🔌 WebSocket connection closed for URL:', finalWsUrl);
-      isConnected = false;
-      safeCloseSocket();
-      updateStatus('disconnected');
-      attemptReconnect(extension, onMessage);
-    };
-  });
-};
-
-const attemptReconnect = (extension, onMessage, reject = null) => {
-  if (reconnectAttempts >= maxReconnectAttempts) {
-    console.error('❌ Max reconnect attempts reached.');
-    if (reject) reject(new Error('Max reconnect attempts reached'));
-    return;
-  }
-
-  if (reconnectTimeout) return; // prevent multiple reconnect timers
-
-  const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), MAX_RECONNECT_DELAY);
-  console.log(`🔄 Reconnecting in ${delay}ms... (${reconnectAttempts + 1}/${maxReconnectAttempts})`);
-  reconnectAttempts++;
-
-  reconnectTimeout = setTimeout(() => {
-    reconnectTimeout = null;
-    connectWebSocket(extension, onMessage, onStatusChange)
-      .catch((err) => console.error('Reconnect failed:', err));
-  }, delay);
-};
-
-const safeCloseSocket = () => {
-  if (socket && socket.readyState !== WebSocket.CLOSED) {
-    try {
-      socket.close();
-    } catch (e) {
-      console.warn('Error while closing socket:', e);
-    }
-  }
-  socket = null;
-  clearTimeout(reconnectTimeout);
-  clearTimeout(connectionTimeout);
-};
-
-export const sendWebSocketMessage = (message, retries = 3, delay = 1000) => {
-  return new Promise((resolve, reject) => {
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      if (retries > 0) {
-        console.warn(`WebSocket not open, retrying in ${delay}ms (${retries} retries left)...`);
-        setTimeout(() => {
-          sendWebSocketMessage(message, retries - 1, delay).then(resolve).catch(reject);
-        }, delay);
+    ws.onmessage = (event) => {
+      const data = event.data instanceof ArrayBuffer ? new TextDecoder().decode(event.data) : event.data.trim();
+      if (data === 'PONG') {
+        console.debug('[websocketservice.js] Received keep-alive PONG');
         return;
       }
-      console.error('WebSocket is not open.');
-      return reject(new Error('WebSocket not open'));
-    }
+      try {
+        let message;
+        try {
+          message = JSON.parse(data);
+        } catch {
+          if (data.includes('SIP/2.0 401 Unauthorized')) {
+            const nonceMatch = data.match(/nonce="([^"]+)"/);
+            if (nonceMatch) {
+              const nonce = nonceMatch[1];
+              console.log('[websocketservice.js] Received nonce:', nonce);
+              if (nonce === lastNonce && authAttempts >= maxAuthAttempts) {
+                console.error('[websocketservice.js] Max authentication attempts reached for nonce:', nonce);
+                reject(new Error('Authentication failed after max attempts'));
+                return;
+              }
+              if (nonce !== lastNonce) {
+                authAttempts = 0;
+                lastNonce = nonce;
+              }
+              authAttempts++;
+              sendSipRegisterWithAuth(extension, nonce);
+            }
+          } else if (data.includes('SIP/2.0 200 OK')) {
+            console.log('[websocketservice.js] SIP registration successful for extension:', extension);
+            authAttempts = 0;
+            lastNonce = null;
+          } else if (data.includes('SIP/2.0 403 Forbidden')) {
+            console.error('[websocketservice.js] Registration failed: 403 Forbidden for extension:', extension);
+            reject(new Error('Registration forbidden'));
+            return;
+          }
+          return;
+        }
+        console.log('[websocketservice.js] WebSocket message:', message);
+        if (message.type === 'incoming-call') {
+          window.dispatchEvent(new CustomEvent('incomingCall', { detail: message }));
+        }
+        if (onMessage) onMessage(message);
+      } catch (error) {
+        console.error('[websocketservice.js] Error processing message:', error, 'Data:', data);
+      }
+    };
 
+    ws.onerror = (error) => {
+      console.error('[websocketservice.js] WebSocket error:', error);
+      isConnected = false;
+      updateStatus('error');
+      reject(new Error('WebSocket connection failed'));
+    };
+
+    ws.onclose = (event) => {
+      console.warn(`[websocketservice.js] WebSocket closed, code: ${event.code}, reason: ${event.reason || 'none'}`);
+      isConnected = false;
+      updateStatus('disconnected');
+      if (keepAliveInterval) clearInterval(keepAliveInterval);
+      if (reconnectAttempts < maxReconnectAttempts) {
+        reconnectAttempts++;
+        console.log(`[websocketservice.js] Reconnecting attempt ${reconnectAttempts}/${maxReconnectAttempts}`);
+        setTimeout(() => connect().then(resolve).catch(reject), reconnectDelay);
+      } else {
+        console.error('[websocketservice.js] Max reconnect attempts reached');
+        reject(new Error(`WebSocket failed after ${maxReconnectAttempts} attempts`));
+      }
+    };
+  });
+
+  return connect();
+};
+
+const sendSipRegisterWithAuth = (extension, nonce) => {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  try {
+    const callId = `call-${Math.random().toString(36).substr(2, 9)}`;
+    const cseq = Math.floor(Math.random() * 10000);
+    const password = `password${extension}`;
+    const digestResponse = computeDigestResponse(
+      extension,
+      password,
+      'asterisk',
+      'REGISTER',
+      'sip:192.168.1.194:8088',
+      nonce
+    );
+    const sipMessage = [
+      `REGISTER sip:192.168.1.194:8088 SIP/2.0`,
+      `Via: SIP/2.0/WS 192.168.1.126:8088;branch=z9hG4bK${Math.random().toString(36).substr(2, 9)}`,
+      `From: <sip:${extension}@192.168.1.194>;tag=${Math.random().toString(36).substr(2, 9)}`,
+      `To: <sip:${extension}@192.168.1.194>`,
+      `Call-ID: ${callId}`,
+      `CSeq: ${cseq} REGISTER`,
+      `Contact: <sip:${extension}@192.168.1.194:8088;transport=ws>`,
+      `Authorization: Digest username="${extension}", realm="asterisk", nonce="${nonce}", uri="sip:192.168.1.194:8088", response="${digestResponse}"`,
+      `Content-Length: 0`,
+      `Max-Forwards: 70`,
+      `\r\n`,
+    ].join('\r\n');
+    ws.send(sipMessage);
+    console.log(`[websocketservice.js] Sent authenticated SIP REGISTER for ${extension}, attempt ${authAttempts}/${maxAuthAttempts}`);
+  } catch (error) {
+    console.error('[websocketservice.js] Error sending authenticated SIP REGISTER:', error);
+  }
+};
+
+export const sendWebSocketMessage = (message) => {
+  return new Promise((resolve, reject) => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      console.error('[websocketservice.js] WebSocket not connected');
+      reject(new Error('WebSocket not connected'));
+      return;
+    }
     try {
-      socket.send(JSON.stringify(message));
-      console.log('📤 WebSocket message sent:', message);
+      ws.send(JSON.stringify(message));
+      console.log('[websocketservice.js] WebSocket message sent:', message);
       resolve();
     } catch (error) {
-      console.error('❌ Error sending WebSocket message:', error);
-      if (retries > 0) {
-        setTimeout(() => {
-          sendWebSocketMessage(message, retries - 1, delay).then(resolve).catch(reject);
-        }, delay);
-      } else {
-        reject(error);
-      }
+      console.error('[websocketservice.js] Error sending WebSocket message:', error);
+      reject(error);
     }
   });
 };
-
-export const getWebSocket = () => socket;
 
 export const getConnectionStatus = () => ({
   isConnected,
-  reconnectAttempts,
-  maxReconnectAttempts,
+  extension: currentExtension,
 });
-
-export const closeWebSocket = () => {
-  safeCloseSocket();
-  reconnectAttempts = 0;
-  isConnected = false;
-  updateStatus('disconnected');
-  console.log('👋 WebSocket connection closed manually.');
-};
 
 const updateStatus = (status) => {
   if (onStatusChange) {

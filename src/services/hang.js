@@ -1,24 +1,24 @@
-// services/hang.js
 import axios from 'axios';
 import { getToken } from './login';
 
-const API_URL = 'http://192.168.1.164:8080';
+const API_URL = process.env.REACT_APP_API_URL || 'http://192.168.1.164:8080';
 
 export const hangup = async (channel) => {
   try {
-    const token = getToken();
     const response = await axios.post(
       `${API_URL}/protected/call/hangup`,
       { channel },
       {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${getToken()}`,
+          'Content-Type': 'application/json',
         },
       }
     );
+    console.log(`[hang.js] Call hung up for channel ${channel}`);
     return response.data;
   } catch (error) {
-    console.error('Hangup error:', error);
-    throw error;
+    console.error(`[hang.js] Error hanging up call for channel ${channel}:`, error);
+    throw new Error(`Failed to hang up call: ${error.message}`);
   }
 };

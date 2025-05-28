@@ -9,8 +9,8 @@ import CallLogsPage from './pages/CallLogsPage';
 import CallingPage from './pages/CallingPage';
 import IncomingCallPage from './pages/IncomingCallPage';
 import Loader from './components/loader';
-import { connectWebSocket, closeWebSocket } from './services/websocketservice';
-import { handleIncomingCall } from './services/IncomingCallService';
+import { connectWebSocket, sendWebSocketMessage } from './services/websocketservice';
+import { initializeSIP, answerCall, hangupCall } from './services/call';
 import VoipPhone from './components/VoipPhone';
 import SipClient from './components/SipClient';
 
@@ -26,9 +26,10 @@ const App = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
   const [notification, setNotification] = useState(null);
+  const [isRegistered, setIsRegistered] = useState(false);
   const [contacts] = useState([
-    { id: 1, name: 'John Doe', extension: '123', avatar: 'https://via.placeholder.com/40/ef4444/fff?text=JD' },
-    { id: 2, name: 'Jane Smith', extension: '456', avatar: 'https://via.placeholder.com/40/facc15/fff?text=JS' },
+    { id: 1, name: 'John Doe', extension: '1001', avatar: 'https://via.placeholder.com/40/ef4444/fff?text=JD' },
+    { id: 2, name: 'Jane Smith', extension: '1002', avatar: 'https://via.placeholder.com/40/facc15/fff?text=JS' },
   ]);
 
   useEffect(() => {
@@ -38,28 +39,58 @@ const App = () => {
     if (token && extension && storedSipPassword) {
       setUser({ username: 'User', extension });
       setSipPassword(storedSipPassword);
-      connectWebSocket(extension, handleWebSocketMessage, (status) => {
-        setNotification({
-          message: `WebSocket ${status}`,
-          type: status === 'connected' ? 'success' : status === 'error' || status === 'disconnected' ? 'error' : 'info',
-        });
-        setTimeout(() => setNotification(null), 3000);
-      }).catch((error) => {
-        console.error('WebSocket connection failed:', error);
-        setNotification({ message: 'Failed to connect WebSocket', type: 'error' });
-        setTimeout(() => setNotification(null), 3000);
-      });
+      initializeConnection(extension);
     }
-    return () => closeWebSocket();
-  }, []);
+
+    const handleRegistrationStatus = (event) => {
+      const { extension, registered, cause } = event.detail;
+      if (extension === user?.extension) {
+        setIsRegistered(registered);
+        if (!registered && cause) {
+          setNotification({ message: `Registration failed: ${cause}`, type: 'error' });
+          setTimeout(() => setNotification(null), 5000);
+        }
+      }
+    };
+
+    window.addEventListener('registrationStatus', handleRegistrationStatus);
+    return () => window.removeEventListener('registrationStatus', handleRegistrationStatus);
+  }, [user?.extension]);
+
+  const initializeConnection = async (extension) => {
+    try {
+      await connectWebSocket(
+        extension,
+        handleWebSocketMessage,
+        (status) => {
+          setNotification({
+            message: `WebSocket ${status}`,
+            type: status === 'connected' ? 'success' : status === 'error' ? 'error' : 'info',
+          });
+          setTimeout(() => setNotification(null), 3000);
+        }
+      );
+      await initializeSIP({ extension }, (call) => {
+        setIncomingCall({
+          from: call.from,
+          channel: `${call.from}@192.168.1.194`,
+          session: call.session,
+        });
+      });
+      console.log('[App.js] Connection initialized for extension:', extension);
+    } catch (error) {
+      console.error('[App.js] Connection initialization failed:', error);
+      setNotification({ message: `Connection failed: ${error.message}`, type: 'error' });
+      setTimeout(() => setNotification(null), 5000);
+    }
+  };
 
   const handleWebSocketMessage = (data) => {
-    if (data.type === 'offer') {
+    if (data.type === 'incoming-call') {
       setIncomingCall({
         from: data.from,
-        channel: data.channel || `chan_${Math.random().toString(36).slice(2)}`,
-        priority: data.priority || 'medium',
-        offer: data.offer,
+        channel: `${data.from}@192.168.1.194`,
+        session: data.session,
       });
     }
   };
@@ -68,7 +99,11 @@ const App = () => {
     if (result.success) {
       localStorage.setItem('token', result.token);
       localStorage.setItem('extension', result.user?.extension);
-      setUser({ username: result.user?.username || 'User', extension: result.user?.extension });
+      localStorage.setItem('sipPassword', `password${result.user?.extension}`);
+      const extension = result.user?.extension;
+      setUser({ username: result.user?.username || 'User', extension });
+      setSipPassword(`password${extension}`);
+      initializeConnection(extension);
       navigate('/dashboard', { state: { success: result.message } });
     }
   };
@@ -76,19 +111,10 @@ const App = () => {
   const handleRegister = (extension, sipPassword) => {
     localStorage.setItem('extension', extension);
     localStorage.setItem('sipPassword', sipPassword);
+    localStorage.setItem('token', 'dummy-token'); // Replace with actual token logic
     setUser({ username: 'User', extension });
     setSipPassword(sipPassword);
-    connectWebSocket(extension, handleWebSocketMessage, (status) => {
-      setNotification({
-        message: `WebSocket ${status}`,
-        type: status === 'connected' ? 'success' : status === 'error' || status === 'disconnected' ? 'error' : 'info',
-      });
-      setTimeout(() => setNotification(null), 3000);
-    }).catch((error) => {
-      console.error('WebSocket connection failed:', error);
-      setNotification({ message: 'Failed to connect WebSocket', type: 'error' });
-      setTimeout(() => setNotification(null), 3000);
-    });
+    initializeConnection(extension);
     navigate('/dashboard', { state: { success: 'Registered successfully' } });
   };
 
@@ -96,38 +122,35 @@ const App = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('extension');
     localStorage.removeItem('sipPassword');
+    localStorage.removeItem(`sipRegistered_${user?.extension}`);
     setUser(null);
     setSipPassword(null);
     setDarkMode(false);
     setIncomingCall(null);
-    closeWebSocket();
+    setIsRegistered(false);
     navigate('/check', { state: { success: 'Logged out successfully' } });
-  };
-
-  const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
   };
 
   const handleAcceptCall = async (callData) => {
     setIsLoading(true);
     try {
-      const { acceptCall } = await handleIncomingCall(
-        callData,
-        user,
-        (stream, peerConnection) => {
-          const caller = contacts.find((c) => c.extension === callData.from) || {
-            name: `Ext ${callData.from}`,
-            extension: callData.from,
-          };
-          setIncomingCall(null);
-          navigate('/calling', { state: { contact: caller, callStatus: 'Connected', isOutgoing: false, stream, peerConnection } });
+      const stream = await answerCall(callData.channel);
+      const caller = contacts.find((c) => c.extension === callData.from) || {
+        name: `Ext ${callData.from}`,
+        extension: callData.from,
+      };
+      setIncomingCall(null);
+      navigate('/calling', {
+        state: {
+          contact: caller,
+          callStatus: 'Connected',
+          isOutgoing: false,
+          stream,
+          peerConnection: null, // Update if WebRTC is implemented
         },
-        () => {
-          setIncomingCall(null);
-        }
-      );
-      await acceptCall();
+      });
     } catch (error) {
+      console.error('[App.js] Failed to accept call:', error);
       setNotification({ message: `Failed to accept call: ${error.message}`, type: 'error' });
       setTimeout(() => setNotification(null), 3000);
       setIncomingCall(null);
@@ -139,16 +162,10 @@ const App = () => {
   const handleRejectCall = async (callData) => {
     setIsLoading(true);
     try {
-      const { rejectCall } = await handleIncomingCall(
-        callData,
-        user,
-        () => {},
-        () => {
-          setIncomingCall(null);
-        }
-      );
-      await rejectCall();
+      await hangupCall(callData.channel, callData.from, user?.extension, callData.session);
+      setIncomingCall(null);
     } catch (error) {
+      console.error('[App.js] Failed to reject call:', error);
       setNotification({ message: `Failed to reject call: ${error.message}`, type: 'error' });
       setTimeout(() => setNotification(null), 3000);
       setIncomingCall(null);
@@ -204,7 +221,7 @@ const App = () => {
               onLogin={handleLogin}
               onSwitchToRegister={() => navigate('/register')}
               darkMode={darkMode}
-              toggleDarkMode={toggleDarkMode}
+              toggleDarkMode={() => setDarkMode(!darkMode)}
             />
           }
         />
@@ -215,7 +232,7 @@ const App = () => {
               onRegister={handleRegister}
               onSwitchToLogin={() => navigate('/login')}
               darkMode={darkMode}
-              toggleDarkMode={toggleDarkMode}
+              toggleDarkMode={() => setDarkMode(!darkMode)}
             />
           }
         />
@@ -227,7 +244,7 @@ const App = () => {
                 user={user}
                 onLogout={handleLogout}
                 darkMode={darkMode}
-                toggleDarkMode={toggleDarkMode}
+                toggleDarkMode={() => setDarkMode(!darkMode)}
                 setIsLoading={setIsLoading}
                 contacts={contacts}
               />
@@ -240,7 +257,7 @@ const App = () => {
             <ProtectedRoute user={user}>
               <ContactsPage
                 darkMode={darkMode}
-                toggleDarkMode={toggleDarkMode}
+                toggleDarkMode={() => setDarkMode(!darkMode)}
                 setIsLoading={setIsLoading}
               />
             </ProtectedRoute>
@@ -254,7 +271,7 @@ const App = () => {
                 extension={user?.extension || ''}
                 sipPassword={sipPassword}
                 darkMode={darkMode}
-                toggleDarkMode={toggleDarkMode}
+                toggleDarkMode={() => setDarkMode(!darkMode)}
                 setIsLoading={setIsLoading}
               />
             </ProtectedRoute>
@@ -266,7 +283,7 @@ const App = () => {
             <ProtectedRoute user={user}>
               <CallLogsPage
                 darkMode={darkMode}
-                toggleDarkMode={toggleDarkMode}
+                toggleDarkMode={() => setDarkMode(!darkMode)}
               />
             </ProtectedRoute>
           }
@@ -276,11 +293,11 @@ const App = () => {
           element={
             <ProtectedRoute user={user}>
               <CallingPage
-                user={user}
+                contact={contacts.find(c => c.extension === user?.extension) || { extension: user?.extension, name: `Ext ${user?.extension}` }}
+                callStatus="Idle"
+                onEndCall={() => navigate('/dashboard')}
                 darkMode={darkMode}
-                toggleDarkMode={toggleDarkMode}
-                setIsLoading={setIsLoading}
-                contacts={contacts}
+                peerConnection={null} // Update if WebRTC is implemented
               />
             </ProtectedRoute>
           }

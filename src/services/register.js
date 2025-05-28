@@ -4,17 +4,71 @@ const API_URL = "http://192.168.1.164:8080";
 
 export const register = async (username, email, password, role) => {
   try {
+    // Validate inputs
+    if (!username || !email || !password || !role) {
+      return {
+        success: false,
+        message: "All fields (username, email, password, role) are required",
+      };
+    }
+    // if (!/^\d{4,6}$/.test(username)) {
+    //   return {
+    //     success: false,
+    //     message: "Username must be a 4-6 digit extension",
+    //   };
+    // }
+    if (!/^(user|admin|faculty|emergency)$/.test(role)) {
+      return {
+        success: false,
+        message: "Role must be user, admin, faculty, or emergency",
+      };
+    }
+
+    console.log('[register.js] Attempting registration for:', { username, email, role });
+
+    // Register user
     const response = await axios.post(`${API_URL}/register`, {
       username,
       email,
       password,
       role,
     });
+
+    const { message, extension, sip_password } = response.data;
+
+    if (!extension || !sip_password) {
+      console.error('[register.js] Missing extension or sip_password:', response.data);
+      return {
+        success: false,
+        message: "Registration failed: Missing VoIP credentials",
+      };
+    }
+
+    // Verify Asterisk contact via /health
+    try {
+      const healthResponse = await axios.post(`${API_URL}/health`, {
+        kali_ip: "192.168.1.194",
+        ssh_port: "22",
+        ssh_user: "kali",
+        ssh_password: "kali",
+      }, {
+        timeout: 10000,
+      });
+      console.log('[register.js] Health check after registration:', healthResponse.data);
+    } catch (healthError) {
+      console.warn('[register.js] Health check failed post-registration:', healthError);
+      return {
+        success: false,
+        message: "Registration succeeded, but Asterisk configuration verification failed. Try logging in.",
+      };
+    }
+
+    console.log('[register.js] Registration successful:', { extension, sip_password });
     return {
       success: true,
-      message: response.data.message || "Registered successfully",
-      extension: response.data.extension,
-      sipPassword: response.data.sip_password,
+      message: message || "Registered successfully",
+      extension,
+      sipPassword: sip_password,
     };
   } catch (error) {
     let message = "Registration failed. Please try again.";
@@ -28,7 +82,7 @@ export const register = async (username, email, password, role) => {
           case "Invalid input":
           case "Invalid username":
           case "Invalid email":
-            message = "Invalid username or email. Please check your input.";
+            message = "Invalid username or email. Username must be a 4-6 digit extension.";
             break;
           case "Duplicate username":
           case "Duplicate email":
@@ -47,7 +101,7 @@ export const register = async (username, email, password, role) => {
             message = "Failed to save user data. Try again later.";
             break;
           case "Failed to update Asterisk configuration":
-            message = "Failed to configure VoIP settings. Try again later.";
+            message = "Failed to configure VoIP settings. Contact support.";
             break;
           case "SSH configuration missing":
             message = "Server configuration error. Contact support.";
@@ -64,7 +118,7 @@ export const register = async (username, email, password, role) => {
       message = `Registration error: ${error.message}`;
     }
 
-    console.error("Registration error:", {
+    console.error("[register.js] Registration error:", {
       message,
       status: error.response?.status,
       data: error.response?.data,
