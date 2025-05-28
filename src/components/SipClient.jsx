@@ -7,11 +7,24 @@ const SipClient = ({ extension, sipPassword }) => {
   const uaRef = useRef(null);
   const reconnectAttemptsRef = useRef(0);
   const maxReconnectAttempts = 5;
-  const baseReconnectDelay = 10000; // 10 seconds
+  const baseReconnectDelay = 15000;
+
+  const attemptReconnect = () => {
+    if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+      console.error('[SipClient.jsx] Max reconnect attempts reached for extension:', extension);
+      return;
+    }
+    reconnectAttemptsRef.current += 1;
+    const delay = baseReconnectDelay * Math.pow(2, reconnectAttemptsRef.current - 1);
+    console.log(`[SipClient.jsx] Reconnecting attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts} in ${delay}ms`);
+    setTimeout(() => {
+      initializeSip();
+    }, delay);
+  };
 
   const initializeSip = useCallback(async () => {
     if (!extension || !/^\d{4,6}$/.test(extension)) {
-      console.error('[SipClient] Invalid extension:', extension);
+      console.error('[SipClient.jsx] Invalid extension:', extension);
       window.dispatchEvent(new CustomEvent('registrationStatus', {
         detail: { extension, registered: false, cause: 'Invalid extension' },
       }));
@@ -19,7 +32,7 @@ const SipClient = ({ extension, sipPassword }) => {
     }
 
     if (uaRef.current && uaRef.current.isConnected()) {
-      console.log('[SipClient] SIP UA already initialized for extension:', extension);
+      console.log('[SipClient.jsx] SIP UA already initialized for extension:', extension);
       return;
     }
 
@@ -28,9 +41,9 @@ const SipClient = ({ extension, sipPassword }) => {
       if (!isConnected || activeExtension !== extension) {
         await connectWebSocket(
           extension,
-          (data) => console.log('[SipClient] WebSocket message:', data),
+          (data) => console.log('[SipClient.jsx] WebSocket message:', data),
           (status) => {
-            console.log('[SipClient] WebSocket status:', status);
+            console.log('[SipClient.jsx] WebSocket status:', status);
             if (status === 'error') {
               window.dispatchEvent(new CustomEvent('registrationStatus', {
                 detail: { extension, registered: false, cause: 'WebSocket connection failed' },
@@ -40,11 +53,15 @@ const SipClient = ({ extension, sipPassword }) => {
         );
       }
 
-      const socket = new JsSIP.WebSocketInterface('ws://192.168.1.194:8088/ws');
+      const socket = new JsSIP.WebSocketInterface('ws://192.168.1.194:8088/ws', {
+        protocols: ['sip'],
+      });
 
       const configuration = {
         sockets: [socket],
-        uri: `sip:${extension}@192.168.1.194`,
+        uri: `sip:${extension}@192.168.1.194:8088`,
+        display_name: `User ${extension}`,
+        contact_uri: `sip:${extension}@192.168.1.126;transport=ws`,
         password: sipPassword,
         register: true,
         session_timers: false,
@@ -52,16 +69,17 @@ const SipClient = ({ extension, sipPassword }) => {
         connection_recovery_max_interval: 30,
         connection_timeout: 15000,
       };
+      console.debug('[SipClient.jsx] JsSIP configuration:', configuration);
 
       uaRef.current = new JsSIP.UA(configuration);
 
       uaRef.current.on('connected', () => {
-        console.log(`[SipClient] SIP UA connected for extension ${extension}`);
+        console.log(`[SipClient.jsx] SIP UA connected for extension ${extension}`);
         reconnectAttemptsRef.current = 0;
       });
 
       uaRef.current.on('disconnected', () => {
-        console.warn(`[SipClient] SIP UA disconnected for extension ${extension}`);
+        console.warn(`[SipClient.jsx] SIP UA disconnected for extension ${extension}`);
         window.dispatchEvent(new CustomEvent('registrationStatus', {
           detail: { extension, registered: false },
         }));
@@ -69,7 +87,7 @@ const SipClient = ({ extension, sipPassword }) => {
       });
 
       uaRef.current.on('registered', () => {
-        console.log(`[SipClient] SIP UA registered for extension ${extension}`);
+        console.log(`[SipClient.jsx] SIP UA registered for extension ${extension}`);
         localStorage.setItem(`sipRegistered_${extension}`, 'true');
         window.dispatchEvent(new CustomEvent('registrationStatus', {
           detail: { extension, registered: true },
@@ -77,7 +95,7 @@ const SipClient = ({ extension, sipPassword }) => {
       });
 
       uaRef.current.on('unregistered', () => {
-        console.log(`[SipClient] SIP UA unregistered for extension ${extension}`);
+        console.log('[SipClient.jsx] SIP UA unregistered for extension:', extension);
         localStorage.removeItem(`sipRegistered_${extension}`);
         window.dispatchEvent(new CustomEvent('registrationStatus', {
           detail: { extension, registered: false },
@@ -85,13 +103,13 @@ const SipClient = ({ extension, sipPassword }) => {
       });
 
       uaRef.current.on('registrationFailed', (data) => {
-        console.error('[SipClient] SIP registration failed:', data.cause);
+        console.error('[SipClient.jsx] SIP registration failed:', data.cause);
         localStorage.removeItem(`sipRegistered_${extension}`);
         window.dispatchEvent(new CustomEvent('registrationStatus', {
           detail: { extension, registered: false, cause: data.cause },
         }));
         if (data.cause === 'Unauthorized') {
-          console.log('[SipClient] Retrying registration after 401 Unauthorized');
+          console.log('[SipClient.jsx] Retrying registration after 401 Unauthorized');
           attemptReconnect();
         }
       });
@@ -99,7 +117,7 @@ const SipClient = ({ extension, sipPassword }) => {
       uaRef.current.on('newRTCSession', (data) => {
         const session = data.session;
         if (session.direction === 'incoming') {
-          console.log('[SipClient] Incoming call from', session.remote_identity.uri.user);
+          console.log('[SipClient.jsx] Incoming call from', session.remote_identity.uri.user);
           window.dispatchEvent(new CustomEvent('incomingCall', {
             detail: {
               from: session.remote_identity.uri.user,
@@ -111,29 +129,17 @@ const SipClient = ({ extension, sipPassword }) => {
       });
 
       uaRef.current.start();
-      console.log('[SipClient] SIP UA started for extension:', extension);
+      console.debug('[SipClient.jsx] SIP UA started with extension:', extension);
+      console.log('[SipClient.jsx] SIP UA started for extension:', extension);
 
     } catch (error) {
-      console.error('[SipClient] SIP UA initialization failed:', error);
+      console.error('[SipClient.jsx] SIP UA initialization failed:', error.message, error.stack);
       window.dispatchEvent(new CustomEvent('registrationStatus', {
         detail: { extension, registered: false, cause: error.message },
       }));
       attemptReconnect();
     }
-  }, [extension, sipPassword]);
-
-  const attemptReconnect = () => {
-    if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
-      console.error('[SipClient] Max reconnect attempts reached for extension:', extension);
-      return;
-    }
-    reconnectAttemptsRef.current += 1;
-    const delay = baseReconnectDelay * Math.pow(2, reconnectAttemptsRef.current - 1);
-    console.log(`[SipClient] Reconnecting attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts} in ${delay}ms`);
-    setTimeout(() => {
-      initializeSip();
-    }, delay);
-  };
+  }, [extension, sipPassword, attemptReconnect]);
 
   useEffect(() => {
     initializeSip();
@@ -141,7 +147,7 @@ const SipClient = ({ extension, sipPassword }) => {
       if (uaRef.current) {
         uaRef.current.stop();
         uaRef.current = null;
-        console.log('[SipClient] SIP UA stopped');
+        console.log('[SipClient.jsx] SIP UA stopped');
       }
     };
   }, [extension, sipPassword, initializeSip]);

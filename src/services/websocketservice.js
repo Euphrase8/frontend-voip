@@ -10,10 +10,11 @@ let onStatusChange = null;
 let currentExtension = null;
 let reconnectAttempts = 0;
 let authAttempts = 0;
-const maxReconnectAttempts = 3;
 const maxAuthAttempts = 3;
-const reconnectDelay = 10000;
+const baseReconnectDelay = 10000;
 let keepAliveInterval = null;
+let connectionMonitor = null;
+let lastPong = Date.now();
 let lastNonce = null;
 
 const checkBackendHealth = async () => {
@@ -54,6 +55,7 @@ const computeDigestResponse = (username, password, realm, method, uri, nonce) =>
 
 const startKeepAlive = () => {
   if (keepAliveInterval) clearInterval(keepAliveInterval);
+  if (connectionMonitor) clearInterval(connectionMonitor);
   keepAliveInterval = setInterval(() => {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send('PING');
@@ -61,9 +63,15 @@ const startKeepAlive = () => {
       sendSipOptions(currentExtension);
     } else {
       console.warn('[websocketservice.js] Keep-alive failed: WebSocket not open');
-      clearInterval(keepAliveInterval);
+      reconnect();
     }
   }, 15000);
+  connectionMonitor = setInterval(() => {
+    if (Date.now() - lastPong > 30000) {
+      console.warn('[websocketservice.js] No PONG received for 30s, forcing reconnect');
+      reconnect();
+    }
+  }, 30000);
 };
 
 const sendSipOptions = (extension) => {
@@ -72,16 +80,18 @@ const sendSipOptions = (extension) => {
     const callId = `call-${Math.random().toString(36).substr(2, 9)}`;
     const cseq = Math.floor(Math.random() * 10000);
     const sipMessage = [
-      `OPTIONS sip:${extension}@192.168.1.194:8088 SIP/2.0`,
-      `Via: SIP/2.0/WS 192.168.1.126:8088;branch=z9hG4bK${Math.random().toString(36).substr(2, 9)}`,
-      `From: <sip:${extension}@192.168.1.194>;tag=${Math.random().toString(36).substr(2, 9)}`,
-      `To: <sip:${extension}@192.168.1.194>`,
+      `OPTIONS sip:192.168.1.194:8088 SIP/2.0`,
+      `Via: SIP/2.0/WS 192.168.1.126:5060;branch=z9hG4bK${Math.random().toString(36).substr(2, 9)}`,
+      `From: "User ${extension}" <sip:${extension}@192.168.1.194:8088>;tag=${Math.random().toString(36).substr(2, 9)}`,
+      `To: <sip:${extension}@192.168.1.194:8088>`,
       `Call-ID: ${callId}`,
       `CSeq: ${cseq} OPTIONS`,
+      `Contact: <sip:${extension}@192.168.1.126;transport=ws>`,
       `Content-Length: 0`,
       `Max-Forwards: 70`,
       `\r\n`,
     ].join('\r\n');
+    console.debug('[websocketservice.js] Sending SIP OPTIONS:', sipMessage);
     ws.send(sipMessage);
     console.log(`[websocketservice.js] Sent SIP OPTIONS for ${extension}`);
   } catch (error) {
@@ -96,21 +106,29 @@ const sendSipRegister = (extension) => {
     const cseq = Math.floor(Math.random() * 10000);
     const sipMessage = [
       `REGISTER sip:192.168.1.194:8088 SIP/2.0`,
-      `Via: SIP/2.0/WS 192.168.1.126:8088;branch=z9hG4bK${Math.random().toString(36).substr(2, 9)}`,
-      `From: <sip:${extension}@192.168.1.194>;tag=${Math.random().toString(36).substr(2, 9)}`,
-      `To: <sip:${extension}@192.168.1.194>`,
+      `Via: SIP/2.0/WS 192.168.1.126:5060;branch=z9hG4bK${Math.random().toString(36).substr(2, 9)}`,
+      `From: "User ${extension}" <sip:${extension}@192.168.1.194:8088>;tag=${Math.random().toString(36).substr(2, 9)}`,
+      `To: <sip:${extension}@192.168.1.194:8088>`,
       `Call-ID: ${callId}`,
       `CSeq: ${cseq} REGISTER`,
-      `Contact: <sip:${extension}@192.168.1.194:8088;transport=ws>`,
+      `Contact: <sip:${extension}@192.168.1.126;transport=ws>`,
       `Content-Length: 0`,
       `Max-Forwards: 70`,
       `\r\n`,
     ].join('\r\n');
+    console.debug('[websocketservice.js] Sending SIP REGISTER:', sipMessage);
     ws.send(sipMessage);
     console.log(`[websocketservice.js] Sent SIP REGISTER for ${extension}`);
   } catch (error) {
     console.error('[websocketservice.js] Error sending SIP REGISTER:', error);
   }
+};
+
+const reconnect = () => {
+  reconnectAttempts++;
+  const delay = Math.min(baseReconnectDelay * Math.pow(2, reconnectAttempts - 1), 30000);
+  console.log(`[websocketservice.js] Reconnecting attempt ${reconnectAttempts} in ${delay}ms`);
+  setTimeout(() => connectWebSocket(currentExtension, null, onStatusChange), delay);
 };
 
 export const connectWebSocket = async (extension, onMessage, statusCallback) => {
@@ -142,7 +160,7 @@ export const connectWebSocket = async (extension, onMessage, statusCallback) => 
       console.log(`[websocketservice.js] WebSocket connected for extension: ${extension}`);
       isConnected = true;
       reconnectAttempts = 0;
-      authAttempts = 0;
+      lastPong = Date.now();
       updateStatus('connected');
       sendSipRegister(extension);
       startKeepAlive();
@@ -153,6 +171,8 @@ export const connectWebSocket = async (extension, onMessage, statusCallback) => 
       const data = event.data instanceof ArrayBuffer ? new TextDecoder().decode(event.data) : event.data.trim();
       if (data === 'PONG') {
         console.debug('[websocketservice.js] Received keep-alive PONG');
+        lastPong = Date.now();
+        reconnectAttempts = 0;
         return;
       }
       try {
@@ -167,7 +187,7 @@ export const connectWebSocket = async (extension, onMessage, statusCallback) => 
               console.log('[websocketservice.js] Received nonce:', nonce);
               if (nonce === lastNonce && authAttempts >= maxAuthAttempts) {
                 console.error('[websocketservice.js] Max authentication attempts reached for nonce:', nonce);
-                reject(new Error('Authentication failed after max attempts'));
+                reconnect();
                 return;
               }
               if (nonce !== lastNonce) {
@@ -181,9 +201,11 @@ export const connectWebSocket = async (extension, onMessage, statusCallback) => 
             console.log('[websocketservice.js] SIP registration successful for extension:', extension);
             authAttempts = 0;
             lastNonce = null;
+            reconnectAttempts = 0;
+            lastPong = Date.now();
           } else if (data.includes('SIP/2.0 403 Forbidden')) {
             console.error('[websocketservice.js] Registration failed: 403 Forbidden for extension:', extension);
-            reject(new Error('Registration forbidden'));
+            reconnect();
             return;
           }
           return;
@@ -202,7 +224,7 @@ export const connectWebSocket = async (extension, onMessage, statusCallback) => 
       console.error('[websocketservice.js] WebSocket error:', error);
       isConnected = false;
       updateStatus('error');
-      reject(new Error('WebSocket connection failed'));
+      reconnect();
     };
 
     ws.onclose = (event) => {
@@ -210,14 +232,8 @@ export const connectWebSocket = async (extension, onMessage, statusCallback) => 
       isConnected = false;
       updateStatus('disconnected');
       if (keepAliveInterval) clearInterval(keepAliveInterval);
-      if (reconnectAttempts < maxReconnectAttempts) {
-        reconnectAttempts++;
-        console.log(`[websocketservice.js] Reconnecting attempt ${reconnectAttempts}/${maxReconnectAttempts}`);
-        setTimeout(() => connect().then(resolve).catch(reject), reconnectDelay);
-      } else {
-        console.error('[websocketservice.js] Max reconnect attempts reached');
-        reject(new Error(`WebSocket failed after ${maxReconnectAttempts} attempts`));
-      }
+      if (connectionMonitor) clearInterval(connectionMonitor);
+      reconnect();
     };
   });
 
@@ -240,17 +256,18 @@ const sendSipRegisterWithAuth = (extension, nonce) => {
     );
     const sipMessage = [
       `REGISTER sip:192.168.1.194:8088 SIP/2.0`,
-      `Via: SIP/2.0/WS 192.168.1.126:8088;branch=z9hG4bK${Math.random().toString(36).substr(2, 9)}`,
-      `From: <sip:${extension}@192.168.1.194>;tag=${Math.random().toString(36).substr(2, 9)}`,
-      `To: <sip:${extension}@192.168.1.194>`,
+      `Via: SIP/2.0/WS 192.168.1.126:5060;branch=z9hG4bK${Math.random().toString(36).substr(2, 9)}`,
+      `From: "User ${extension}" <sip:${extension}@192.168.1.194:8088>;tag=${Math.random().toString(36).substr(2, 9)}`,
+      `To: <sip:${extension}@192.168.1.194:8088>`,
       `Call-ID: ${callId}`,
       `CSeq: ${cseq} REGISTER`,
-      `Contact: <sip:${extension}@192.168.1.194:8088;transport=ws>`,
+      `Contact: <sip:${extension}@192.168.1.126;transport=ws>`,
       `Authorization: Digest username="${extension}", realm="asterisk", nonce="${nonce}", uri="sip:192.168.1.194:8088", response="${digestResponse}"`,
       `Content-Length: 0`,
       `Max-Forwards: 70`,
       `\r\n`,
     ].join('\r\n');
+    console.debug('[websocketservice.js] Sending authenticated SIP REGISTER:', sipMessage);
     ws.send(sipMessage);
     console.log(`[websocketservice.js] Sent authenticated SIP REGISTER for ${extension}, attempt ${authAttempts}/${maxAuthAttempts}`);
   } catch (error) {
