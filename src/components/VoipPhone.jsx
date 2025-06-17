@@ -37,7 +37,7 @@ const VoipPhone = ({
 
   const setupWebSocket = useCallback(() => {
     if (!extension || incomingStream) return; // Skip for incoming calls
-    const wsUrl = `ws://192.168.1.164:8080/ws?extension=${encodeURIComponent(extension)}`;
+    const wsUrl = `ws://172.20.10.3:8080/ws?extension=${encodeURIComponent(extension)}`;
     wsRef.current = new WebSocket(wsUrl);
 
     wsRef.current.onopen = () => {
@@ -67,10 +67,10 @@ const VoipPhone = ({
   useEffect(() => {
     if (incomingStream) return; // Skip SIP setup for incoming calls
     JsSIP.debug.enable('JsSIP:*');
-    const socket = new JsSIP.WebSocketInterface('wss://192.168.1.164:8088/ws');
+    const socket = new JsSIP.WebSocketInterface('wss://172.20.10.3:8088/ws');
     const configuration = {
       sockets: [socket],
-      uri: `sip:${extension}@192.168.1.164`,
+      uri: `sip:${extension}@172.20.10.3`,
       password,
       register: true,
     };
@@ -106,7 +106,7 @@ const VoipPhone = ({
 
     setIsLoading(true);
     try {
-      const response = await fetch('http://192.168.1.164:8080/protected/call/initiate', {
+      const response = await fetch('http://172.20.10.3:8080/protected/call/initiate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -118,7 +118,7 @@ const VoipPhone = ({
       const data = await response.json();
       if (response.ok) {
         setCallStatus(`Call initiated to ${targetExtension} (Channel: ${data.channel})`);
-        callRef.current = uaRef.current.call(`sip:${targetExtension}@192.168.1.164`, {
+        callRef.current = uaRef.current.call(`sip:${targetExtension}@172.20.10.3`, {
           mediaConstraints: { audio: true, video: false },
           eventHandlers: {
             progress: () => setCallStatus('Dialing...'),

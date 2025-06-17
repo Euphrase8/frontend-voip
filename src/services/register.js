@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = "http://192.168.1.164:8080";
+const API_URL = "http://172.20.10.3:8080";
 
 export const register = async (username, email, password, role) => {
   try {
@@ -41,25 +41,6 @@ export const register = async (username, email, password, role) => {
       return {
         success: false,
         message: "Registration failed: Missing VoIP credentials",
-      };
-    }
-
-    // Verify Asterisk contact via /health
-    try {
-      const healthResponse = await axios.post(`${API_URL}/health`, {
-        kali_ip: "192.168.1.194",
-        ssh_port: "22",
-        ssh_user: "kali",
-        ssh_password: "kali",
-      }, {
-        timeout: 10000,
-      });
-      console.log('[register.js] Health check after registration:', healthResponse.data);
-    } catch (healthError) {
-      console.warn('[register.js] Health check failed post-registration:', healthError);
-      return {
-        success: false,
-        message: "Registration succeeded, but Asterisk configuration verification failed. Try logging in.",
       };
     }
 

@@ -1,96 +1,98 @@
-import { sendWebSocketMessage } from './websocketservice';
-import { hangup } from './hang';
+import { sendWebSocketMessage } from "./websocketservice";
+import { hangup } from "./hang";
 
-export const handleIncomingCall = async (callData, user, onAccept, onReject) => {
+export const handleIncomingCall = async (
+  callData,
+  user,
+  onAccept,
+  onReject
+) => {
   let peerConnection = null;
   let stream = null;
 
   try {
-    // Initialize WebRTC
     peerConnection = new RTCPeerConnection({
       iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" },
       ],
     });
 
-    // Set remote description from offer
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(callData.offer));
+    await peerConnection.setRemoteDescription(
+      new RTCSessionDescription(callData.offer)
+    );
 
-    // Handle ICE candidates
     peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
         sendWebSocketMessage({
-          type: 'ice-candidate',
+          type: "ice-candidate",
           to: callData.from,
           from: user.extension,
           candidate: event.candidate,
         }).catch((error) => {
-          console.error('Failed to send ICE candidate:', error);
+          console.error("Failed to send ICE candidate:", error);
         });
       }
     };
 
-    // Handle incoming tracks
     peerConnection.ontrack = (event) => {
       stream = event.streams[0];
       onAccept(stream, peerConnection);
     };
 
-    // Monitor connection state
     peerConnection.onconnectionstatechange = () => {
       const state = peerConnection.connectionState;
-      if (state === 'failed' || state === 'disconnected') {
-        console.error('Call connection state:', state);
+      if (state === "failed" || state === "disconnected") {
+        console.error("Call connection state:", state);
         cleanup();
         onReject();
       }
     };
 
-    // Accept call
     const acceptCall = async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: false,
+        });
         stream.getTracks().forEach((track) => peerConnection.addTrack(track, stream));
-
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
-
         await sendWebSocketMessage({
-          type: 'answer',
+          type: "answer",
           to: callData.from,
           from: user.extension,
           answer,
+          channel: callData.channel,
+          transport: callData.transport || "transport-ws",
         });
-
-        // onAccept is called via ontrack
       } catch (error) {
-        console.error('Error accepting call:', error);
+        console.error("Error accepting call:", error);
         cleanup();
         throw error;
       }
     };
 
-    // Reject call
     const rejectCall = async () => {
       try {
         await hangup(callData.channel);
         await sendWebSocketMessage({
-          type: 'hangup',
+          type: "hangup",
           to: callData.from,
           from: user.extension,
+          channel: callData.channel,
+          transport: callData.transport || "transport-ws",
         });
         cleanup();
         onReject();
       } catch (error) {
-        console.error('Error rejecting call:', error);
+        console.error("Error rejecting call:", error);
         cleanup();
         throw error;
       }
     };
 
-    // Cleanup resources
     const cleanup = () => {
       if (stream) {
         stream.getTracks().forEach((track) => track.stop());
@@ -104,7 +106,7 @@ export const handleIncomingCall = async (callData, user, onAccept, onReject) => 
 
     return { acceptCall, rejectCall };
   } catch (error) {
-    console.error('Error initializing incoming call:', error);
+    console.error("Error initializing incoming call:", error);
     if (peerConnection) peerConnection.close();
     throw error;
   }

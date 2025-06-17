@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { getToken } from './login';
 
-const API_URL = "http://192.168.1.164:8080";
+const API_URL = "http://172.20.10.3:8080";
 
 export const getLogs = async () => {
   try {

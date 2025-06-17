@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { getToken } from './login';
 
-const API_URL = "http://192.168.1.164:8080";
-const WS_URL = "ws://192.168.1.194:8080/ws";
+const API_URL = "http://172.20.10.3:8080";
+const WS_URL = "ws://172.20.10.14:8080/ws";
 
 export const getUsers = async () => {
   try {

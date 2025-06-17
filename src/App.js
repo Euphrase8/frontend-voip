@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import ServerCheckPage from './pages/ServerCheckPage';
 import LoginPage from './auth/LoginPage';
 import RegisterPage from './auth/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
@@ -9,14 +8,10 @@ import CallLogsPage from './pages/CallLogsPage';
 import CallingPage from './pages/CallingPage';
 import IncomingCallPage from './pages/IncomingCallPage';
 import Loader from './components/loader';
-import { connectWebSocket, sendWebSocketMessage } from './services/websocketservice';
-import { initializeSIP, answerCall, hangupCall } from './services/call';
+import { initializeSIP } from './services/call';
 import VoipPhone from './components/VoipPhone';
 import SipClient from './components/SipClient';
-
-const ProtectedRoute = ({ user, children }) => {
-  return user ? children : <Navigate to="/check" replace />;
-};
+import IncomingCallListener from './pages/IncomingCallListener'; // Import the component
 
 const App = () => {
   const navigate = useNavigate();
@@ -24,7 +19,6 @@ const App = () => {
   const [sipPassword, setSipPassword] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [incomingCall, setIncomingCall] = useState(null);
   const [notification, setNotification] = useState(null);
   const [isRegistered, setIsRegistered] = useState(false);
   const [contacts] = useState([
@@ -40,8 +34,13 @@ const App = () => {
       setUser({ username: 'User', extension });
       setSipPassword(storedSipPassword);
       initializeConnection(extension);
+    } else if (!token && window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+      console.log('[App.js] No token, redirecting to /login');
+      navigate('/login', { replace: true });
     }
+  }, [navigate]);
 
+  useEffect(() => {
     const handleRegistrationStatus = (event) => {
       const { extension, registered, cause } = event.detail;
       if (extension === user?.extension) {
@@ -52,29 +51,25 @@ const App = () => {
         }
       }
     };
-
     window.addEventListener('registrationStatus', handleRegistrationStatus);
     return () => window.removeEventListener('registrationStatus', handleRegistrationStatus);
   }, [user?.extension]);
 
   const initializeConnection = async (extension) => {
     try {
-      await connectWebSocket(
-        extension,
-        handleWebSocketMessage,
-        (status) => {
-          setNotification({
-            message: `WebSocket ${status}`,
-            type: status === 'connected' ? 'success' : status === 'error' ? 'error' : 'info',
-          });
-          setTimeout(() => setNotification(null), 3000);
-        }
-      );
       await initializeSIP({ extension }, (call) => {
-        setIncomingCall({
-          from: call.from,
-          channel: `${call.from}@192.168.1.194`,
-          session: call.session,
+        // Optional: Keep this if you want to handle SIP-specific calls differently
+        navigate('/calling', {
+          state: {
+            contact: contacts.find((c) => c.extension === call.from) || {
+              name: `Ext ${call.from}`,
+              extension: call.from,
+            },
+            callStatus: 'Incoming',
+            isOutgoing: false,
+            channel: `${call.from}@172.20.10.14`,
+            session: call.session,
+          },
         });
       });
       console.log('[App.js] Connection initialized for extension:', extension);
@@ -85,22 +80,13 @@ const App = () => {
     }
   };
 
-  const handleWebSocketMessage = (data) => {
-    if (data.type === 'incoming-call') {
-      setIncomingCall({
-        from: data.from,
-        channel: `${data.from}@192.168.1.194`,
-        session: data.session,
-      });
-    }
-  };
-
   const handleLogin = (result) => {
     if (result.success) {
       localStorage.setItem('token', result.token);
       localStorage.setItem('extension', result.user?.extension);
       localStorage.setItem('sipPassword', `password${result.user?.extension}`);
       const extension = result.user?.extension;
+      console.log('[App.js] Login successful, setting user:', { username: result.user?.username, extension });
       setUser({ username: result.user?.username || 'User', extension });
       setSipPassword(`password${extension}`);
       initializeConnection(extension);
@@ -111,7 +97,7 @@ const App = () => {
   const handleRegister = (extension, sipPassword) => {
     localStorage.setItem('extension', extension);
     localStorage.setItem('sipPassword', sipPassword);
-    localStorage.setItem('token', 'dummy-token'); // Replace with actual token logic
+    localStorage.setItem('token', 'dummy-token');
     setUser({ username: 'User', extension });
     setSipPassword(sipPassword);
     initializeConnection(extension);
@@ -126,53 +112,11 @@ const App = () => {
     setUser(null);
     setSipPassword(null);
     setDarkMode(false);
-    setIncomingCall(null);
     setIsRegistered(false);
-    navigate('/check', { state: { success: 'Logged out successfully' } });
+    navigate('/login', { state: { success: 'Logged out successfully' } });
   };
 
-  const handleAcceptCall = async (callData) => {
-    setIsLoading(true);
-    try {
-      const stream = await answerCall(callData.channel);
-      const caller = contacts.find((c) => c.extension === callData.from) || {
-        name: `Ext ${callData.from}`,
-        extension: callData.from,
-      };
-      setIncomingCall(null);
-      navigate('/calling', {
-        state: {
-          contact: caller,
-          callStatus: 'Connected',
-          isOutgoing: false,
-          stream,
-          peerConnection: null, // Update if WebRTC is implemented
-        },
-      });
-    } catch (error) {
-      console.error('[App.js] Failed to accept call:', error);
-      setNotification({ message: `Failed to accept call: ${error.message}`, type: 'error' });
-      setTimeout(() => setNotification(null), 3000);
-      setIncomingCall(null);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleRejectCall = async (callData) => {
-    setIsLoading(true);
-    try {
-      await hangupCall(callData.channel, callData.from, user?.extension, callData.session);
-      setIncomingCall(null);
-    } catch (error) {
-      console.error('[App.js] Failed to reject call:', error);
-      setNotification({ message: `Failed to reject call: ${error.message}`, type: 'error' });
-      setTimeout(() => setNotification(null), 3000);
-      setIncomingCall(null);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const token = localStorage.getItem('token');
 
   return (
     <div className={`min-h-screen w-full ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
@@ -187,122 +131,79 @@ const App = () => {
           <span className="text-xs sm:text-sm font-medium text-white">{notification.message}</span>
         </div>
       )}
-      {incomingCall && (
-        <IncomingCallPage
-          callData={incomingCall}
-          contacts={contacts}
-          user={user}
-          darkMode={darkMode}
-          onAccept={() => handleAcceptCall(incomingCall)}
-          onReject={() => handleRejectCall(incomingCall)}
-        />
-      )}
       {user?.extension && sipPassword && (
-        <SipClient
-          extension={user.extension}
-          sipPassword={sipPassword}
-        />
+        <>
+          <SipClient
+            extension={user.extension}
+            sipPassword={sipPassword}
+          />
+          <IncomingCallListener /> {/* Add IncomingCallListener here */}
+        </>
       )}
       <Routes>
         <Route
-          path="/check"
-          element={
-            <ServerCheckPage
-              onSwitchToLogin={() => navigate('/login')}
-              onSwitchToRegister={() => navigate('/register')}
-              darkMode={darkMode}
-            />
-          }
-        />
-        <Route
           path="/login"
-          element={
-            <LoginPage
-              onLogin={handleLogin}
-              onSwitchToRegister={() => navigate('/register')}
-              darkMode={darkMode}
-              toggleDarkMode={() => setDarkMode(!darkMode)}
-            />
-          }
+          element={<LoginPage
+            onLogin={handleLogin}
+            onSwitchToRegister={() => navigate('/register')}
+            darkMode={darkMode}
+            toggleDarkMode={() => setDarkMode(!darkMode)}
+          />}
         />
         <Route
           path="/register"
-          element={
-            <RegisterPage
-              onRegister={handleRegister}
-              onSwitchToLogin={() => navigate('/login')}
-              darkMode={darkMode}
-              toggleDarkMode={() => setDarkMode(!darkMode)}
-            />
-          }
+          element={<RegisterPage
+            onRegister={handleRegister}
+            onSwitchToLogin={() => navigate('/login')}
+            darkMode={darkMode}
+            toggleDarkMode={() => setDarkMode(!darkMode)}
+          />}
         />
         <Route
           path="/dashboard"
-          element={
-            <ProtectedRoute user={user}>
-              <DashboardPage
-                user={user}
-                onLogout={handleLogout}
-                darkMode={darkMode}
-                toggleDarkMode={() => setDarkMode(!darkMode)}
-                setIsLoading={setIsLoading}
-                contacts={contacts}
-              />
-            </ProtectedRoute>
-          }
+          element={token ? <DashboardPage
+            user={user}
+            onLogout={handleLogout}
+            darkMode={darkMode}
+            toggleDarkMode={() => setDarkMode(!darkMode)}
+          /> : <Navigate to="/login" replace />}
         />
         <Route
           path="/contacts"
-          element={
-            <ProtectedRoute user={user}>
-              <ContactsPage
-                darkMode={darkMode}
-                toggleDarkMode={() => setDarkMode(!darkMode)}
-                setIsLoading={setIsLoading}
-              />
-            </ProtectedRoute>
-          }
+          element={token ? <ContactsPage
+            darkMode={darkMode}
+            toggleDarkMode={() => setDarkMode(!darkMode)}
+            setIsLoading={setIsLoading}
+          /> : <Navigate to="/login" replace />}
         />
         <Route
           path="/callings"
-          element={
-            <ProtectedRoute user={user}>
-              <VoipPhone
-                extension={user?.extension || ''}
-                sipPassword={sipPassword}
-                darkMode={darkMode}
-                toggleDarkMode={() => setDarkMode(!darkMode)}
-                setIsLoading={setIsLoading}
-              />
-            </ProtectedRoute>
-          }
+          element={token ? <VoipPhone
+            extension={user?.extension || ''}
+            sipPassword={sipPassword}
+            darkMode={darkMode}
+            toggleDarkMode={() => setDarkMode(!darkMode)}
+            setIsLoading={setIsLoading}
+          /> : <Navigate to="/login" replace />}
         />
         <Route
           path="/callLogs"
-          element={
-            <ProtectedRoute user={user}>
-              <CallLogsPage
-                darkMode={darkMode}
-                toggleDarkMode={() => setDarkMode(!darkMode)}
-              />
-            </ProtectedRoute>
-          }
+          element={token ? <CallLogsPage
+            darkMode={darkMode}
+            toggleDarkMode={() => setDarkMode(!darkMode)}
+          /> : <Navigate to="/login" replace />}
         />
         <Route
           path="/calling"
-          element={
-            <ProtectedRoute user={user}>
-              <CallingPage
-                contact={contacts.find(c => c.extension === user?.extension) || { extension: user?.extension, name: `Ext ${user?.extension}` }}
-                callStatus="Idle"
-                onEndCall={() => navigate('/dashboard')}
-                darkMode={darkMode}
-                peerConnection={null} // Update if WebRTC is implemented
-              />
-            </ProtectedRoute>
-          }
+          element={token ? <CallingPage
+            contact={contacts.find(c => c.extension === user?.extension) || { extension: user?.extension, name: `Ext ${user?.extension}` }}
+            callStatus="Idle"
+            onEndCall={() => navigate('/dashboard')}
+            darkMode={darkMode}
+            peerConnection={null}
+          /> : <Navigate to="/login" replace />}
         />
-        <Route path="/" element={<Navigate to="/check" replace />} />
+        <Route path="/" element={<Navigate to="/login" replace />} />
       </Routes>
       {isLoading && <Loader />}
     </div>

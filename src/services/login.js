@@ -1,14 +1,15 @@
 import axios from 'axios';
+import { connectWebSocket } from './websocketservice'; // ✅ Import WebSocket connector
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://192.168.1.164:8080';
+const API_URL = process.env.REACT_APP_API_URL || 'http://172.20.10.3:8080';
 
 // Validate API_URL
 let validatedApiUrl;
 try {
-  validatedApiUrl = new URL(API_URL).toString().replace(/\/$/, ''); // Remove trailing slash
+  validatedApiUrl = new URL(API_URL).toString().replace(/\/$/, '');
 } catch (error) {
   console.error('[login.js] Invalid API_URL:', API_URL, error);
-  validatedApiUrl = 'http://192.168.1.164:8080'; // Fallback
+  validatedApiUrl = 'http://172.20.10.3:8080';
 }
 
 export const getToken = () => {
@@ -50,7 +51,7 @@ export const login = async (username, password) => {
       username: username.trim(),
       password,
     }, {
-      timeout: 8000, // Match ServerCheckPage.jsx
+      timeout: 8000,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -67,6 +68,9 @@ export const login = async (username, password) => {
       localStorage.setItem('token', token);
       localStorage.setItem('extension', extension);
       console.log('[login.js] Login successful, stored:', { token, extension });
+
+      // ✅ Connect to WebSocket after successful login
+      connectWebSocket();
 
       return {
         success: true,
