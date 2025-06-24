@@ -11,7 +11,7 @@ import { HowToReg as RegisterIcon } from '@mui/icons-material';
 import { register } from '../services/register';
 import Logo from '../assets/Login.png';
 
-const RegisterPage = ({ onSwitchToLogin, onRegister }) => {
+const RegisterPage = ({ onSwitchToLogin }) => {
   const [step, setStep] = useState(0);
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -21,13 +21,11 @@ const RegisterPage = ({ onSwitchToLogin, onRegister }) => {
   const [notification, setNotification] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
 
-  // Load dark mode preference on mount
   useEffect(() => {
     const savedMode = localStorage.getItem('darkMode') === 'true';
     setDarkMode(savedMode);
   }, []);
 
-  // Save dark mode preference on change
   useEffect(() => {
     localStorage.setItem('darkMode', darkMode);
   }, [darkMode]);
@@ -69,7 +67,12 @@ const RegisterPage = ({ onSwitchToLogin, onRegister }) => {
             message: `${res.message}. Extension: ${res.extension}, SIP Password: ${res.sipPassword}`,
             type: 'success',
           });
-          onRegister(res.extension, res.sipPassword);
+
+          // Clear auto-login data
+          localStorage.removeItem('extension');
+          localStorage.removeItem('sipPassword');
+
+          // Delay then switch to login
           setTimeout(() => {
             onSwitchToLogin();
           }, 3000);
@@ -99,7 +102,6 @@ const RegisterPage = ({ onSwitchToLogin, onRegister }) => {
           : 'bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100 text-gray-900'
       }`}
     >
-      {/* Top Navigation */}
       <nav
         className={`flex justify-between items-center px-6 py-3 ${
           darkMode ? 'bg-gray-800' : 'bg-white shadow-md'
@@ -118,14 +120,12 @@ const RegisterPage = ({ onSwitchToLogin, onRegister }) => {
         </button>
       </nav>
 
-      {/* Registration form container */}
       <div className="flex-grow flex items-center justify-center px-4 py-6">
         <div
           className={`rounded-2xl shadow-2xl p-6 sm:p-8 w-full max-w-md transition-all duration-500 overflow-hidden ${
             darkMode ? 'bg-gray-800' : 'bg-white'
           }`}
         >
-          {/* Static Header */}
           <div className="flex flex-col items-center mb-4">
             <img
               src={Logo}
@@ -144,7 +144,6 @@ const RegisterPage = ({ onSwitchToLogin, onRegister }) => {
             </h2>
           </div>
 
-          {/* Notification Toast */}
           {notification && (
             <div
               className={`fixed top-20 right-4 z-50 p-3 rounded-lg shadow-lg animate-[fadeInUp_0.6s_ease-out_forwards] ${
@@ -155,10 +154,8 @@ const RegisterPage = ({ onSwitchToLogin, onRegister }) => {
             </div>
           )}
 
-          {/* Form Inputs */}
-          <form className="space-y-4">
-            {[
-              {
+          <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+            {[{
                 label: 'Username',
                 value: username,
                 onChange: setUsername,
@@ -209,9 +206,7 @@ const RegisterPage = ({ onSwitchToLogin, onRegister }) => {
                 </label>
                 {field.type === 'select' ? (
                   <FormControl fullWidth>
-                    <InputLabel
-                      className={darkMode ? 'text-white' : ''}
-                    >
+                    <InputLabel className={darkMode ? 'text-white' : ''}>
                       {field.label}
                     </InputLabel>
                     <Select
@@ -268,7 +263,6 @@ const RegisterPage = ({ onSwitchToLogin, onRegister }) => {
               </div>
             ))}
 
-            {/* Submit */}
             <Button
               type="button"
               onClick={nextStep}

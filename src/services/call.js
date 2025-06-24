@@ -7,7 +7,7 @@ const MEDIA_CONSTRAINTS = { audio: true, video: false };
 
 export const toAppChannelFormat = (apiChannel) => {
   const ext = apiChannel?.replace(/^PJSIP\//, '');
-  return `${ext}@172.20.10.14:8088`;
+  return `${ext}@172.20.10.6:8088`;
 };
 
 export const toApiChannelFormat = (appChannel) => {

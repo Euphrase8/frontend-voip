@@ -17,7 +17,7 @@ const CallingPage = ({ contact, callStatus, onEndCall, darkMode, peerConnection 
   const callStartTimeRef = useRef(null);
   const animationFrameRef = useRef(null);
 
-  const callChannel = channel || `${contact?.extension || '1002'}@192.168.1.194`;
+  const callChannel = channel || `${contact?.extension || '1002'}@172.20.10.6`;
 
   useEffect(() => {
     if (!contact?.extension || !/^\d{4,6}$/.test(contact.extension)) {
@@ -322,7 +322,7 @@ const CallingPage = ({ contact, callStatus, onEndCall, darkMode, peerConnection 
           </Tooltip>
         </div>
 
-        <div className="flex justify-center space-x-3 sm:space-x-4 mb-4 animate-[fadeInUp_2.2s_ease-out_forwards]">
+        <div className="flex justify-center space-x-3 sm:space-x-4 mb-4 annpm stimate-[fadeInUp_2.2s_ease-out_forwards]">
           <Button
             onClick={handleInitiateCall}
             disabled={callStatus === 'Connected' || !isRegistered}

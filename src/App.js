@@ -56,28 +56,28 @@ const App = () => {
   }, [user?.extension]);
 
   const initializeConnection = async (extension) => {
-    try {
-      await initializeSIP({ extension }, (call) => {
-        // Optional: Keep this if you want to handle SIP-specific calls differently
-        navigate('/calling', {
-          state: {
-            contact: contacts.find((c) => c.extension === call.from) || {
-              name: `Ext ${call.from}`,
-              extension: call.from,
-            },
-            callStatus: 'Incoming',
-            isOutgoing: false,
-            channel: `${call.from}@172.20.10.14`,
-            session: call.session,
-          },
-        });
-      });
-      console.log('[App.js] Connection initialized for extension:', extension);
-    } catch (error) {
-      console.error('[App.js] Connection initialization failed:', error);
-      setNotification({ message: `Connection failed: ${error.message}`, type: 'error' });
-      setTimeout(() => setNotification(null), 5000);
-    }
+    // try {
+    //   await initializeSIP({ extension }, (call) => {
+    //     // Optional: Keep this if you want to handle SIP-specific calls differently
+    //     navigate('/calling', {
+    //       state: {
+    //         contact: contacts.find((c) => c.extension === call.from) || {
+    //           name: `Ext ${call.from}`,
+    //           extension: call.from,
+    //         },
+    //         callStatus: 'Incoming',
+    //         isOutgoing: false,
+    //         channel: `${call.from}@172.20.10.6`,
+    //         session: call.session,
+    //       },
+    //     });
+    //   });
+    //   console.log('[App.js] Connection initialized for extension:', extension);
+    // } catch (error) {
+    //   console.error('[App.js] Connection initialization failed:', error);
+    //   setNotification({ message: `Connection failed: ${error.message}`, type: 'error' });
+    //   setTimeout(() => setNotification(null), 5000);
+    // }
   };
 
   const handleLogin = (result) => {
@@ -95,14 +95,17 @@ const App = () => {
   };
 
   const handleRegister = (extension, sipPassword) => {
-    localStorage.setItem('extension', extension);
-    localStorage.setItem('sipPassword', sipPassword);
-    localStorage.setItem('token', 'dummy-token');
-    setUser({ username: 'User', extension });
-    setSipPassword(sipPassword);
-    initializeConnection(extension);
-    navigate('/dashboard', { state: { success: 'Registered successfully' } });
-  };
+  // Clear any saved auth info (or don't save yet)
+  localStorage.removeItem('token');
+  localStorage.removeItem('extension');
+  localStorage.removeItem('sipPassword');
+
+  // Just navigate to login page, let user login explicitly
+  setUser(null);
+  setSipPassword(null);
+  navigate('/login', { state: { success: 'Registered successfully, please log in' } });
+};
+
 
   const handleLogout = () => {
     localStorage.removeItem('token');

@@ -8,8 +8,9 @@ const SipClient = ({ extension, sipPassword }) => {
   const reconnectAttemptsRef = useRef(0);
 
   const MAX_RECONNECT_ATTEMPTS = 5;
-  const BASE_RECONNECT_DELAY = 15000;
+  const BASE_RECONNECT_DELAY = 15000; // 15 seconds base delay
 
+  // Reconnect with exponential backoff capped at MAX_RECONNECT_ATTEMPTS
   const attemptReconnect = useCallback(() => {
     if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
       console.error('[SipClient] Max reconnect attempts reached for extension:', extension);
@@ -17,11 +18,14 @@ const SipClient = ({ extension, sipPassword }) => {
     }
 
     reconnectAttemptsRef.current += 1;
-    const delay = BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttemptsRef.current - 1);
+    const delay = BASE_RECONNECT_DELAY * 2 ** (reconnectAttemptsRef.current - 1);
     console.warn(`[SipClient] Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})`);
 
     setTimeout(() => {
-      initializeSip();
+      // Only try to initialize if uaRef is not connected or null
+      if (!uaRef.current || !uaRef.current.isConnected()) {
+        initializeSip();
+      }
     }, delay);
   }, [extension]);
 
@@ -34,14 +38,15 @@ const SipClient = ({ extension, sipPassword }) => {
       return;
     }
 
+    // Prevent multiple UA instances
     if (uaRef.current && uaRef.current.isConnected()) {
-      console.log('[SipClient] SIP UA already initialized for extension:', extension);
+      console.log('[SipClient] SIP UA already connected for extension:', extension);
       return;
     }
 
     try {
+      // Check WebSocket connection status and connect if necessary
       const { isConnected, extension: activeExt } = getConnectionStatus();
-
       if (!isConnected || activeExt !== extension) {
         await connectWebSocket(
           extension,
@@ -57,11 +62,12 @@ const SipClient = ({ extension, sipPassword }) => {
         );
       }
 
-      const socket = new JsSIP.WebSocketInterface(`ws://172.20.10.14:8088/ws`, { protocols: ['sip'] });
+      // Setup JsSIP UA with correct config
+      const socket = new JsSIP.WebSocketInterface('ws://172.20.10.6:8088/ws', { protocols: ['sip'] });
 
       const config = {
         sockets: [socket],
-        uri: `sip:${extension}@172.20.10.14:8088`,
+        uri: `sip:${extension}@172.20.10.6:8088`,
         display_name: `User ${extension}`,
         contact_uri: `sip:${extension}@172.20.10.3;transport=ws`,
         password: sipPassword,
@@ -123,7 +129,7 @@ const SipClient = ({ extension, sipPassword }) => {
           window.dispatchEvent(new CustomEvent('incomingCall', {
             detail: {
               from: session.remote_identity.uri.user,
-              channel: `${session.remote_identity.uri.user}@172.20.10.14`,
+              channel: `${session.remote_identity.uri.user}@172.20.10.6`,
               session,
             },
           }));
@@ -142,7 +148,10 @@ const SipClient = ({ extension, sipPassword }) => {
   }, [extension, sipPassword, attemptReconnect]);
 
   useEffect(() => {
-    initializeSip();
+    // Only initialize if extension and password are provided
+    if (extension && sipPassword) {
+      initializeSip();
+    }
 
     return () => {
       if (uaRef.current) {
