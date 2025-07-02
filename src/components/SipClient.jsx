@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import JsSIP from 'jssip';
 import { connectWebSocket, getConnectionStatus } from '../services/websocketservice';
+import { CONFIG } from '../services/config';
 
 const SipClient = ({ extension, sipPassword }) => {
   const uaRef = useRef(null);
@@ -48,34 +49,43 @@ const SipClient = ({ extension, sipPassword }) => {
       // Check WebSocket connection status and connect if necessary
       const { isConnected, extension: activeExt } = getConnectionStatus();
       if (!isConnected || activeExt !== extension) {
-        await connectWebSocket(
-          extension,
-          (msg) => console.log('[SipClient] WS message:', msg),
-          (status) => {
-            console.log('[SipClient] WS status:', status);
-            if (status === 'error') {
-              window.dispatchEvent(new CustomEvent('registrationStatus', {
-                detail: { extension, registered: false, cause: 'WebSocket error' },
-              }));
-            }
+        const websocket = connectWebSocket(extension);
+
+        // Set up WebSocket message handler
+        websocket.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            console.log('[SipClient] WS message:', msg);
+          } catch (error) {
+            console.error('[SipClient] Failed to parse WebSocket message:', error);
           }
-        );
+        };
+
+        // Set up WebSocket error handler
+        websocket.onerror = () => {
+          console.log('[SipClient] WS status: error');
+          window.dispatchEvent(new CustomEvent('registrationStatus', {
+            detail: { extension, registered: false, cause: 'WebSocket error' },
+          }));
+        };
       }
 
       // Setup JsSIP UA with correct config
-      const socket = new JsSIP.WebSocketInterface('ws://172.20.10.6:8088/ws', { protocols: ['sip'] });
+      const socket = new JsSIP.WebSocketInterface(CONFIG.SIP_WS_URL, { protocols: ['sip'] });
 
       const config = {
         sockets: [socket],
-        uri: `sip:${extension}@172.20.10.6:8088`,
+        uri: `sip:${extension}@${CONFIG.SIP_SERVER}:${CONFIG.SIP_PORT}`,
         display_name: `User ${extension}`,
-        contact_uri: `sip:${extension}@172.20.10.3;transport=ws`,
+        contact_uri: `sip:${extension}@${CONFIG.CLIENT_IP};transport=${CONFIG.SIP_TRANSPORT}`,
         password: sipPassword,
         register: true,
         session_timers: false,
         connection_recovery_min_interval: 2,
         connection_recovery_max_interval: 30,
         connection_timeout: 15000,
+        register_expires: 300, // 5 minutes registration expiry
+        no_answer_timeout: 30, // 30 seconds no answer timeout
       };
 
       console.debug('[SipClient] JsSIP config:', config);
@@ -126,13 +136,58 @@ const SipClient = ({ extension, sipPassword }) => {
       uaRef.current.on('newRTCSession', ({ session }) => {
         if (session.direction === 'incoming') {
           console.log('[SipClient] Incoming call from', session.remote_identity.uri.user);
+
+          // Set up session event handlers for incoming calls
+          session.on('accepted', () => {
+            console.log('[SipClient] Incoming call accepted');
+          });
+
+          session.on('ended', () => {
+            console.log('[SipClient] Incoming call ended');
+          });
+
+          session.on('failed', (data) => {
+            console.log('[SipClient] Incoming call failed:', data.cause);
+          });
+
           window.dispatchEvent(new CustomEvent('incomingCall', {
             detail: {
               from: session.remote_identity.uri.user,
-              channel: `${session.remote_identity.uri.user}@172.20.10.6`,
+              channel: `${session.remote_identity.uri.user}@${CONFIG.SIP_SERVER}`,
               session,
             },
           }));
+        } else if (session.direction === 'outgoing') {
+          console.log('[SipClient] Outgoing call to', session.remote_identity.uri.user);
+
+          // Set up session event handlers for outgoing calls
+          session.on('progress', () => {
+            console.log('[SipClient] Outgoing call progress');
+            window.dispatchEvent(new CustomEvent('callProgress', {
+              detail: { status: 'ringing' }
+            }));
+          });
+
+          session.on('accepted', () => {
+            console.log('[SipClient] Outgoing call accepted');
+            window.dispatchEvent(new CustomEvent('callAccepted', {
+              detail: { session }
+            }));
+          });
+
+          session.on('ended', () => {
+            console.log('[SipClient] Outgoing call ended');
+            window.dispatchEvent(new CustomEvent('callEnded', {
+              detail: { reason: 'normal' }
+            }));
+          });
+
+          session.on('failed', (data) => {
+            console.log('[SipClient] Outgoing call failed:', data.cause);
+            window.dispatchEvent(new CustomEvent('callFailed', {
+              detail: { cause: data.cause }
+            }));
+          });
         }
       });
 

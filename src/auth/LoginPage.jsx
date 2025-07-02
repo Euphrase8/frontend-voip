@@ -64,12 +64,21 @@ const LoginPage = ({ onLogin, onSwitchToRegister }) => {
             message: `${result.message} (Ext: ${result.user.extension})`,
             type: "success",
           });
-          connectWebSocket(result.user.extension, (data) => {
-            if (data.type === "incoming-call") {
-              alert(`Incoming call from ${data.from} (Priority: ${data.priority})`);
+
+          // Connect WebSocket and set up message handler
+          const websocket = connectWebSocket(result.user.extension);
+          websocket.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              if (data.type === "incoming-call") {
+                alert(`Incoming call from ${data.from} (Priority: ${data.priority})`);
+              }
+            } catch (error) {
+              console.error('[LoginPage.jsx] Failed to parse WebSocket message:', error);
             }
-          });
-          onLogin(result.user);
+          };
+
+          onLogin(result);
           setLoginSuccess(result);
         } else {
           setNotification({ message: result.message, type: "error" });

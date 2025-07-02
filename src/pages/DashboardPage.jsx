@@ -16,6 +16,8 @@ import VoipPhone from "../components/VoipPhone";
 import Sidebar from "../components/sidebar";
 import TopNav from "../components/TopNav";
 import { call, answerCall, hangupCall } from "../services/call";
+import webrtcCallService from "../services/webrtcCallService";
+import ConnectionStatus from "../components/ConnectionStatus";
 
 const initialContacts = [
   {
@@ -95,6 +97,33 @@ const DashboardPage = ({ user, onLogout, darkMode, toggleDarkMode, setIncomingCa
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location, navigate, user?.extension]);
+
+  // Initialize WebRTC service
+  useEffect(() => {
+    if (user?.extension) {
+      console.log('[Dashboard] Initializing WebRTC service for extension:', user.extension);
+
+      webrtcCallService.initialize(
+        user.extension,
+        (incomingCallData) => {
+          console.log('[Dashboard] Incoming WebRTC call:', incomingCallData);
+          setLocalIncomingCall(incomingCallData);
+          setNotification({
+            message: `Incoming call from ${incomingCallData.fromUsername || incomingCallData.from}`,
+            type: "info"
+          });
+        },
+        (status) => {
+          console.log('[Dashboard] WebRTC call status:', status);
+          setCallStatus(status);
+        }
+      );
+
+      return () => {
+        webrtcCallService.cleanup();
+      };
+    }
+  }, [user?.extension]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -261,10 +290,14 @@ const DashboardPage = ({ user, onLogout, darkMode, toggleDarkMode, setIncomingCa
       {/* Incoming Call UI */}
       {incomingCall && (
         <IncomingCallPage
-          caller={incomingCall.caller}
-          channel={incomingCall.channel}
-          onAccept={handleAcceptCall}
-          onDecline={handleDeclineCall}
+          callData={{
+            from: incomingCall.caller,
+            channel: incomingCall.channel,
+            priority: incomingCall.priority || 'normal',
+            transport: incomingCall.transport || 'transport-ws'
+          }}
+          contacts={contacts}
+          user={user}
           darkMode={darkMode}
         />
       )}
@@ -279,6 +312,45 @@ const DashboardPage = ({ user, onLogout, darkMode, toggleDarkMode, setIncomingCa
         toggleDarkMode={toggleDarkMode}
       />
       <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} darkMode={darkMode} />
+
+      {/* Incoming Call Modal */}
+      {incomingCall && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl max-w-sm w-full mx-4">
+            <div className="text-center">
+              <div className="mb-4">
+                <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                  <Phone className="w-8 h-8 text-white" />
+                </div>
+                <h3 className="text-lg font-semibold">Incoming Call</h3>
+                <p className="text-gray-600 dark:text-gray-300">
+                  {incomingCall.fromUsername || `Extension ${incomingCall.from}`}
+                </p>
+              </div>
+              <div className="flex space-x-4">
+                <button
+                  onClick={() => {
+                    incomingCall.onAccept();
+                    setLocalIncomingCall(null);
+                  }}
+                  className="flex-1 bg-green-500 hover:bg-green-600 text-white py-3 px-4 rounded-xl font-medium transition-colors"
+                >
+                  Accept
+                </button>
+                <button
+                  onClick={() => {
+                    incomingCall.onReject();
+                    setLocalIncomingCall(null);
+                  }}
+                  className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 px-4 rounded-xl font-medium transition-colors"
+                >
+                  Reject
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Page Body */}
       <div className="flex-grow px-4 md:pl-[280px] py-4 pb-[60px]">
@@ -329,6 +401,9 @@ const DashboardPage = ({ user, onLogout, darkMode, toggleDarkMode, setIncomingCa
 
       {/* Bottom Navigation */}
       <BottomNav currentPage={currentPage} onNavigate={setCurrentPage} />
+
+      {/* Connection Status Monitor */}
+      <ConnectionStatus />
     </div>
   );
 };

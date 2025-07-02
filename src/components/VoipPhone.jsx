@@ -4,6 +4,7 @@ import { Call, CallEnd } from '@mui/icons-material';
 import { hangup } from '../services/hang';
 import { sendWebSocketMessage } from '../services/websocketservice';
 import JsSIP from 'jssip';
+import { CONFIG } from '../services/config';
 
 const VoipPhone = ({
   extension = '',
@@ -37,7 +38,7 @@ const VoipPhone = ({
 
   const setupWebSocket = useCallback(() => {
     if (!extension || incomingStream) return; // Skip for incoming calls
-    const wsUrl = `ws://172.20.10.3:8080/ws?extension=${encodeURIComponent(extension)}`;
+    const wsUrl = `${CONFIG.WS_URL}?extension=${encodeURIComponent(extension)}`;
     wsRef.current = new WebSocket(wsUrl);
 
     wsRef.current.onopen = () => {
@@ -67,10 +68,10 @@ const VoipPhone = ({
   useEffect(() => {
     if (incomingStream) return; // Skip SIP setup for incoming calls
     JsSIP.debug.enable('JsSIP:*');
-    const socket = new JsSIP.WebSocketInterface('wss://172.20.10.3:8088/ws');
+    const socket = new JsSIP.WebSocketInterface(CONFIG.SIP_WS_URL);
     const configuration = {
       sockets: [socket],
-      uri: `sip:${extension}@172.20.10.3`,
+      uri: `sip:${extension}@${CONFIG.SIP_SERVER}`,
       password,
       register: true,
     };
@@ -106,19 +107,19 @@ const VoipPhone = ({
 
     setIsLoading(true);
     try {
-      const response = await fetch('http://172.20.10.3:8080/protected/call/initiate', {
+      const response = await fetch(`${CONFIG.API_URL}/protected/call/initiate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
-        body: JSON.stringify({ extension: targetExtension }),
+        body: JSON.stringify({ target_extension: targetExtension }),
         credentials: 'include',
       });
       const data = await response.json();
       if (response.ok) {
         setCallStatus(`Call initiated to ${targetExtension} (Channel: ${data.channel})`);
-        callRef.current = uaRef.current.call(`sip:${targetExtension}@172.20.10.3`, {
+        callRef.current = uaRef.current.call(`sip:${targetExtension}@${CONFIG.SIP_SERVER}`, {
           mediaConstraints: { audio: true, video: false },
           eventHandlers: {
             progress: () => setCallStatus('Dialing...'),

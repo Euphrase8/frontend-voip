@@ -1,55 +1,43 @@
 import axios from "axios";
+import { CONFIG } from './config';
 
-const API_URL = "http://172.20.10.3:8080";
+const API_URL = CONFIG.API_URL;
 
-export const register = async (username, email, password, role) => {
+export const register = async (username, email, password, extension) => {
   try {
     // Validate inputs
-    if (!username || !email || !password || !role) {
+    if (!username || !email || !password || !extension) {
       return {
         success: false,
-        message: "All fields (username, email, password, role) are required",
-      };
-    }
-    // if (!/^\d{4,6}$/.test(username)) {
-    //   return {
-    //     success: false,
-    //     message: "Username must be a 4-6 digit extension",
-    //   };
-    // }
-    if (!/^(user|admin|faculty|emergency)$/.test(role)) {
-      return {
-        success: false,
-        message: "Role must be user, admin, faculty, or emergency",
+        message: "All fields (username, email, password, extension) are required",
       };
     }
 
-    console.log('[register.js] Attempting registration for:', { username, email, role });
+    if (!/^\d{4,6}$/.test(extension)) {
+      return {
+        success: false,
+        message: "Extension must be a 4-6 digit number",
+      };
+    }
+
+    console.log('[register.js] Attempting registration for:', { username, email, extension });
 
     // Register user
-    const response = await axios.post(`${API_URL}/register`, {
+    const response = await axios.post(`${API_URL}/api/register`, {
       username,
       email,
       password,
-      role,
+      extension,
     });
 
-    const { message, extension, sip_password } = response.data;
+    const { message, user } = response.data;
 
-    if (!extension || !sip_password) {
-      console.error('[register.js] Missing extension or sip_password:', response.data);
-      return {
-        success: false,
-        message: "Registration failed: Missing VoIP credentials",
-      };
-    }
-
-    console.log('[register.js] Registration successful:', { extension, sip_password });
+    console.log('[register.js] Registration successful:', user);
     return {
       success: true,
       message: message || "Registered successfully",
-      extension,
-      sipPassword: sip_password,
+      extension: user.extension,
+      user: user,
     };
   } catch (error) {
     let message = "Registration failed. Please try again.";

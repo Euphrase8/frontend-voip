@@ -15,7 +15,7 @@ const RegisterPage = ({ onSwitchToLogin }) => {
   const [step, setStep] = useState(0);
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState('user');
+  const [extension, setExtension] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [notification, setNotification] = useState(null);
@@ -39,7 +39,7 @@ const RegisterPage = ({ onSwitchToLogin }) => {
       case 1:
         return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
       case 2:
-        return ['user', 'admin', 'faculty', 'emergency'].includes(role);
+        return /^\d{4,6}$/.test(extension);
       case 3:
         return password.length >= 6;
       case 4:
@@ -61,10 +61,10 @@ const RegisterPage = ({ onSwitchToLogin }) => {
       setStep(step + 1);
     } else {
       try {
-        const res = await register(username, email, password, role);
+        const res = await register(username, email, password, extension);
         if (res.success) {
           setNotification({
-            message: `${res.message}. Extension: ${res.extension}, SIP Password: ${res.sipPassword}`,
+            message: `${res.message}. Extension: ${res.extension}`,
             type: 'success',
           });
 
@@ -170,11 +170,11 @@ const RegisterPage = ({ onSwitchToLogin }) => {
                 placeholder: 'Enter email',
               },
               {
-                label: 'Role',
-                value: role,
-                onChange: setRole,
-                type: 'select',
-                options: ['user', 'admin', 'faculty', 'emergency'],
+                label: 'Extension',
+                value: extension,
+                onChange: setExtension,
+                type: 'text',
+                placeholder: 'Enter 4-6 digit extension (e.g., 1004)',
               },
               {
                 label: 'Password',

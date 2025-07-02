@@ -60,21 +60,36 @@ const CallingPage = ({ contact, callStatus, onEndCall, darkMode, peerConnection 
       }
 
       try {
-        await connectWebSocket(
-          contact.extension,
-          (data) => console.log('[CallingPage.jsx] WebSocket message:', data),
-          (status) => {
-            setWsConnected(status === 'connected');
-            if (status === 'error') {
-              setNotification({ message: 'WebSocket connection failed', type: 'error' });
-              setTimeout(() => setNotification(null), 5000);
-            }
+        const websocket = connectWebSocket(contact.extension);
+
+        // Set up WebSocket message handler
+        websocket.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            console.log('[CallingPage.jsx] WebSocket message:', data);
+          } catch (error) {
+            console.error('[CallingPage.jsx] Failed to parse WebSocket message:', error);
           }
-        );
+        };
+
+        // Set up WebSocket status handlers
+        websocket.onopen = () => {
+          setWsConnected(true);
+        };
+
+        websocket.onerror = () => {
+          setWsConnected(false);
+          setNotification({ message: 'WebSocket connection failed', type: 'error' });
+          setTimeout(() => setNotification(null), 5000);
+        };
+
+        websocket.onclose = () => {
+          setWsConnected(false);
+        };
         await initializeSIP({ extension: contact.extension }, (call) => {
           window.dispatchEvent(new CustomEvent('incomingCall', { detail: call }));
-        });
-        console.log('[CallingPage.jsx] Connection initialized successfully');
+        }, true); // Enable WebRTC mode
+        console.log('[CallingPage.jsx] WebRTC connection initialized successfully');
       } catch (error) {
         console.error('[CallingPage.jsx] Initialization error:', error);
         setNotification({ message: `Initialization error: ${error.message}`, type: 'error' });
@@ -124,12 +139,9 @@ const CallingPage = ({ contact, callStatus, onEndCall, darkMode, peerConnection 
   };
 
   const handleInitiateCall = async () => {
-    if (!isRegistered) {
-      setNotification({ message: 'Extension not registered', type: 'error' });
-      return;
-    }
+    // Skip registration check for WebRTC mode
     try {
-      console.log('[CallingPage.jsx] Initiating call to:', contact.extension);
+      console.log('[CallingPage.jsx] Initiating WebRTC call to:', contact.extension);
       const response = await call(contact.extension);
       setChannel(response.channel);
       setNotification({ message: `Calling ${contact.extension}`, type: 'info' });

@@ -19,9 +19,12 @@ export const handleIncomingCall = async (
       ],
     });
 
-    await peerConnection.setRemoteDescription(
-      new RTCSessionDescription(callData.offer)
-    );
+    // Only set remote description if offer is available
+    if (callData.offer && callData.offer.type && callData.offer.sdp) {
+      await peerConnection.setRemoteDescription(
+        new RTCSessionDescription(callData.offer)
+      );
+    }
 
     peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
@@ -57,16 +60,30 @@ export const handleIncomingCall = async (
           video: false,
         });
         stream.getTracks().forEach((track) => peerConnection.addTrack(track, stream));
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-        await sendWebSocketMessage({
-          type: "answer",
-          to: callData.from,
-          from: user.extension,
-          answer,
-          channel: callData.channel,
-          transport: callData.transport || "transport-ws",
-        });
+
+        // If we have an offer, create answer immediately
+        if (callData.offer && callData.offer.type && callData.offer.sdp) {
+          const answer = await peerConnection.createAnswer();
+          await peerConnection.setLocalDescription(answer);
+          await sendWebSocketMessage({
+            type: "answer",
+            to: callData.from,
+            from: user.extension,
+            answer,
+            channel: callData.channel,
+            transport: callData.transport || "transport-ws",
+          });
+        } else {
+          // For calls without initial offer, just send acceptance message
+          // The WebRTC negotiation will happen via separate offer/answer messages
+          await sendWebSocketMessage({
+            type: "answer_call",
+            to: callData.from,
+            from: user.extension,
+            channel: callData.channel,
+            transport: callData.transport || "transport-ws",
+          });
+        }
       } catch (error) {
         console.error("Error accepting call:", error);
         cleanup();

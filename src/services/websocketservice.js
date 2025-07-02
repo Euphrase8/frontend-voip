@@ -1,24 +1,38 @@
+import { CONFIG } from './config';
+
 let socket = null;
 let reconnectTimeout = null;
 let reconnectAttempts = 0;
+let currentExtension = null;
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_INTERVAL = 5000;
 
-export const connectWebSocket = (url = process.env.REACT_APP_WS_URL || 'ws://172.20.10.3:8080/ws') => {
-  if (socket && socket.readyState === WebSocket.OPEN) {
-    console.log('[websocketservice] WebSocket already open, reusing connection');
+export const connectWebSocket = (extension = null, url = CONFIG.WS_URL) => {
+  // Use provided extension or get from localStorage
+  const targetExtension = extension || localStorage.getItem('extension');
+
+  if (socket && socket.readyState === WebSocket.OPEN && currentExtension === targetExtension) {
+    console.log('[websocketservice] WebSocket already open for extension:', targetExtension);
     return socket;
   }
 
-  // Append extension to URL if available (e.g., from localStorage)
-  const extension = localStorage.getItem('extension');
-  const wsUrl = extension ? `${url}?extension=${encodeURIComponent(extension)}` : url;
+  // Close existing connection if extension changed
+  if (socket && currentExtension !== targetExtension) {
+    console.log('[websocketservice] Extension changed, closing existing connection');
+    socket.close();
+    socket = null;
+  }
+
+  currentExtension = targetExtension;
+  const wsUrl = targetExtension ? `${url}?extension=${encodeURIComponent(targetExtension)}` : url;
 
   console.log(`[websocketservice] Connecting WebSocket to ${wsUrl}`);
   socket = new WebSocket(wsUrl);
 
   socket.onopen = () => {
-    console.log(`[websocketservice] WebSocket connected for extension ${extension || 'unknown'}`);
+    console.log(`[websocketservice] ✅ WebSocket connected for extension ${currentExtension || 'unknown'}`);
+    console.log(`[websocketservice] WebSocket URL: ${wsUrl}`);
+    console.log(`[websocketservice] WebSocket readyState: ${socket.readyState}`);
     reconnectAttempts = 0;
     if (reconnectTimeout) {
       clearTimeout(reconnectTimeout);
@@ -36,7 +50,7 @@ export const connectWebSocket = (url = process.env.REACT_APP_WS_URL || 'ws://172
       reconnectAttempts += 1;
       console.log(`[websocketservice] Reconnecting (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}) in ${RECONNECT_INTERVAL}ms...`);
       reconnectTimeout = setTimeout(() => {
-        connectWebSocket(url);
+        connectWebSocket(currentExtension, url);
       }, RECONNECT_INTERVAL);
     } else {
       console.error('[websocketservice] Max reconnect attempts reached. Giving up.');
@@ -81,17 +95,41 @@ export const sendWebSocketMessage = async (message) => {
 export const getWebSocket = () => socket;
 
 export const getConnectionStatus = () => {
-  if (!socket) return 'CLOSED';
-  switch (socket.readyState) {
-    case WebSocket.CONNECTING:
-      return 'CONNECTING';
-    case WebSocket.OPEN:
-      return 'OPEN';
-    case WebSocket.CLOSING:
-      return 'CLOSING';
-    case WebSocket.CLOSED:
-      return 'CLOSED';
-    default:
-      return 'UNKNOWN';
+  const status = {
+    isConnected: socket && socket.readyState === WebSocket.OPEN,
+    extension: currentExtension,
+    readyState: socket ? socket.readyState : WebSocket.CLOSED
+  };
+
+  if (!socket) {
+    status.state = 'CLOSED';
+  } else {
+    switch (socket.readyState) {
+      case WebSocket.CONNECTING:
+        status.state = 'CONNECTING';
+        break;
+      case WebSocket.OPEN:
+        status.state = 'OPEN';
+        break;
+      case WebSocket.CLOSING:
+        status.state = 'CLOSING';
+        break;
+      case WebSocket.CLOSED:
+        status.state = 'CLOSED';
+        break;
+      default:
+        status.state = 'UNKNOWN';
+    }
+  }
+
+  return status;
+};
+
+// Close WebSocket connection
+export const closeWebSocket = () => {
+  if (socket) {
+    socket.close();
+    socket = null;
+    currentExtension = null;
   }
 };

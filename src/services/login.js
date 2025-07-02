@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { connectWebSocket } from './websocketservice'; // ✅ Import WebSocket connector
+import { CONFIG } from './config';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://172.20.10.3:8080';
+const API_URL = CONFIG.API_URL;
 
 // Validate API_URL
 let validatedApiUrl;
@@ -9,7 +10,7 @@ try {
   validatedApiUrl = new URL(API_URL).toString().replace(/\/$/, '');
 } catch (error) {
   console.error('[login.js] Invalid API_URL:', API_URL, error);
-  validatedApiUrl = 'http://172.20.10.3:8080';
+  validatedApiUrl = CONFIG.API_URL;
 }
 
 export const getToken = () => {
@@ -47,7 +48,7 @@ export const login = async (username, password) => {
 
   try {
     console.log('[login.js] Attempting login for:', username);
-    const response = await axios.post(`${validatedApiUrl}/login`, {
+    const response = await axios.post(`${validatedApiUrl}/api/login`, {
       username: username.trim(),
       password,
     }, {
@@ -57,8 +58,9 @@ export const login = async (username, password) => {
       },
     });
 
-    if (response.data && response.data.token && response.data.extension) {
-      const { token, message, extension } = response.data;
+    if (response.data && response.data.token && response.data.user && response.data.user.extension) {
+      const { token, message, user } = response.data;
+      const extension = user.extension;
 
       if (!/^\d{4,6}$/.test(extension)) {
         console.error('[login.js] Invalid extension format:', extension);
@@ -77,11 +79,11 @@ export const login = async (username, password) => {
         token,
         extension,
         message: message || 'Login successful',
-        user: { username, extension },
+        user: { username: user.username, extension },
       };
     } else {
       console.error('[login.js] Invalid response:', response.data);
-      return { success: false, message: 'Invalid login response: token or extension missing' };
+      return { success: false, message: 'Invalid login response: token or user data missing' };
     }
   } catch (error) {
     let message = 'Login failed. Please try again.';

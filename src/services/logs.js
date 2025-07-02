@@ -1,12 +1,13 @@
 import axios from 'axios';
 import { getToken } from './login';
+import { CONFIG } from './config';
 
-const API_URL = "http://172.20.10.3:8080";
+const API_URL = CONFIG.API_URL;
 
 export const getLogs = async () => {
   try {
     const token = getToken(); // Make sure this returns a valid JWT string
-    const response = await axios.get(`${API_URL}/protected/admin/call/logs`, {
+    const response = await axios.get(`${API_URL}/protected/call/logs`, {
       headers: {
         Authorization: `Bearer ${token}`,
       }

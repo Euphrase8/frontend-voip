@@ -1,13 +1,15 @@
 import axios from 'axios';
 import { sendWebSocketMessage } from './websocketservice';
 import { getToken } from './login';
+import CONFIG from './config';
+import sipManager from './sipManager';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://172.20.10.3:8080';
-const MEDIA_CONSTRAINTS = { audio: true, video: false };
+const API_URL = CONFIG.API_URL;
+const MEDIA_CONSTRAINTS = CONFIG.MEDIA_CONSTRAINTS;
 
 export const toAppChannelFormat = (apiChannel) => {
   const ext = apiChannel?.replace(/^PJSIP\//, '');
-  return `${ext}@172.20.10.6:8088`;
+  return `${ext}@${CONFIG.SIP_SERVER}:${CONFIG.SIP_PORT}`;
 };
 
 export const toApiChannelFormat = (appChannel) => {
@@ -35,65 +37,183 @@ export const getAppMediaStream = async () => {
 };
 
 export const call = async (extension) => {
+  console.log(`[call.js] Initiating call to extension: ${extension}`);
+
   if (!/^\d{4,6}$/.test(extension)) {
     throw new Error(`Invalid extension "${extension}". Must be 4-6 digits.`);
   }
-  const { data } = await axios.post(
-    `${API_URL}/protected/call/initiate`,
-    { target_extension: extension },
-    { headers: getAuthHeaders() }
-  );
-  const stream = await getAppMediaStream();
-  return {
-    apiChannel: data.channel,
-    appChannel: toAppChannelFormat(data.channel),
-    message: data.message,
-    priority: data.priority,
-    stream,
-  };
-};
 
-export const answerCall = async (appChannel) => {
-  if (!appChannel || !appChannel.includes('@')) {
-    throw new Error('Invalid appChannel format. Expected ext@host.');
-  }
-  const apiChannel = toApiChannelFormat(appChannel);
-  const { data } = await axios.post(
-    `${API_URL}/protected/call/answer`,
-    { channel: apiChannel },
-    { headers: getAuthHeaders() }
-  );
-  const stream = await getAppMediaStream();
-  return {
-    apiChannel,
-    message: data.message,
-    stream,
-  };
-};
-
-export const hangupCall = async (appChannel) => {
-  if (!appChannel || !appChannel.includes('@')) {
-    throw new Error('Invalid appChannel format. Expected ext@host.');
-  }
-  const apiChannel = toApiChannelFormat(appChannel);
   try {
-    await sendWebSocketMessage({ type: 'hangup', channel: apiChannel });
-  } catch (wsError) {
-    console.warn('[call.js] WebSocket hangup message failed:', wsError);
+    console.log('[call.js] Step 1: Notifying backend about call initiation');
+
+    // First, notify backend about call initiation using WebRTC method
+    const { data } = await axios.post(
+      `${API_URL}/protected/call/initiate?method=webrtc`,
+      { target_extension: extension },
+      { headers: getAuthHeaders() }
+    );
+
+    console.log('[call.js] Step 2: Backend call initiation successful:', data);
+
+    // Check if this is a WebRTC call (no need for SIP manager)
+    if (data.method === 'webrtc') {
+      console.log('[call.js] Step 3: WebRTC call initiated, waiting for target response');
+
+      return {
+        apiChannel: data.channel,
+        appChannel: data.call_id,
+        message: data.message,
+        priority: data.priority,
+        method: 'webrtc',
+        call_id: data.call_id,
+      };
+    } else {
+      console.log('[call.js] Step 3: Making SIP call through sipManager');
+
+      // Use SIP manager to make the actual call (traditional method)
+      const session = await sipManager.makeCall(extension);
+
+      console.log('[call.js] Step 4: SIP call initiated successfully');
+
+      return {
+        apiChannel: data.channel,
+        appChannel: toAppChannelFormat(data.channel),
+        message: data.message,
+        priority: data.priority,
+        session: session,
+      };
+    }
+  } catch (error) {
+    console.error('[call.js] Call initiation failed:', error);
+
+    // Provide more specific error messages
+    if (error.response) {
+      const status = error.response.status;
+      const message = error.response.data?.error || error.message;
+      console.error(`[call.js] Backend error ${status}: ${message}`);
+      throw new Error(`Call failed: ${message}`);
+    } else if (error.message.includes('SIP not registered')) {
+      throw new Error('SIP client not registered. Please refresh and try again.');
+    } else {
+      throw new Error(`Call failed: ${error.message}`);
+    }
   }
-  const { data } = await axios.post(
-    `${API_URL}/protected/call/hangup`,
-    { channel: apiChannel },
-    { headers: getAuthHeaders() }
-  );
-  return { message: data.message };
 };
 
-export const initializeSIP = async ({ extension }, onIncomingCall) => {
-  console.log(`[initializeSIP] Registering SIP for extension: ${extension}`);
-  // Placeholder for real SIP library integration (e.g., JsSIP)
-  localStorage.setItem(`sipRegistered_${extension}`, 'true');
-  setTimeout(() => {
-    onIncomingCall?.({ from: '1001', message: 'Incoming call simulated' });
-  }, 1000);
+export const answerCall = async (session) => {
+  try {
+    // Answer the call using SIP manager
+    await sipManager.answerCall(session);
+
+    // Notify backend about call answer
+    const extension = session.remote_identity.uri.user;
+    const apiChannel = `PJSIP/${extension}`;
+
+    const { data } = await axios.post(
+      `${API_URL}/protected/call/answer`,
+      { channel: apiChannel },
+      { headers: getAuthHeaders() }
+    );
+
+    return {
+      apiChannel,
+      message: data.message,
+      session: session,
+    };
+  } catch (error) {
+    console.error('[call.js] Answer call failed:', error);
+    throw error;
+  }
+};
+
+export const hangupCall = async (session = null) => {
+  try {
+    // End the call using SIP manager
+    if (session) {
+      session.terminate();
+    } else {
+      sipManager.endCall();
+    }
+
+    // Notify backend about call hangup
+    const currentSession = session || sipManager.currentSession;
+    if (currentSession) {
+      const extension = currentSession.remote_identity.uri.user;
+      const apiChannel = `PJSIP/${extension}`;
+
+      try {
+        await sendWebSocketMessage({ type: 'hangup', channel: apiChannel });
+      } catch (wsError) {
+        console.warn('[call.js] WebSocket hangup message failed:', wsError);
+      }
+
+      const { data } = await axios.post(
+        `${API_URL}/protected/call/hangup`,
+        { channel: apiChannel },
+        { headers: getAuthHeaders() }
+      );
+
+      return { message: data.message };
+    }
+
+    return { message: 'Call ended' };
+  } catch (error) {
+    console.error('[call.js] Hangup call failed:', error);
+    throw error;
+  }
+};
+
+export const initializeSIP = async ({ extension }, onIncomingCall, useWebRTC = true) => {
+  console.log(`[initializeSIP] Initializing SIP for extension: ${extension}, WebRTC mode: ${useWebRTC}`);
+
+  // Skip SIP registration if using WebRTC mode
+  if (useWebRTC) {
+    console.log('[initializeSIP] Using WebRTC mode - skipping traditional SIP registration');
+    return { success: true, method: 'webrtc' };
+  }
+
+  try {
+    const sipPassword = localStorage.getItem('sipPassword') || `password${extension}`;
+    console.log(`[initializeSIP] Using SIP password: password${extension}`);
+
+    // Initialize SIP manager and wait for registration
+    console.log('[initializeSIP] Starting SIP initialization...');
+    await sipManager.initialize(extension, sipPassword);
+    console.log('[initializeSIP] SIP initialization completed successfully');
+
+    // Set up event listeners
+    sipManager.on('registered', () => {
+      console.log(`[initializeSIP] SIP registered for extension: ${extension}`);
+      localStorage.setItem(`sipRegistered_${extension}`, 'true');
+    });
+
+    sipManager.on('unregistered', () => {
+      console.log(`[initializeSIP] SIP unregistered for extension: ${extension}`);
+      localStorage.removeItem(`sipRegistered_${extension}`);
+    });
+
+    sipManager.on('incomingCall', (data) => {
+      console.log(`[initializeSIP] Incoming call from: ${data.from}`);
+      if (onIncomingCall) {
+        onIncomingCall({
+          from: data.from,
+          session: data.session,
+          message: `Incoming call from ${data.from}`
+        });
+      }
+    });
+
+    sipManager.on('registrationFailed', (cause) => {
+      console.error(`[initializeSIP] Registration failed: ${cause}`);
+      localStorage.removeItem(`sipRegistered_${extension}`);
+    });
+
+    // Mark as registered in localStorage since we waited for registration
+    localStorage.setItem(`sipRegistered_${extension}`, 'true');
+
+    return sipManager;
+  } catch (error) {
+    console.error('[initializeSIP] SIP initialization failed:', error);
+    throw new Error(`SIP initialization failed: ${error.message}`);
+  }
 };

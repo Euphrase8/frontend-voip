@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Avatar, Tooltip, Button } from "@mui/material";
 import { Call, CallEnd } from "@mui/icons-material";
-import { handleIncomingCall } from "../services/IncomingCallService";
+import { sendWebSocketMessage } from "../services/websocketservice";
+import { hangup } from "../services/hang";
 
 const IncomingCallPage = ({ callData, contacts, user, darkMode = false }) => {
   const navigate = useNavigate();
@@ -13,38 +14,68 @@ const IncomingCallPage = ({ callData, contacts, user, darkMode = false }) => {
   const timerRef = useRef(null);
   const callHandlerRef = useRef(null);
 
-  const caller = contacts.find((c) => c.extension === callData.from) || {
-    name: `Ext ${callData.from}`,
-    extension: callData.from,
-    avatar: "https://via.placeholder.com/40/cccccc/fff?text=?",
-  };
+  const caller = useMemo(() =>
+    (contacts || []).find((c) => c.extension === callData?.from) || {
+      name: `Ext ${callData?.from || 'Unknown'}`,
+      extension: callData?.from || 'Unknown',
+      avatar: "https://via.placeholder.com/40/cccccc/fff?text=?",
+    }, [contacts, callData?.from]);
 
   useEffect(() => {
-    const handler = handleIncomingCall(
-      {
-        ...callData,
-        transport: callData.transport || "transport-ws",
-      },
-      user,
-      (stream, peerConnection) => {
-        navigate("/calling", {
-          state: {
-            contact: caller,
-            callStatus: "Connected",
-            isOutgoing: false,
-            stream,
-            peerConnection,
+    // Safety check for callData
+    if (!callData) {
+      console.error('[IncomingCallPage] No callData provided');
+      return;
+    }
+
+    console.log('[IncomingCallPage] Incoming call data:', callData);
+
+    // Store call handler functions
+    callHandlerRef.current = {
+      acceptCall: async () => {
+        try {
+          // Send call acceptance message
+          await sendWebSocketMessage({
+            type: "answer_call",
+            to: callData.from,
+            from: user.extension,
             channel: callData.channel,
             transport: callData.transport || "transport-ws",
-          },
-        });
+          });
+
+          // Navigate to calling page
+          navigate("/calling", {
+            state: {
+              contact: caller,
+              callStatus: "Connected",
+              isOutgoing: false,
+              channel: callData?.channel,
+              transport: callData?.transport || "transport-ws",
+            },
+          });
+        } catch (error) {
+          console.error("Error accepting call:", error);
+          throw error;
+        }
       },
-      () => {
-        setNotification({ message: "Call rejected", type: "info" });
-        setTimeout(() => setNotification(null), 3000);
+      rejectCall: async () => {
+        try {
+          await hangup(callData.channel);
+          await sendWebSocketMessage({
+            type: "hangup",
+            to: callData.from,
+            from: user.extension,
+            channel: callData.channel,
+            transport: callData.transport || "transport-ws",
+          });
+          setNotification({ message: "Call rejected", type: "info" });
+          setTimeout(() => setNotification(null), 3000);
+        } catch (error) {
+          console.error("Error rejecting call:", error);
+          throw error;
+        }
       }
-    );
-    callHandlerRef.current = handler;
+    };
 
     audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
     const oscillator = audioContextRef.current.createOscillator();
@@ -83,7 +114,7 @@ const IncomingCallPage = ({ callData, contacts, user, darkMode = false }) => {
         clearInterval(timerRef.current);
       }
     };
-  }, [callData, user, contacts, navigate]);
+  }, [callData, user, navigate, caller]);
 
   const handleAccept = async () => {
     if (!callHandlerRef.current) return;
@@ -176,11 +207,11 @@ const IncomingCallPage = ({ callData, contacts, user, darkMode = false }) => {
               aria-live="polite"
               style={{ textShadow: "0 1px 2px rgba(0, 0, 0, 0.5)" }}
             >
-              Incoming Call
+              📞 Incoming Call
             </h2>
             <p
-              className={`text-base sm:text-lg ${
-                darkMode ? "text-gray-300" : "text-gray-200"
+              className={`text-base sm:text-lg font-semibold ${
+                darkMode ? "text-blue-200" : "text-blue-200"
               }`}
             >
               From: {caller.name} (Ext: {caller.extension})
@@ -190,7 +221,7 @@ const IncomingCallPage = ({ callData, contacts, user, darkMode = false }) => {
                 darkMode ? "text-gray-400" : "text-gray-300"
               } mt-1`}
             >
-              Priority: {callData.priority || "Normal"}
+              Priority: {callData?.priority || "Normal"} • Method: WebRTC
             </p>
             <p
               className={`text-sm ${

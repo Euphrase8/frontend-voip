@@ -7,11 +7,13 @@ import ContactsPage from './pages/ContactsPage';
 import CallLogsPage from './pages/CallLogsPage';
 import CallingPage from './pages/CallingPage';
 import IncomingCallPage from './pages/IncomingCallPage';
+import WebRTCTestPage from './pages/WebRTCTestPage';
 import Loader from './components/loader';
 import { initializeSIP } from './services/call';
 import VoipPhone from './components/VoipPhone';
 import SipClient from './components/SipClient';
-import IncomingCallListener from './pages/IncomingCallListener'; // Import the component
+import IncomingCallListener from './pages/IncomingCallListener';
+import sipManager from './services/sipManager';
 
 const App = () => {
   const navigate = useNavigate();
@@ -56,28 +58,33 @@ const App = () => {
   }, [user?.extension]);
 
   const initializeConnection = async (extension) => {
-    // try {
-    //   await initializeSIP({ extension }, (call) => {
-    //     // Optional: Keep this if you want to handle SIP-specific calls differently
-    //     navigate('/calling', {
-    //       state: {
-    //         contact: contacts.find((c) => c.extension === call.from) || {
-    //           name: `Ext ${call.from}`,
-    //           extension: call.from,
-    //         },
-    //         callStatus: 'Incoming',
-    //         isOutgoing: false,
-    //         channel: `${call.from}@172.20.10.6`,
-    //         session: call.session,
-    //       },
-    //     });
-    //   });
-    //   console.log('[App.js] Connection initialized for extension:', extension);
-    // } catch (error) {
-    //   console.error('[App.js] Connection initialization failed:', error);
-    //   setNotification({ message: `Connection failed: ${error.message}`, type: 'error' });
-    //   setTimeout(() => setNotification(null), 5000);
-    // }
+    try {
+      // Use WebRTC mode by default (no traditional SIP registration)
+      await initializeSIP({ extension }, (call) => {
+        // Handle incoming calls
+        console.log('[App.js] Incoming call received:', call);
+        navigate('/calling', {
+          state: {
+            contact: contacts.find((c) => c.extension === call.from) || {
+              name: `Ext ${call.from}`,
+              extension: call.from,
+            },
+            callStatus: 'Incoming',
+            isOutgoing: false,
+            channel: `${call.from}@172.20.10.6`,
+            session: call.session,
+          },
+        });
+      }, true); // Enable WebRTC mode
+      console.log('[App.js] WebRTC connection initialized for extension:', extension);
+    } catch (error) {
+      console.error('[App.js] Connection initialization failed:', error);
+      // Don't show error for WebRTC mode since it's expected to skip SIP registration
+      if (!error.message.includes('WebRTC mode')) {
+        setNotification({ message: `Connection failed: ${error.message}`, type: 'error' });
+        setTimeout(() => setNotification(null), 5000);
+      }
+    }
   };
 
   const handleLogin = (result) => {
@@ -108,14 +115,21 @@ const App = () => {
 
 
   const handleLogout = () => {
+    // Clean up SIP connection
+    sipManager.destroy();
+
+    // Clear localStorage
     localStorage.removeItem('token');
     localStorage.removeItem('extension');
     localStorage.removeItem('sipPassword');
     localStorage.removeItem(`sipRegistered_${user?.extension}`);
+
+    // Reset state
     setUser(null);
     setSipPassword(null);
     setDarkMode(false);
     setIsRegistered(false);
+
     navigate('/login', { state: { success: 'Logged out successfully' } });
   };
 
@@ -136,10 +150,11 @@ const App = () => {
       )}
       {user?.extension && sipPassword && (
         <>
-          <SipClient
+          {/* SipClient disabled for WebRTC mode - uncomment if you want traditional SIP */}
+          {/* <SipClient
             extension={user.extension}
             sipPassword={sipPassword}
-          />
+          /> */}
           <IncomingCallListener /> {/* Add IncomingCallListener here */}
         </>
       )}
@@ -205,6 +220,10 @@ const App = () => {
             darkMode={darkMode}
             peerConnection={null}
           /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="/webrtc-test"
+          element={token ? <WebRTCTestPage /> : <Navigate to="/login" replace />}
         />
         <Route path="/" element={<Navigate to="/login" replace />} />
       </Routes>
