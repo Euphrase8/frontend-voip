@@ -53,7 +53,10 @@ const IncomingCallListener = () => {
           extension: callInfo.caller,
           transport: callInfo.transport,
         });
+
+        // Clear call info immediately to hide incoming call UI
         setCallInfo(null);
+
         navigate('/calling', {
           state: {
             contact: { extension: callInfo.caller, name: `Ext ${callInfo.caller}` },

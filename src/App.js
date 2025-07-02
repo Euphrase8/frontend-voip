@@ -214,11 +214,7 @@ const App = () => {
         <Route
           path="/calling"
           element={token ? <CallingPage
-            contact={contacts.find(c => c.extension === user?.extension) || { extension: user?.extension, name: `Ext ${user?.extension}` }}
-            callStatus="Idle"
-            onEndCall={() => navigate('/dashboard')}
             darkMode={darkMode}
-            peerConnection={null}
           /> : <Navigate to="/login" replace />}
         />
         <Route

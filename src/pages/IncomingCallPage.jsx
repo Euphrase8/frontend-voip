@@ -5,7 +5,7 @@ import { Call, CallEnd } from "@mui/icons-material";
 import { sendWebSocketMessage } from "../services/websocketservice";
 import { hangup } from "../services/hang";
 
-const IncomingCallPage = ({ callData, contacts, user, darkMode = false }) => {
+const IncomingCallPage = ({ callData, contacts, user, darkMode = false, onCallAccepted, onCallRejected }) => {
   const navigate = useNavigate();
   const [notification, setNotification] = useState(null);
   const [timeLeft, setTimeLeft] = useState(30);
@@ -43,6 +43,11 @@ const IncomingCallPage = ({ callData, contacts, user, darkMode = false }) => {
             transport: callData.transport || "transport-ws",
           });
 
+          // Notify parent component that call was accepted
+          if (onCallAccepted) {
+            onCallAccepted();
+          }
+
           // Navigate to calling page
           navigate("/calling", {
             state: {
@@ -68,6 +73,12 @@ const IncomingCallPage = ({ callData, contacts, user, darkMode = false }) => {
             channel: callData.channel,
             transport: callData.transport || "transport-ws",
           });
+
+          // Notify parent component that call was rejected
+          if (onCallRejected) {
+            onCallRejected();
+          }
+
           setNotification({ message: "Call rejected", type: "info" });
           setTimeout(() => setNotification(null), 3000);
         } catch (error) {

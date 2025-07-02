@@ -299,6 +299,14 @@ const DashboardPage = ({ user, onLogout, darkMode, toggleDarkMode, setIncomingCa
           contacts={contacts}
           user={user}
           darkMode={darkMode}
+          onCallAccepted={() => {
+            setLocalIncomingCall(null);
+            setIncomingCall(null);
+          }}
+          onCallRejected={() => {
+            setLocalIncomingCall(null);
+            setIncomingCall(null);
+          }}
         />
       )}
 
