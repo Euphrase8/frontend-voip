@@ -1,6 +1,8 @@
 // Dynamic Configuration Service
 // This service fetches configuration from the backend instead of using hardcoded values
 
+import ipConfigService from './ipConfigService';
+
 class ConfigService {
   constructor() {
     this.config = null;
@@ -79,9 +81,17 @@ class ConfigService {
     const currentHost = window.location.hostname;
     const protocol = window.location.protocol;
 
+    // Get configured backend URL if available
+    const configuredBackendUrl = ipConfigService.isConfigured()
+      ? ipConfigService.getBackendUrl()
+      : null;
+
     return [
       // Environment-specific (highest priority)
       ...(process.env.REACT_APP_API_URL ? [process.env.REACT_APP_API_URL] : []),
+
+      // User-configured backend (high priority)
+      ...(configuredBackendUrl ? [configuredBackendUrl] : []),
 
       // Known backend server IP (for network access)
       'http://172.20.10.4:8080',
@@ -108,17 +118,27 @@ class ConfigService {
   _getFallbackConfig() {
     const currentHost = window.location.hostname;
 
-    // Use known backend IP for network access, fallback to current host
-    const backendHost = (currentHost === 'localhost' || currentHost === '127.0.0.1')
-      ? '172.20.10.4'
-      : currentHost;
+    // Use configured IPs if available, otherwise use defaults
+    let backendHost, asteriskHost;
+
+    if (ipConfigService.isConfigured()) {
+      const config = ipConfigService.getConfig();
+      backendHost = config.backendHost;
+      asteriskHost = config.asteriskHost;
+    } else {
+      // Use known backend IP for network access, fallback to current host
+      backendHost = (currentHost === 'localhost' || currentHost === '127.0.0.1')
+        ? '172.20.10.4'
+        : currentHost;
+      asteriskHost = '172.20.10.2';
+    }
 
     return {
       api_url: `http://${backendHost}:8080`,
       ws_url: `ws://${backendHost}:8080/ws`,
       asterisk: {
-        host: '172.20.10.6',
-        ws_url: 'ws://172.20.10.6:8088/ws',
+        host: asteriskHost,
+        ws_url: `ws://${asteriskHost}:8088/ws`,
       },
       environment: 'development',
       debug: true,
@@ -151,17 +171,34 @@ class ConfigService {
 
   // Get API URL
   getApiUrl() {
+    if (ipConfigService.isConfigured()) {
+      return ipConfigService.getBackendUrl();
+    }
     return this.get('api_url', 'http://172.20.10.4:8080');
   }
 
   // Get WebSocket URL
   getWebSocketUrl() {
+    if (ipConfigService.isConfigured()) {
+      return ipConfigService.getBackendWebSocketUrl();
+    }
     return this.get('ws_url', 'ws://172.20.10.4:8080/ws');
   }
 
   // Get Asterisk WebSocket URL
   getAsteriskWebSocketUrl() {
-    return this.get('asterisk.ws_url', 'ws://asterisk.local:8088/ws');
+    if (ipConfigService.isConfigured()) {
+      return ipConfigService.getAsteriskWebSocketUrl();
+    }
+    return this.get('asterisk.ws_url', 'ws://172.20.10.2:8088/ws');
+  }
+
+  // Get Asterisk Host
+  getAsteriskHost() {
+    if (ipConfigService.isConfigured()) {
+      return ipConfigService.getAsteriskHost();
+    }
+    return this.get('asterisk.host', '172.20.10.2');
   }
 
   // Get Asterisk host

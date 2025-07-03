@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import configService from '../services/configService';
+import ipConfigService from '../services/ipConfigService';
 
 const ConnectionStatus = ({ onConfigChange }) => {
+  const navigate = useNavigate();
   const [status, setStatus] = useState({
     backend: { healthy: false, checking: true },
     asterisk: { healthy: false, checking: true },
@@ -82,9 +85,13 @@ const ConnectionStatus = ({ onConfigChange }) => {
       backend: { ...prev.backend, checking: true },
       asterisk: { ...prev.asterisk, checking: true },
     }));
-    
+
     await configService.reload();
     await checkConnections();
+  };
+
+  const openIPConfig = () => {
+    navigate('/ip-config');
   };
 
   if (!showDetails) {
@@ -148,6 +155,16 @@ const ConnectionStatus = ({ onConfigChange }) => {
             </span>
           </div>
         )}
+
+        {/* IP Configuration Info */}
+        {ipConfigService.isConfigured() && (
+          <div className="flex items-center justify-between">
+            <span className="text-gray-600 dark:text-gray-300">IPs:</span>
+            <span className="text-green-600 dark:text-green-400 text-xs">
+              Configured
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Configuration Details */}
@@ -164,18 +181,26 @@ const ConnectionStatus = ({ onConfigChange }) => {
       )}
 
       {/* Actions */}
-      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600 flex space-x-2">
+      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600 space-y-2">
+        <div className="flex space-x-2">
+          <button
+            onClick={reloadConfig}
+            className="flex-1 px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-colors"
+          >
+            Reload Config
+          </button>
+          <button
+            onClick={checkConnections}
+            className="flex-1 px-3 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600 transition-colors"
+          >
+            Check Now
+          </button>
+        </div>
         <button
-          onClick={reloadConfig}
-          className="flex-1 px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-colors"
+          onClick={openIPConfig}
+          className="w-full px-3 py-1 bg-purple-500 text-white text-xs rounded hover:bg-purple-600 transition-colors"
         >
-          Reload Config
-        </button>
-        <button
-          onClick={checkConnections}
-          className="flex-1 px-3 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600 transition-colors"
-        >
-          Check Now
+          Configure IP Addresses
         </button>
       </div>
 

@@ -66,6 +66,47 @@ func main() {
 		})
 	})
 
+	// Configuration update endpoint (for IP configuration)
+	r.POST("/config/update", func(c *gin.Context) {
+		var updateRequest struct {
+			AsteriskHost    string `json:"asterisk_host"`
+			AsteriskAMIPort string `json:"asterisk_ami_port"`
+			SIPPort         string `json:"sip_port"`
+		}
+
+		if err := c.ShouldBindJSON(&updateRequest); err != nil {
+			c.JSON(400, gin.H{
+				"success": false,
+				"error":   "Invalid request format",
+			})
+			return
+		}
+
+		// Update configuration if provided
+		if updateRequest.AsteriskHost != "" {
+			config.AppConfig.AsteriskHost = updateRequest.AsteriskHost
+			config.AppConfig.SIPDomain = updateRequest.AsteriskHost
+		}
+		if updateRequest.AsteriskAMIPort != "" {
+			config.AppConfig.AsteriskAMIPort = updateRequest.AsteriskAMIPort
+		}
+		if updateRequest.SIPPort != "" {
+			config.AppConfig.SIPPort = updateRequest.SIPPort
+		}
+
+		log.Printf("[Config] Configuration updated: Asterisk=%s:%s, SIP=%s:%s",
+			config.AppConfig.AsteriskHost,
+			config.AppConfig.AsteriskAMIPort,
+			config.AppConfig.AsteriskHost,
+			config.AppConfig.SIPPort)
+
+		c.JSON(200, gin.H{
+			"success": true,
+			"message": "Configuration updated successfully",
+			"config":  config.AppConfig.GetFrontendConfig(),
+		})
+	})
+
 	// WebSocket endpoint
 	r.GET("/ws", websocket.HandleWebSocket)
 

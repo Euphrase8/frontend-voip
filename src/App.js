@@ -10,12 +10,14 @@ import ContactsPage from './pages/ContactsPage';
 import CallLogsPage from './pages/CallLogsPage';
 import CallingPage from './pages/CallingPage';
 import WebRTCTestPage from './pages/WebRTCTestPage';
+import IPConfigurationPage from './pages/IPConfigurationPage';
 import Loader from './components/loader';
 import { initializeSIP } from './services/call';
 import VoipPhone from './components/VoipPhone';
 import IncomingCallListener from './pages/IncomingCallListener';
 import BrowserCompatibilityAlert from './components/BrowserCompatibilityAlert';
 import sipManager from './services/sipManager';
+import ipConfigService from './services/ipConfigService';
 
 const App = () => {
   const navigate = useNavigate();
@@ -31,6 +33,15 @@ const App = () => {
   ]);
 
   useEffect(() => {
+    // Check if IP configuration is required first
+    if (!ipConfigService.isConfigured()) {
+      console.log('[App.js] IP configuration required, redirecting to /ip-config');
+      if (window.location.pathname !== '/ip-config') {
+        navigate('/ip-config', { replace: true });
+      }
+      return;
+    }
+
     const token = localStorage.getItem('token');
     const extension = localStorage.getItem('extension');
     const storedSipPassword = localStorage.getItem('sipPassword');
@@ -40,7 +51,7 @@ const App = () => {
       setUser({ username: 'User', extension, role: userRole });
       setSipPassword(storedSipPassword);
       initializeConnection(extension);
-    } else if (!token && window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+    } else if (!token && window.location.pathname !== '/login' && window.location.pathname !== '/register' && window.location.pathname !== '/ip-config') {
       console.log('[App.js] No token, redirecting to /login');
       navigate('/login', { replace: true });
     }
@@ -193,6 +204,13 @@ const App = () => {
       )}
       <Routes>
         <Route
+          path="/ip-config"
+          element={<IPConfigurationPage
+            darkMode={darkMode}
+            toggleDarkMode={() => setDarkMode(!darkMode)}
+          />}
+        />
+        <Route
           path="/login"
           element={<LoginPage
             onLogin={handleLogin}
@@ -261,7 +279,11 @@ const App = () => {
           path="/webrtc-test"
           element={token ? <WebRTCTestPage /> : <Navigate to="/login" replace />}
         />
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={
+          ipConfigService.isConfigured()
+            ? <Navigate to="/login" replace />
+            : <Navigate to="/ip-config" replace />
+        } />
       </Routes>
       {isLoading && <Loader />}
       </div>
