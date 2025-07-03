@@ -25,7 +25,7 @@ const initialContacts = [
     name: "John Doe",
     priority: "high",
     status: "online",
-    avatar: "https://via.placeholder.com/40/ef4444/fff?text=JD",
+    avatar: null,
     isFavorite: true,
     extension: "1001",
   },
@@ -34,7 +34,7 @@ const initialContacts = [
     name: "Jane Smith",
     priority: "medium",
     status: "offline",
-    avatar: "https://via.placeholder.com/40/facc15/fff?text=JS",
+    avatar: null,
     isFavorite: false,
     extension: "1002",
   },
@@ -43,7 +43,7 @@ const initialContacts = [
     name: "Alice Brown",
     priority: "low",
     status: "online",
-    avatar: "https://via.placeholder.com/40/22c55e/fff?text=AB",
+    avatar: null,
     isFavorite: false,
     extension: "1003",
   },
@@ -291,21 +291,21 @@ const DashboardPage = ({ user, onLogout, darkMode, toggleDarkMode, setIncomingCa
       {incomingCall && (
         <IncomingCallPage
           callData={{
-            from: incomingCall.caller,
-            channel: incomingCall.channel,
-            priority: incomingCall.priority || 'normal',
-            transport: incomingCall.transport || 'transport-ws'
+            from: (incomingCall?.caller || incomingCall?.from),
+            channel: (incomingCall?.channel || incomingCall?.callId),
+            priority: (incomingCall?.priority || 'normal'),
+            transport: (incomingCall?.transport || 'transport-ws')
           }}
           contacts={contacts}
           user={user}
           darkMode={darkMode}
           onCallAccepted={() => {
             setLocalIncomingCall(null);
-            setIncomingCall(null);
+            if (setIncomingCall) setIncomingCall(null);
           }}
           onCallRejected={() => {
             setLocalIncomingCall(null);
-            setIncomingCall(null);
+            if (setIncomingCall) setIncomingCall(null);
           }}
         />
       )}

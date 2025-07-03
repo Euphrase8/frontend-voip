@@ -4,7 +4,7 @@
 Write-Host "=== WebRTC Call Method Test ===" -ForegroundColor Green
 
 # Configuration
-$BACKEND_URL = "http://172.20.10.8:8080"
+$BACKEND_URL = "http://172.20.10.4:8080"
 
 Write-Host "`nTesting WebRTC call method..." -ForegroundColor Cyan
 

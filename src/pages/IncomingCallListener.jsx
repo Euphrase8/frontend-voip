@@ -17,6 +17,8 @@ const IncomingCallListener = () => {
       websocket.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
+          console.log('[IncomingCallListener] Received message:', message);
+
           if (message.type === 'incoming_call') {
             setCallInfo({
               caller: message.caller,
@@ -24,6 +26,10 @@ const IncomingCallListener = () => {
               priority: message.priority || 'normal',
               transport: message.transport || 'transport-ws',
             });
+          } else if (message.type === 'call_ended' || message.type === 'hangup') {
+            // Clear incoming call UI when call is ended by the other party
+            console.log('[IncomingCallListener] Call ended, clearing incoming call UI');
+            setCallInfo(null);
           }
         } catch (err) {
           console.error('❌ Invalid message format:', event.data);

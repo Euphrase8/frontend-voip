@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # VoIP System Status Checker
-# Run this script from your PC (172.20.10.8) to check the status of your VoIP system
+# Run this script from your PC (172.20.10.4) to check the status of your VoIP system
 
 echo "=== VoIP System Status Checker ==="
 echo "Checking connectivity and status..."
 
 # Configuration
 ASTERISK_IP="172.20.10.6"
-BACKEND_IP="172.20.10.8"
+BACKEND_IP="172.20.10.4"
 AMI_PORT=5038
 WEBSOCKET_PORT=8088
 BACKEND_PORT=8080
@@ -80,7 +80,7 @@ echo "   To check backend diagnostics, you need a JWT token."
 echo "   1. Login to your frontend application"
 echo "   2. Open browser console and run: localStorage.getItem('token')"
 echo "   3. Then run this command with your token:"
-echo "   curl -H \"Authorization: Bearer YOUR_TOKEN\" http://172.20.10.8:8080/protected/diagnostics"
+echo "   curl -H \"Authorization: Bearer YOUR_TOKEN\" http://172.20.10.4:8080/protected/diagnostics"
 
 echo ""
 echo "=== Next Steps ==="

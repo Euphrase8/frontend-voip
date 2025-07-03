@@ -5,6 +5,8 @@ import { Call, CallEnd, Mic, MicOff, VolumeUp, VolumeOff, SignalCellularAlt, Pho
 import PropTypes from 'prop-types';
 import { connectWebSocket, sendWebSocketMessage } from '../services/websocketservice';
 import { hangupCall } from '../services/call';
+import { hangup } from '../services/hang';
+import webrtcCallService from '../services/webrtcCallService';
 
 const CallingPage = ({
   darkMode = false,
@@ -37,6 +39,7 @@ const CallingPage = ({
   const callStartTimeRef = useRef(null);
   const animationFrameRef = useRef(null);
   const wsRef = useRef(null);
+  const hangupInProgressRef = useRef(false);
 
   useEffect(() => {
     // Validate navigation state with more detailed error handling
@@ -68,6 +71,31 @@ const CallingPage = ({
     }
 
     console.log('[CallingPage] Call data validated:', { contact, currentCallStatus, isOutgoing, channel, transport });
+    console.log('[CallingPage] Navigation state:', location.state);
+    console.log('[CallingPage] Props:', { propContact, propCallStatus, propIsOutgoing, propChannel, propTransport });
+
+    // Check if this is a WebRTC call and set up status listener
+    const isWebRTCCall = channel && channel.startsWith('webrtc-call-');
+    if (isWebRTCCall) {
+      console.log('[CallingPage] Setting up WebRTC call status listener');
+
+      // Listen for WebRTC call status updates
+      const originalOnCallStatusChange = webrtcCallService.onCallStatusChange;
+      webrtcCallService.onCallStatusChange = (status) => {
+        console.log('[CallingPage] WebRTC status update:', status);
+        setCurrentCallStatus(status);
+
+        // Call original handler if it exists
+        if (originalOnCallStatusChange) {
+          originalOnCallStatusChange(status);
+        }
+      };
+
+      // Cleanup function to restore original handler
+      return () => {
+        webrtcCallService.onCallStatusChange = originalOnCallStatusChange;
+      };
+    }
 
     // Set up WebSocket connection for real-time updates
     const setupWebSocket = () => {
@@ -86,8 +114,22 @@ const CallingPage = ({
 
           switch (message.type) {
             case 'call_answered':
+              console.log('[CallingPage] Call answered - starting timer');
               setCurrentCallStatus('Connected');
               setIsConnected(true);
+
+              // Start call timer when call is answered
+              if (!callStartTimeRef.current) {
+                callStartTimeRef.current = Date.now();
+                const updateCallTime = () => {
+                  if (callStartTimeRef.current) {
+                    setCallTime(Math.floor((Date.now() - callStartTimeRef.current) / 1000));
+                    animationFrameRef.current = requestAnimationFrame(updateCallTime);
+                  }
+                };
+                animationFrameRef.current = requestAnimationFrame(updateCallTime);
+              }
+
               setNotification({ message: 'Call connected', type: 'success' });
               setTimeout(() => setNotification(null), 3000);
               break;
@@ -130,8 +172,9 @@ const CallingPage = ({
 
     setupWebSocket();
 
-    // Start call timer if connected
-    if (isConnected && !callStartTimeRef.current) {
+    // Start call timer only if call is actually connected (not just during dialing)
+    if (isConnected && currentCallStatus === 'Connected' && !callStartTimeRef.current) {
+      console.log('[CallingPage] Starting call timer - call is connected');
       callStartTimeRef.current = Date.now();
       const updateCallTime = () => {
         if (callStartTimeRef.current) {
@@ -152,10 +195,13 @@ const CallingPage = ({
     };
   }, [contact?.extension, navigate]);
 
-  // Handle call status changes
+  // Handle call status changes and timer management
   useEffect(() => {
     if (currentCallStatus === 'Connected' && !isConnected) {
+      console.log('[CallingPage] Call status changed to Connected - starting timer');
       setIsConnected(true);
+
+      // Start timer only when call is truly connected
       if (!callStartTimeRef.current) {
         callStartTimeRef.current = Date.now();
         const updateCallTime = () => {
@@ -167,9 +213,11 @@ const CallingPage = ({
         animationFrameRef.current = requestAnimationFrame(updateCallTime);
       }
     } else if (currentCallStatus === 'Call Ended' || currentCallStatus === 'Disconnected') {
+      console.log('[CallingPage] Call ended - stopping timer');
       setIsConnected(false);
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
       }
     }
   }, [currentCallStatus, isConnected]);
@@ -181,8 +229,18 @@ const CallingPage = ({
   };
 
   const handleEndCall = async () => {
+    // Prevent multiple hangup attempts
+    if (hangupInProgressRef.current) {
+      console.log('[CallingPage] Hangup already in progress, ignoring duplicate call');
+      return;
+    }
+
+    hangupInProgressRef.current = true;
+
     try {
       console.log('[CallingPage] Ending call on channel:', channel);
+      console.log('[CallingPage] Contact:', contact);
+      console.log('[CallingPage] Transport:', transport);
 
       // Immediately update UI state for faster response
       setCurrentCallStatus('Call Ended');
@@ -216,11 +274,22 @@ const CallingPage = ({
         );
       }
 
-      // Also try hangup via API
-      if (channel) {
-        hangupPromises.push(
-          hangupCall(channel).catch(err => console.warn('[CallingPage] API hangup failed:', err))
-        );
+      // Also try hangup via API - use appropriate hangup method based on channel type
+      if (channel && channel.trim() !== '' && channel !== 'undefined' && channel !== 'null') {
+        console.log('[CallingPage] Attempting hangup for channel:', channel);
+        if (channel.startsWith('webrtc-call-') || channel.startsWith('PJSIP/')) {
+          // Use the hangup API for WebRTC and SIP calls
+          hangupPromises.push(
+            hangup(channel).catch(err => console.warn('[CallingPage] API hangup failed:', err))
+          );
+        } else {
+          // Use SIP hangup for traditional SIP sessions
+          hangupPromises.push(
+            hangupCall(channel).catch(err => console.warn('[CallingPage] SIP hangup failed:', err))
+          );
+        }
+      } else {
+        console.warn('[CallingPage] No valid channel available for hangup, channel:', channel);
       }
 
       // Execute hangup operations in parallel (don't wait for completion)
@@ -247,6 +316,9 @@ const CallingPage = ({
       } else {
         setTimeout(() => navigate('/dashboard'), 1000);
       }
+    } finally {
+      // Reset hangup flag
+      hangupInProgressRef.current = false;
     }
   };
 
@@ -321,9 +393,17 @@ const CallingPage = ({
         <div className="flex items-center space-x-4 mb-6 animate-[fadeInUp_1s_ease-out_forwards]">
           <Avatar
             alt={contact?.name || 'Contact'}
-            src={contact?.avatar || "https://via.placeholder.com/40/cccccc/fff?text=?"}
+            src={contact?.avatar}
             className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border-3 border-white/40 shadow-md"
-          />
+            sx={{
+              bgcolor: contact?.avatar ? 'transparent' : '#6366f1',
+              color: 'white',
+              fontSize: '1.2rem',
+              fontWeight: 'bold'
+            }}
+          >
+            {!contact?.avatar && (contact?.name ? contact.name.charAt(0).toUpperCase() : contact?.extension?.charAt(0) || '?')}
+          </Avatar>
           <div>
             <h2
               className={`text-xl sm:text-2xl font-bold ${
@@ -357,7 +437,7 @@ const CallingPage = ({
                 darkMode ? "text-gray-400" : "text-gray-300"
               } mt-1`}
             >
-              Duration: {isConnected ? formatTime(callTime) : '00:00'}
+              Duration: {isConnected && callStartTimeRef.current ? formatTime(callTime) : (currentCallStatus === 'Connected' ? 'Connecting...' : '00:00')}
             </p>
           </div>
         </div>

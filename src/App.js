@@ -24,8 +24,8 @@ const App = () => {
   const [notification, setNotification] = useState(null);
   const [isRegistered, setIsRegistered] = useState(false);
   const [contacts] = useState([
-    { id: 1, name: 'John Doe', extension: '1001', avatar: 'https://via.placeholder.com/40/ef4444/fff?text=JD' },
-    { id: 2, name: 'Jane Smith', extension: '1002', avatar: 'https://via.placeholder.com/40/facc15/fff?text=JS' },
+    { id: 1, name: 'John Doe', extension: '1001', avatar: null },
+    { id: 2, name: 'Jane Smith', extension: '1002', avatar: null },
   ]);
 
   useEffect(() => {

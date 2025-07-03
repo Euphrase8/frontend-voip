@@ -49,7 +49,7 @@ The system now supports multiple devices per extension:
 
 2. **Local Network Setup**
    - Ensure all devices can reach the server IP
-   - Use the server's local network IP (e.g., 172.20.10.14)
+   - Use the server's local network IP (e.g., 172.20.10.6)
    - Configure firewall to allow port 8080
 
 ### 3. Network Configuration
@@ -66,8 +66,8 @@ ip addr show
 #### Frontend Configuration:
 Update frontend to use server's local IP:
 ```javascript
-const API_URL = "http://172.20.10.14:8080";
-const WS_URL = "ws://172.20.10.14:8080/ws";
+const API_URL = "http://172.20.10.6:8080";
+const WS_URL = "ws://172.20.10.6:8080/ws";
 ```
 
 ### 4. Debugging Commands
@@ -159,7 +159,7 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 
 ### Environment Variables:
 ```bash
-PUBLIC_HOST=172.20.10.14  # Use your server's local IP
+PUBLIC_HOST=172.20.10.6  # Use your server's local IP
 PORT=8080
 DEBUG=true
 CORS_ORIGINS=*  # Allow all origins for development
@@ -168,8 +168,8 @@ CORS_ORIGINS=*  # Allow all origins for development
 ### Frontend Configuration:
 ```javascript
 const config = {
-  apiUrl: "http://172.20.10.14:8080",
-  wsUrl: "ws://172.20.10.14:8080/ws",
+  apiUrl: "http://172.20.10.6:8080",
+  wsUrl: "ws://172.20.10.6:8080/ws",
   // ... other config
 };
 ```

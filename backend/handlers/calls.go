@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 	"voip-backend/asterisk"
 	"voip-backend/database"
@@ -211,57 +212,103 @@ func HangupCall(c *gin.Context) {
 
 	var req models.CallHangupRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("[HANGUP] Invalid request format from user %s: %v", extension, err)
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid request format",
+			"error": "Invalid request format: " + err.Error(),
 		})
 		return
 	}
+
+	if req.Channel == "" {
+		log.Printf("[HANGUP] Empty channel provided by user %s", extension)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Channel is required",
+		})
+		return
+	}
+
+	log.Printf("[HANGUP] User %s attempting to hangup channel: %s", extension, req.Channel)
+
+	// Check if this is a WebRTC call
+	isWebRTCCall := strings.HasPrefix(req.Channel, "webrtc-call-")
 
 	// Find the active call
 	var activeCall models.ActiveCall
 	if err := database.GetDB().Where("channel = ? AND (caller_id = ? OR callee_id = ?)", req.Channel, userID, userID).First(&activeCall).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "Active call not found",
-		})
-		return
-	}
-
-	// Hangup the call through Asterisk
-	if err := asterisk.HangupCall(req.Channel); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to hangup call: " + err.Error(),
-		})
-		return
-	}
-
-	// Calculate call duration
-	duration := int(time.Since(activeCall.StartTime).Seconds())
-
-	// Update call log
-	endTime := time.Now()
-	database.GetDB().Model(&models.CallLog{}).Where("channel = ?", req.Channel).Updates(map[string]interface{}{
-		"status":   "ended",
-		"end_time": &endTime,
-		"duration": duration,
-	})
-
-	// Remove active call
-	database.GetDB().Delete(&activeCall)
-
-	// Notify via WebSocket
-	hub := websocket.GetHub()
-	if hub != nil {
-		// Get other party info
-		var otherUser models.User
-		if activeCall.CallerID == userID {
-			database.GetDB().First(&otherUser, activeCall.CalleeID)
+		if isWebRTCCall {
+			// For WebRTC calls, if no active call record found, still proceed with WebSocket notification
+			log.Printf("[HANGUP] WebRTC call record not found, proceeding with WebSocket notification")
 		} else {
-			database.GetDB().First(&otherUser, activeCall.CallerID)
+			log.Printf("[HANGUP] Active call not found for channel: %s, user: %s", req.Channel, extension)
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "Active call not found",
+			})
+			return
 		}
+	}
 
-		if otherUser.ID != 0 {
-			hub.NotifyCallStatus(extension, otherUser.Extension, "ended", req.Channel)
+	// Hangup the call through appropriate method
+	if isWebRTCCall {
+		log.Printf("[HANGUP] Handling WebRTC call hangup for channel: %s", req.Channel)
+		// For WebRTC calls, we don't need to call Asterisk
+	} else {
+		// Hangup traditional calls through Asterisk
+		if err := asterisk.HangupCall(req.Channel); err != nil {
+			log.Printf("[HANGUP] Asterisk hangup failed for channel %s: %v", req.Channel, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to hangup call: " + err.Error(),
+			})
+			return
 		}
+	}
+
+	var duration int
+
+	// Calculate call duration and handle database operations only if activeCall exists
+	if activeCall.ID != 0 {
+		duration = int(time.Since(activeCall.StartTime).Seconds())
+
+		// Update call log
+		endTime := time.Now()
+		database.GetDB().Model(&models.CallLog{}).Where("channel = ?", req.Channel).Updates(map[string]interface{}{
+			"status":   "ended",
+			"end_time": &endTime,
+			"duration": duration,
+		})
+
+		// Remove active call
+		database.GetDB().Delete(&activeCall)
+
+		// Notify via WebSocket
+		hub := websocket.GetHub()
+		if hub != nil {
+			// Get other party info
+			var otherUser models.User
+			if activeCall.CallerID == userID {
+				database.GetDB().First(&otherUser, activeCall.CalleeID)
+			} else {
+				database.GetDB().First(&otherUser, activeCall.CallerID)
+			}
+
+			if otherUser.ID != 0 {
+				hub.NotifyCallStatus(extension, otherUser.Extension, "ended", req.Channel)
+			}
+		}
+	} else {
+		// For WebRTC calls without active call record, still send WebSocket notification
+		log.Printf("[HANGUP] Sending WebSocket hangup notification for WebRTC call: %s", req.Channel)
+		hub := websocket.GetHub()
+		if hub != nil {
+			// Send a general hangup message
+			hangupMsg := websocket.Message{
+				Type:    "call_ended",
+				From:    extension,
+				Channel: req.Channel,
+				Status:  "ended",
+			}
+			hub.BroadcastMessage(hangupMsg)
+		}
+		duration = 0
 	}
 
 	c.JSON(http.StatusOK, gin.H{

@@ -82,7 +82,7 @@ const ContactsPage = ({ darkMode = false }) => {
           .map((user) => ({
             ...user,
             channel: `PJSIP/${user.extension}`,
-            avatar: user.avatar || 'https://via.placeholder.com/40/cccccc/fff?text=?',
+            avatar: user.avatar || null,
           }));
 
         setContacts(filtered);

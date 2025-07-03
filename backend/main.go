@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"time"
 	"voip-backend/asterisk"
 	"voip-backend/config"
 	"voip-backend/database"
@@ -48,9 +49,12 @@ func main() {
 
 	// Health check endpoint
 	r.GET("/health", func(c *gin.Context) {
+		start := time.Now()
 		c.JSON(200, gin.H{
-			"status":  "ok",
-			"service": "voip-backend",
+			"status":           "ok",
+			"service":          "voip-backend",
+			"timestamp":        start.Unix(),
+			"response_time_ms": time.Since(start).Milliseconds(),
 		})
 	})
 

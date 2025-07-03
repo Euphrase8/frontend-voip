@@ -1,13 +1,13 @@
 # VoIP App Quick Start Guide
 
 ## Your Network Setup
-- **Your PC**: 172.20.10.8 (Frontend + Backend)
-- **Asterisk Server**: 172.20.10.14 (SSH access)
+- **Your PC**: 172.20.10.4 (Frontend + Backend)
+- **Asterisk Server**: 172.20.10.6 (SSH access)
 
 ## ✅ Current Status
-- ✅ Backend running on 172.20.10.8:8080
-- ✅ Asterisk AMI reachable at 172.20.10.14:5038
-- ✅ Asterisk WebSocket reachable at 172.20.10.14:8088
+- ✅ Backend running on 172.20.10.4:8080
+- ✅ Asterisk AMI reachable at 172.20.10.6:5038
+- ✅ Asterisk WebSocket reachable at 172.20.10.6:8088
 - ✅ Configuration updated for your network
 - ✅ WebRTC calling system implemented
 
@@ -30,12 +30,12 @@ npm start
 
 **Check backend health:**
 ```bash
-curl http://172.20.10.8:8080/health
+curl http://172.20.10.4:8080/health
 ```
 
 **Check configuration:**
 ```bash
-curl http://172.20.10.8:8080/config
+curl http://172.20.10.4:8080/config
 ```
 
 ### 3. Login and Test
@@ -70,18 +70,18 @@ curl http://172.20.10.8:8080/config
 
 ### Frontend (.env)
 ```env
-REACT_APP_API_URL=http://172.20.10.8:8080
-REACT_APP_WS_URL=ws://172.20.10.8:8080/ws
-REACT_APP_SIP_SERVER=172.20.10.14
-REACT_APP_SIP_WS_URL=ws://172.20.10.14:8088/ws
-REACT_APP_CLIENT_IP=172.20.10.8
+REACT_APP_API_URL=http://172.20.10.4:8080
+REACT_APP_WS_URL=ws://172.20.10.4:8080/ws
+REACT_APP_SIP_SERVER=172.20.10.6
+REACT_APP_SIP_WS_URL=ws://172.20.10.6:8088/ws
+REACT_APP_CLIENT_IP=172.20.10.4
 ```
 
 ### Backend (backend/.env)
 ```env
-ASTERISK_HOST=172.20.10.14
-PUBLIC_HOST=172.20.10.8
-CORS_ORIGINS=http://localhost:3000,http://172.20.10.8:3000
+ASTERISK_HOST=172.20.10.6
+PUBLIC_HOST=172.20.10.4
+CORS_ORIGINS=http://localhost:3000,http://172.20.10.4:3000
 ```
 
 ## 🛠️ Troubleshooting
@@ -92,7 +92,7 @@ CORS_ORIGINS=http://localhost:3000,http://172.20.10.8:3000
 netstat -ano | findstr :8080
 
 # Test health endpoint
-curl http://172.20.10.8:8080/health
+curl http://172.20.10.4:8080/health
 
 # Restart backend
 cd backend && go run main.go
@@ -110,7 +110,7 @@ npm start
 ### Asterisk Issues
 ```bash
 # SSH to Asterisk server
-ssh user@172.20.10.14
+ssh user@172.20.10.6
 
 # Check Asterisk status
 sudo asterisk -rx "core show version"
@@ -121,8 +121,8 @@ sudo asterisk -rx "manager show connected"
 ### Network Issues
 ```bash
 # Test connectivity from your PC
-Test-NetConnection -ComputerName 172.20.10.14 -Port 5038
-Test-NetConnection -ComputerName 172.20.10.14 -Port 8088
+Test-NetConnection -ComputerName 172.20.10.6 -Port 5038
+Test-NetConnection -ComputerName 172.20.10.6 -Port 8088
 
 # Check firewall on Asterisk server
 sudo ufw status
@@ -157,9 +157,9 @@ sudo ufw status
 ## 🚨 Common Issues
 
 ### "No response from server"
-- Check if backend is running on 172.20.10.8:8080
+- Check if backend is running on 172.20.10.4:8080
 - Verify .env file has correct IP addresses
-- Test with: `curl http://172.20.10.8:8080/health`
+- Test with: `curl http://172.20.10.4:8080/health`
 
 ### "WebSocket connection failed"
 - This is normal for traditional SIP (we're using WebRTC)

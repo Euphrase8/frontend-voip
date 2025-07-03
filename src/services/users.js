@@ -24,7 +24,7 @@ export const getUsers = async () => {
         extension: `100${index + 1}`, // Use 4-digit extensions starting from 1001
         priority: index === 0 ? 'high' : index === 1 ? 'medium' : 'low',
         status: 'online',
-        avatar: `https://via.placeholder.com/40/22c55e/fff?text=${name.charAt(0).toUpperCase()}`,
+        avatar: null,
       }));
     } else if (response.data.users) {
       // If users are provided as objects with extension info
@@ -34,7 +34,7 @@ export const getUsers = async () => {
         extension: user.extension,
         priority: user.priority || (index === 0 ? 'high' : index === 1 ? 'medium' : 'low'),
         status: user.status || 'online',
-        avatar: user.avatar || `https://via.placeholder.com/40/22c55e/fff?text=${(user.name || user.username || 'U').charAt(0).toUpperCase()}`,
+        avatar: user.avatar || null,
       }));
     } else {
       console.warn('[users.js] Unexpected response format:', response.data);

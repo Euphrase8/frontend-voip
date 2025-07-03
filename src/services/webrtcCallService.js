@@ -18,12 +18,52 @@ class WebRTCCallService {
     };
   }
 
+  // Check browser compatibility
+  checkBrowserSupport() {
+    const issues = [];
+
+    // Check WebRTC support
+    if (!window.RTCPeerConnection) {
+      issues.push('WebRTC is not supported in this browser');
+    }
+
+    // Check getUserMedia support
+    if (!navigator.mediaDevices && !navigator.getUserMedia &&
+        !navigator.webkitGetUserMedia && !navigator.mozGetUserMedia) {
+      issues.push('Microphone access is not supported in this browser');
+    }
+
+    // Check WebSocket support
+    if (!window.WebSocket) {
+      issues.push('WebSocket is not supported in this browser');
+    }
+
+    // Check secure context for getUserMedia
+    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      issues.push('Microphone access requires HTTPS or localhost. Current URL: ' + window.location.origin);
+    }
+
+    return {
+      supported: issues.length === 0,
+      issues: issues
+    };
+  }
+
   // Initialize WebRTC service with extension
-  initialize(extension, onIncomingCall, onCallStatusChange) {
+  initialize(extension, onIncomingCall, onCallStatusChange, onCallEnded) {
     this.extension = extension;
     this.onIncomingCall = onIncomingCall;
     this.onCallStatusChange = onCallStatusChange;
-    
+    this.onCallEnded = onCallEnded;
+
+    // Check browser support
+    const support = this.checkBrowserSupport();
+    if (!support.supported) {
+      console.error('[WebRTCCallService] Browser compatibility issues:', support.issues);
+      this.onCallStatusChange && this.onCallStatusChange(`Browser not supported: ${support.issues.join(', ')}`);
+      return;
+    }
+
     this.setupWebSocket();
   }
 
@@ -124,7 +164,14 @@ class WebRTCCallService {
       
     } catch (error) {
       console.error('[WebRTCCallService] Failed to accept call:', error);
-      this.rejectCall();
+
+      // Provide user-friendly error message
+      this.onCallStatusChange && this.onCallStatusChange(`Call failed: ${error.message}`);
+
+      // Auto-reject the call after a brief delay to show the error
+      setTimeout(() => {
+        this.rejectCall();
+      }, 3000);
     }
   }
 
@@ -162,16 +209,49 @@ class WebRTCCallService {
   // Setup local media (audio)
   async setupLocalMedia() {
     try {
-      this.localStream = await navigator.mediaDevices.getUserMedia({ 
-        audio: true, 
-        video: false 
-      });
-      
+      console.log('[WebRTCCallService] Setting up local media...');
+      console.log('[WebRTCCallService] navigator.mediaDevices:', navigator.mediaDevices);
+      console.log('[WebRTCCallService] Location:', window.location.origin);
+
+      // Check if getUserMedia is available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        // Try legacy getUserMedia
+        const getUserMedia = navigator.getUserMedia ||
+                           navigator.webkitGetUserMedia ||
+                           navigator.mozGetUserMedia ||
+                           navigator.msGetUserMedia;
+
+        if (!getUserMedia) {
+          throw new Error('getUserMedia is not supported in this browser');
+        }
+
+        // Use legacy getUserMedia with Promise wrapper
+        this.localStream = await new Promise((resolve, reject) => {
+          getUserMedia.call(navigator, { audio: true, video: false }, resolve, reject);
+        });
+      } else {
+        // Use modern getUserMedia
+        this.localStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: false
+        });
+      }
+
       console.log('[WebRTCCallService] Local media setup successful');
       return this.localStream;
     } catch (error) {
       console.error('[WebRTCCallService] Failed to get local media:', error);
-      throw error;
+
+      // Provide more specific error messages
+      if (error.name === 'NotAllowedError') {
+        throw new Error('Microphone access denied. Please allow microphone access and try again.');
+      } else if (error.name === 'NotFoundError') {
+        throw new Error('No microphone found. Please connect a microphone and try again.');
+      } else if (error.name === 'NotSupportedError') {
+        throw new Error('Your browser does not support audio calls. Please use a modern browser.');
+      } else {
+        throw new Error(`Failed to access microphone: ${error.message}`);
+      }
     }
   }
 
@@ -265,6 +345,12 @@ class WebRTCCallService {
   // Handle call ended
   handleCallEnded(message) {
     console.log('[WebRTCCallService] Call ended by peer');
+
+    // Notify UI that call ended (to clear incoming call UI)
+    if (this.onCallEnded) {
+      this.onCallEnded();
+    }
+
     this.endCall();
   }
 

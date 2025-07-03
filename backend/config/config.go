@@ -163,7 +163,7 @@ func (c *Config) resolveAsteriskHost() string {
 		"asterisk.local",
 		"asterisk",
 		"voip-asterisk",
-		"172.20.10.14", // Updated to your new Asterisk IP
+		"172.20.10.6", // Updated to your new Asterisk IP
 		"172.20.10.6",  // Old fallback
 	}
 
@@ -176,7 +176,7 @@ func (c *Config) resolveAsteriskHost() string {
 	}
 
 	// If nothing works, return the first candidate
-	return "172.20.10.14"
+	return "172.20.10.6"
 }
 
 // getPublicHost determines the best public host for frontend connections

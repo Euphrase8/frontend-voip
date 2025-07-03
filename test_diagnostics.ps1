@@ -6,7 +6,7 @@ Write-Host "=== VoIP Diagnostics Test ===" -ForegroundColor Green
 # Check if backend is running
 Write-Host "`nTesting backend connectivity..." -ForegroundColor Cyan
 try {
-    $response = Invoke-RestMethod -Uri "http://172.20.10.8:8080/health" -Method GET -TimeoutSec 5
+    $response = Invoke-RestMethod -Uri "http://172.20.10.4:8080/health" -Method GET -TimeoutSec 5
     if ($response.status -eq "ok") {
         Write-Host "✓ Backend is running" -ForegroundColor Green
     } else {
@@ -42,7 +42,7 @@ try {
         "Content-Type" = "application/json"
     }
     
-    $response = Invoke-RestMethod -Uri "http://172.20.10.8:8080/protected/diagnostics" -Method GET -Headers $headers -TimeoutSec 10
+    $response = Invoke-RestMethod -Uri "http://172.20.10.4:8080/protected/diagnostics" -Method GET -Headers $headers -TimeoutSec 10
     
     Write-Host "✓ Diagnostics endpoint responded" -ForegroundColor Green
     Write-Host "`n=== DIAGNOSTIC RESULTS ===" -ForegroundColor Yellow

@@ -10,17 +10,29 @@ const HomePage = ({ darkMode = false }) => {
   const [loading, setLoading] = useState(false);
   const [showCallingPage, setShowCallingPage] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [callData, setCallData] = useState(null);
 
   const initiateCall = useCallback(async (ext) => {
     setLoading(true);
     setError('');
 
     try {
-      await call(ext);
+      const callResult = await call(ext);
+      console.log('[HomePage] Call initiated with result:', callResult);
+
+      // Store call data including channel information
+      setCallData({
+        channel: callResult.apiChannel || callResult.appChannel || callResult.call_id,
+        method: callResult.method || 'webrtc',
+        callId: callResult.call_id,
+        extension: ext
+      });
+
       setNotification({ message: `Dialing ${ext}...`, type: 'info' });
       setShowCallingPage(true);
       setTimeout(() => setNotification(null), 3000);
     } catch (err) {
+      console.error('[HomePage] Call initiation failed:', err);
       setError('Failed to initiate call. Please try again.');
       setNotification({ message: 'Call failed', type: 'error' });
       setTimeout(() => setNotification(null), 3000);
@@ -83,6 +95,7 @@ const HomePage = ({ darkMode = false }) => {
   const handleEndCall = () => {
     setExtension('');
     setShowCallingPage(false);
+    setCallData(null);
     setNotification({ message: 'Call ended', type: 'success' });
     setTimeout(() => setNotification(null), 3000);
   };
@@ -94,6 +107,9 @@ const HomePage = ({ darkMode = false }) => {
       <CallingPage
         contact={{ name: `Extension ${extension}`, extension }}
         callStatus="Dialing..."
+        isOutgoing={true}
+        channel={callData?.channel}
+        transport={callData?.method === 'webrtc' ? 'transport-ws' : 'transport-sip'}
         onEndCall={handleEndCall}
         darkMode={darkMode}
       />

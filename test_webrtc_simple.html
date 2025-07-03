@@ -129,7 +129,7 @@
                 
                 // Test backend health first
                 log('Checking backend health...');
-                const healthResponse = await fetch('http://172.20.10.8:8080/health');
+                const healthResponse = await fetch('http://172.20.10.4:8080/health');
                 const healthData = await healthResponse.json();
                 
                 if (healthData.status === 'ok') {
@@ -141,7 +141,7 @@
                 // Test WebRTC call initiation
                 log(`Initiating WebRTC call to extension ${targetExtension}...`);
                 
-                const response = await fetch('http://172.20.10.8:8080/protected/call/initiate?method=webrtc', {
+                const response = await fetch('http://172.20.10.4:8080/protected/call/initiate?method=webrtc', {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,

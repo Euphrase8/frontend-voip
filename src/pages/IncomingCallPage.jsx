@@ -4,21 +4,25 @@ import { Avatar, Tooltip, Button } from "@mui/material";
 import { Call, CallEnd } from "@mui/icons-material";
 import { sendWebSocketMessage } from "../services/websocketservice";
 import { hangup } from "../services/hang";
+import webrtcCallService from "../services/webrtcCallService";
 
 const IncomingCallPage = ({ callData, contacts, user, darkMode = false, onCallAccepted, onCallRejected }) => {
   const navigate = useNavigate();
   const [notification, setNotification] = useState(null);
   const [timeLeft, setTimeLeft] = useState(30);
   const [isLoading, setIsLoading] = useState(false);
+  const [callAccepted, setCallAccepted] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState('');
   const audioContextRef = useRef(null);
   const timerRef = useRef(null);
   const callHandlerRef = useRef(null);
+
 
   const caller = useMemo(() =>
     (contacts || []).find((c) => c.extension === callData?.from) || {
       name: `Ext ${callData?.from || 'Unknown'}`,
       extension: callData?.from || 'Unknown',
-      avatar: "https://via.placeholder.com/40/cccccc/fff?text=?",
+      avatar: null,
     }, [contacts, callData?.from]);
 
   useEffect(() => {
@@ -30,49 +34,88 @@ const IncomingCallPage = ({ callData, contacts, user, darkMode = false, onCallAc
 
     console.log('[IncomingCallPage] Incoming call data:', callData);
 
+    // Note: WebSocket connection is handled by the parent component (DashboardPage)
+    // and WebRTC call service. No need to create a separate connection here.
+
     // Store call handler functions
+    // Determine if this is a WebRTC call based on the call data
+    const isWebRTCCall = callData.channel && callData.channel.startsWith('webrtc-call-');
+
     callHandlerRef.current = {
       acceptCall: async () => {
         try {
-          // Send call acceptance message
-          await sendWebSocketMessage({
-            type: "answer_call",
-            to: callData.from,
-            from: user.extension,
-            channel: callData.channel,
-            transport: callData.transport || "transport-ws",
-          });
+          // Update UI to show connection status
+          setCallAccepted(true);
+          setConnectionStatus('Connecting to extension...');
 
-          // Notify parent component that call was accepted
-          if (onCallAccepted) {
-            onCallAccepted();
+          // Clear the timeout timer since call is being accepted
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
           }
 
-          // Navigate to calling page
-          navigate("/calling", {
-            state: {
-              contact: caller,
-              callStatus: "Connected",
-              isOutgoing: false,
-              channel: callData?.channel,
-              transport: callData?.transport || "transport-ws",
-            },
-          });
+          if (isWebRTCCall) {
+            // For WebRTC calls, delegate to WebRTC call service
+            console.log('[IncomingCallPage] Accepting WebRTC call via service');
+            await webrtcCallService.acceptCall();
+            setConnectionStatus('WebRTC call accepted! Establishing connection...');
+          } else {
+            // For traditional SIP calls, send answer_call message
+            console.log('[IncomingCallPage] Accepting SIP call via WebSocket');
+            await sendWebSocketMessage({
+              type: "answer_call",
+              to: callData.from,
+              from: user.extension,
+              channel: callData.channel,
+              transport: callData.transport || "transport-ws",
+            });
+            setConnectionStatus('SIP call accepted! Connecting...');
+          }
+
+          // Wait a moment to show the connection message
+          setTimeout(() => {
+            // Notify parent component that call was accepted
+            if (onCallAccepted) {
+              onCallAccepted();
+            }
+
+            // Navigate to calling page
+            navigate("/calling", {
+              state: {
+                contact: caller,
+                callStatus: "Connected",
+                isOutgoing: false,
+                channel: callData?.channel,
+                transport: callData?.transport || "transport-ws",
+              },
+            });
+          }, 2000); // Show connection message for 2 seconds
+
         } catch (error) {
           console.error("Error accepting call:", error);
+          setConnectionStatus('Failed to connect. Please try again.');
+          setCallAccepted(false);
           throw error;
         }
       },
       rejectCall: async () => {
         try {
-          await hangup(callData.channel);
-          await sendWebSocketMessage({
-            type: "hangup",
-            to: callData.from,
-            from: user.extension,
-            channel: callData.channel,
-            transport: callData.transport || "transport-ws",
-          });
+          if (isWebRTCCall) {
+            // For WebRTC calls, delegate to WebRTC call service
+            console.log('[IncomingCallPage] Rejecting WebRTC call via service');
+            webrtcCallService.rejectCall();
+          } else {
+            // For traditional SIP calls, use hangup API and WebSocket
+            console.log('[IncomingCallPage] Rejecting SIP call via hangup API');
+            await hangup(callData.channel);
+            await sendWebSocketMessage({
+              type: "hangup",
+              to: callData.from,
+              from: user.extension,
+              channel: callData.channel,
+              transport: callData.transport || "transport-ws",
+            });
+          }
 
           // Notify parent component that call was rejected
           if (onCallRejected) {
@@ -106,7 +149,10 @@ const IncomingCallPage = ({ callData, contacts, user, darkMode = false, onCallAc
     timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          handleReject();
+          // Only reject if call hasn't been accepted yet
+          if (!callAccepted) {
+            handleReject();
+          }
           return 0;
         }
         return prev - 1;
@@ -148,6 +194,13 @@ const IncomingCallPage = ({ callData, contacts, user, darkMode = false, onCallAc
 
   const handleReject = async () => {
     if (!callHandlerRef.current) return;
+
+    // Clear the timeout timer since call is being rejected
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
     setIsLoading(true);
     try {
       await callHandlerRef.current.rejectCall();
@@ -209,7 +262,15 @@ const IncomingCallPage = ({ callData, contacts, user, darkMode = false, onCallAc
             alt={caller.name}
             src={caller.avatar}
             className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border-3 border-white/40 shadow-md"
-          />
+            sx={{
+              bgcolor: caller.avatar ? 'transparent' : '#6366f1',
+              color: 'white',
+              fontSize: '1.2rem',
+              fontWeight: 'bold'
+            }}
+          >
+            {!caller.avatar && (caller.name ? caller.name.charAt(0).toUpperCase() : caller.extension?.charAt(0) || '?')}
+          </Avatar>
           <div>
             <h2
               className={`text-xl sm:text-2xl font-bold ${
@@ -218,7 +279,7 @@ const IncomingCallPage = ({ callData, contacts, user, darkMode = false, onCallAc
               aria-live="polite"
               style={{ textShadow: "0 1px 2px rgba(0, 0, 0, 0.5)" }}
             >
-              📞 Incoming Call
+              {callAccepted ? "📞 Connecting..." : "📞 Incoming Call"}
             </h2>
             <p
               className={`text-base sm:text-lg font-semibold ${
@@ -234,41 +295,66 @@ const IncomingCallPage = ({ callData, contacts, user, darkMode = false, onCallAc
             >
               Priority: {callData?.priority || "Normal"} • Method: WebRTC
             </p>
-            <p
-              className={`text-sm ${
-                darkMode ? "text-gray-400" : "text-gray-300"
-              } mt-1`}
-            >
-              Time Left: {timeLeft}s
-            </p>
+            {callAccepted ? (
+              <p
+                className={`text-sm ${
+                  darkMode ? "text-green-400" : "text-green-300"
+                } mt-1 font-semibold animate-pulse`}
+              >
+                {connectionStatus}
+              </p>
+            ) : (
+              <p
+                className={`text-sm ${
+                  darkMode ? "text-gray-400" : "text-gray-300"
+                } mt-1`}
+              >
+                Time Left: {timeLeft}s
+              </p>
+            )}
           </div>
         </div>
-        <div className="flex justify-center space-x-6 animate-[fadeInUp_1.2s_ease-out_forwards]">
-          <Tooltip title="Accept Call">
-            <Button
-              variant="contained"
-              onClick={handleAccept}
-              disabled={isLoading}
-              className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-r from-green-600 to-green-800 hover:from-green-700 hover:to-green-900 focus:ring-4 focus:ring-green-500/60 transition-all transform hover:scale-110 active:scale-95 ${
-                isLoading ? "opacity-50 cursor-not-allowed" : ""
-              } ${darkMode ? "shadow-green-900/60" : "shadow-green-700/60"}`}
-              startIcon={<Call className="text-2xl" />}
-              aria-label="Accept the incoming call"
-            />
-          </Tooltip>
-          <Tooltip title="Reject Call">
-            <Button
-              variant="contained"
-              onClick={handleReject}
-              disabled={isLoading}
-              className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-r from-red-700 to-red-900 hover:from-red-800 hover:to-red-950 focus:ring-4 focus:ring-red-500/60 transition-all transform hover:scale-110 active:scale-95 ${
-                isLoading ? "opacity-50 cursor-not-allowed" : ""
-              } ${darkMode ? "shadow-red-900/60" : "shadow-red-700/60"}`}
-              startIcon={<CallEnd className="text-2xl" />}
-              aria-label="Reject the incoming call"
-            />
-          </Tooltip>
-        </div>
+        {!callAccepted && (
+          <div className="flex justify-center space-x-6 animate-[fadeInUp_1.2s_ease-out_forwards]">
+            <Tooltip title="Accept Call">
+              <Button
+                variant="contained"
+                onClick={handleAccept}
+                disabled={isLoading}
+                className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-r from-green-600 to-green-800 hover:from-green-700 hover:to-green-900 focus:ring-4 focus:ring-green-500/60 transition-all transform hover:scale-110 active:scale-95 ${
+                  isLoading ? "opacity-50 cursor-not-allowed" : ""
+                } ${darkMode ? "shadow-green-900/60" : "shadow-green-700/60"}`}
+                startIcon={<Call className="text-2xl" />}
+                aria-label="Accept the incoming call"
+              />
+            </Tooltip>
+            <Tooltip title="Reject Call">
+              <Button
+                variant="contained"
+                onClick={handleReject}
+                disabled={isLoading}
+                className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-r from-red-700 to-red-900 hover:from-red-800 hover:to-red-950 focus:ring-4 focus:ring-red-500/60 transition-all transform hover:scale-110 active:scale-95 ${
+                  isLoading ? "opacity-50 cursor-not-allowed" : ""
+                } ${darkMode ? "shadow-red-900/60" : "shadow-red-700/60"}`}
+                startIcon={<CallEnd className="text-2xl" />}
+                aria-label="Reject the incoming call"
+              />
+            </Tooltip>
+          </div>
+        )}
+
+        {callAccepted && (
+          <div className="flex justify-center animate-[fadeInUp_1.2s_ease-out_forwards]">
+            <div className="flex items-center space-x-3">
+              <div className="w-4 h-4 bg-green-500 rounded-full animate-pulse"></div>
+              <span className={`text-lg font-semibold ${
+                darkMode ? "text-green-400" : "text-green-300"
+              }`}>
+                Establishing connection...
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

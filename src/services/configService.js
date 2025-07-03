@@ -78,39 +78,47 @@ class ConfigService {
   _getPossibleBackendHosts() {
     const currentHost = window.location.hostname;
     const protocol = window.location.protocol;
-    
+
     return [
-      // Same host as frontend (most common in development)
+      // Environment-specific (highest priority)
+      ...(process.env.REACT_APP_API_URL ? [process.env.REACT_APP_API_URL] : []),
+
+      // Known backend server IP (for network access)
+      'http://172.20.10.4:8080',
+
+      // Same host as frontend (common in development)
       `${protocol}//${currentHost}:8080`,
-      
-      // Localhost variations
-      `http://localhost:8080`,
-      `http://127.0.0.1:8080`,
-      
-      // Service discovery names
-      `http://voip-backend:8080`,
-      `http://backend.local:8080`,
-      
+
       // Current network variations
       ...(currentHost !== 'localhost' && currentHost !== '127.0.0.1' ? [
         `${protocol}//${currentHost}:8080`,
       ] : []),
-      
-      // Environment-specific
-      ...(process.env.REACT_APP_BACKEND_URL ? [process.env.REACT_APP_BACKEND_URL] : []),
+
+      // Localhost variations (lowest priority for network access)
+      `http://localhost:8080`,
+      `http://127.0.0.1:8080`,
+
+      // Service discovery names
+      `http://voip-backend:8080`,
+      `http://backend.local:8080`,
     ];
   }
 
   // Fallback configuration when backend is unreachable
   _getFallbackConfig() {
     const currentHost = window.location.hostname;
-    
+
+    // Use known backend IP for network access, fallback to current host
+    const backendHost = (currentHost === 'localhost' || currentHost === '127.0.0.1')
+      ? '172.20.10.4'
+      : currentHost;
+
     return {
-      api_url: `http://${currentHost}:8080`,
-      ws_url: `ws://${currentHost}:8080/ws`,
+      api_url: `http://${backendHost}:8080`,
+      ws_url: `ws://${backendHost}:8080/ws`,
       asterisk: {
-        host: 'asterisk.local',
-        ws_url: 'ws://asterisk.local:8088/ws',
+        host: '172.20.10.14',
+        ws_url: 'ws://172.20.10.14:8088/ws',
       },
       environment: 'development',
       debug: true,
@@ -143,12 +151,12 @@ class ConfigService {
 
   // Get API URL
   getApiUrl() {
-    return this.get('api_url', 'http://localhost:8080');
+    return this.get('api_url', 'http://172.20.10.4:8080');
   }
 
   // Get WebSocket URL
   getWebSocketUrl() {
-    return this.get('ws_url', 'ws://localhost:8080/ws');
+    return this.get('ws_url', 'ws://172.20.10.4:8080/ws');
   }
 
   // Get Asterisk WebSocket URL
