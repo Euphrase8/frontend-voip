@@ -254,41 +254,42 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   return (
     <div className={cn(
-      'min-h-screen',
+      'h-screen flex flex-col overflow-hidden',
       darkMode ? 'bg-secondary-900' : 'bg-secondary-50'
     )}>
       {/* Header */}
       <div className={cn(
-        'border-b px-6 py-4',
-        darkMode 
-          ? 'bg-secondary-800 border-secondary-700' 
+        'flex-shrink-0 border-b px-4 sm:px-6 py-4',
+        darkMode
+          ? 'bg-secondary-800 border-secondary-700'
           : 'bg-white border-secondary-200'
       )}>
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Shield className="w-8 h-8 text-primary-600" />
+          <div className="flex items-center space-x-2 sm:space-x-4">
+            <Shield className="w-6 h-6 sm:w-8 sm:h-8 text-primary-600" />
             <div>
               <h1 className={cn(
-                'text-2xl font-bold',
+                'text-lg sm:text-2xl font-bold',
                 darkMode ? 'text-white' : 'text-secondary-900'
               )}>
                 Admin Dashboard
               </h1>
               <p className={cn(
-                'text-sm',
+                'text-xs sm:text-sm',
                 darkMode ? 'text-secondary-400' : 'text-secondary-600'
               )}>
                 Welcome back, {user?.username}
               </p>
             </div>
           </div>
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2 sm:space-x-3">
             <button
               onClick={() => setShowAdminCall(true)}
-              className="btn-primary flex items-center space-x-2"
+              className="btn-primary flex items-center space-x-1 sm:space-x-2 text-sm"
             >
               <Phone className="w-4 h-4" />
-              <span>Admin Call</span>
+              <span className="hidden sm:inline">Admin Call</span>
+              <span className="sm:hidden">Call</span>
             </button>
             <button
               onClick={loadDashboardData}
@@ -301,13 +302,14 @@ const AdminDashboard = ({ user, onLogout }) => {
                   : 'bg-secondary-100 hover:bg-secondary-200 text-secondary-700'
               )}
             >
-              <RefreshCw className="w-5 h-5" />
+              <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
             <button
               onClick={onLogout}
-              className="btn-danger"
+              className="btn-danger text-sm"
             >
-              Logout
+              <span className="hidden sm:inline">Logout</span>
+              <span className="sm:hidden">Exit</span>
             </button>
           </div>
         </div>
@@ -315,12 +317,12 @@ const AdminDashboard = ({ user, onLogout }) => {
 
       {/* Navigation Tabs */}
       <div className={cn(
-        'border-b px-6',
-        darkMode 
-          ? 'bg-secondary-800 border-secondary-700' 
+        'flex-shrink-0 border-b px-4 sm:px-6',
+        darkMode
+          ? 'bg-secondary-800 border-secondary-700'
           : 'bg-white border-secondary-200'
       )}>
-        <nav className="flex space-x-8">
+        <nav className="flex space-x-4 sm:space-x-8 overflow-x-auto">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
@@ -328,19 +330,27 @@ const AdminDashboard = ({ user, onLogout }) => {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  'flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors',
+                  'flex items-center space-x-1 sm:space-x-2 py-3 sm:py-4 px-1 border-b-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap',
                   activeTab === tab.id
                     ? 'border-primary-500 text-primary-600'
                     : cn(
                         'border-transparent',
-                        darkMode 
-                          ? 'text-secondary-400 hover:text-secondary-300' 
+                        darkMode
+                          ? 'text-secondary-400 hover:text-secondary-300'
                           : 'text-secondary-500 hover:text-secondary-700'
                       )
                 )}
               >
                 <Icon className="w-4 h-4" />
-                <span>{tab.label}</span>
+                <span className="hidden sm:inline">{tab.label}</span>
+                <span className="sm:hidden">
+                  {tab.id === 'overview' ? 'Overview' :
+                   tab.id === 'users' ? 'Users' :
+                   tab.id === 'calls' ? 'Calls' :
+                   tab.id === 'system' ? 'System' :
+                   tab.id === 'notifications' ? 'Logs' :
+                   'Settings'}
+                </span>
               </button>
             );
           })}
@@ -348,24 +358,32 @@ const AdminDashboard = ({ user, onLogout }) => {
       </div>
 
       {/* Content */}
-      <div className="p-6">
+      <div className="flex-1 overflow-hidden">
         {activeTab === 'overview' && (
-          <OverviewTab stats={stats} darkMode={darkMode} />
+          <div className="h-full overflow-y-auto p-4 sm:p-6">
+            <OverviewTab stats={stats} darkMode={darkMode} />
+          </div>
         )}
         {activeTab === 'users' && (
-          <UsersTab users={users} onDeleteUser={showDeleteConfirmation} darkMode={darkMode} />
+          <div className="h-full overflow-y-auto p-4 sm:p-6">
+            <UsersTab users={users} onDeleteUser={showDeleteConfirmation} darkMode={darkMode} />
+          </div>
         )}
         {activeTab === 'calls' && (
           <CallLogsTab callLogs={callLogs} onDeleteCallLog={deleteCallLog} darkMode={darkMode} />
         )}
         {activeTab === 'system' && (
-          <SystemTab systemStatus={systemStatus} darkMode={darkMode} />
+          <div className="h-full overflow-y-auto p-4 sm:p-6">
+            <SystemTab systemStatus={systemStatus} darkMode={darkMode} />
+          </div>
         )}
         {activeTab === 'notifications' && (
           <NotificationsPage darkMode={darkMode} user={user} />
         )}
         {activeTab === 'settings' && (
-          <SettingsTab darkMode={darkMode} />
+          <div className="h-full overflow-y-auto p-4 sm:p-6">
+            <SettingsTab darkMode={darkMode} />
+          </div>
         )}
       </div>
 
@@ -507,11 +525,24 @@ const OverviewTab = ({ stats, darkMode }) => {
             Quick Actions
           </h3>
           <div className="space-y-3">
-            <button className="w-full btn-primary flex items-center justify-center space-x-2">
+            <button
+              onClick={() => toast.info('User management feature coming soon')}
+              className="w-full btn-primary flex items-center justify-center space-x-2"
+            >
               <UserPlus className="w-4 h-4" />
               <span>Add New User</span>
             </button>
-            <button className="w-full btn-secondary flex items-center justify-center space-x-2">
+            <button
+              onClick={async () => {
+                try {
+                  await adminService.exportCallLogs('csv');
+                  toast.success('Call logs exported successfully');
+                } catch (error) {
+                  toast.error('Failed to export call logs');
+                }
+              }}
+              className="w-full btn-secondary flex items-center justify-center space-x-2"
+            >
               <Download className="w-4 h-4" />
               <span>Export Call Logs</span>
             </button>
@@ -536,7 +567,7 @@ const UsersTab = ({ users, onDeleteUser, darkMode }) => {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 max-w-full">
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1">
@@ -545,7 +576,7 @@ const UsersTab = ({ users, onDeleteUser, darkMode }) => {
             placeholder="Search users..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="input-primary"
+            className="input-primary w-full"
           />
         </div>
         <select
@@ -570,120 +601,158 @@ const UsersTab = ({ users, onDeleteUser, darkMode }) => {
             : 'bg-white border-secondary-200'
         )}
       >
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className={cn(
-              'border-b',
-              darkMode ? 'border-secondary-700' : 'border-secondary-200'
+        {filteredUsers.length === 0 ? (
+          <div className="flex flex-col items-center justify-center p-8 text-center">
+            <Users className={cn(
+              'w-16 h-16 mb-4',
+              darkMode ? 'text-secondary-600' : 'text-secondary-400'
+            )} />
+            <h3 className={cn(
+              'text-lg font-medium mb-2',
+              darkMode ? 'text-secondary-400' : 'text-secondary-600'
             )}>
-              <tr>
-                <th className={cn(
-                  'text-left py-3 px-4 font-medium text-sm',
-                  darkMode ? 'text-secondary-400' : 'text-secondary-600'
-                )}>
-                  User
-                </th>
-                <th className={cn(
-                  'text-left py-3 px-4 font-medium text-sm',
-                  darkMode ? 'text-secondary-400' : 'text-secondary-600'
-                )}>
-                  Extension
-                </th>
-                <th className={cn(
-                  'text-left py-3 px-4 font-medium text-sm',
-                  darkMode ? 'text-secondary-400' : 'text-secondary-600'
-                )}>
-                  Status
-                </th>
-                <th className={cn(
-                  'text-left py-3 px-4 font-medium text-sm',
-                  darkMode ? 'text-secondary-400' : 'text-secondary-600'
-                )}>
-                  Role
-                </th>
-                <th className={cn(
-                  'text-right py-3 px-4 font-medium text-sm',
-                  darkMode ? 'text-secondary-400' : 'text-secondary-600'
-                )}>
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredUsers.map((user) => (
-                <tr
-                  key={user.id}
-                  className={cn(
-                    'border-b transition-colors hover:bg-opacity-50',
-                    darkMode
-                      ? 'border-secondary-700 hover:bg-secondary-700'
-                      : 'border-secondary-100 hover:bg-secondary-50'
-                  )}
-                >
-                  <td className="py-3 px-4">
-                    <div>
-                      <p className={cn(
-                        'font-medium',
-                        darkMode ? 'text-white' : 'text-secondary-900'
-                      )}>
-                        {user.username}
-                      </p>
-                      <p className={cn(
-                        'text-sm',
-                        darkMode ? 'text-secondary-400' : 'text-secondary-600'
-                      )}>
-                        {user.email}
-                      </p>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={cn(
-                      'font-mono text-sm',
-                      darkMode ? 'text-secondary-300' : 'text-secondary-700'
-                    )}>
-                      {user.extension}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4">
-                    <div className="flex items-center space-x-2">
-                      <div className={cn(
-                        'w-2 h-2 rounded-full',
-                        getStatusColor(user.status, 'bg')
-                      )} />
-                      <span className={cn(
-                        'text-sm capitalize',
-                        getStatusColor(user.status, 'text')
-                      )}>
-                        {user.status}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={cn(
-                      'px-2 py-1 rounded-full text-xs font-medium',
-                      user.role === 'admin'
-                        ? 'bg-primary-100 text-primary-700'
-                        : 'bg-secondary-100 text-secondary-700'
-                    )}>
-                      {user.role}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-right">
-                    {user.role !== 'admin' && (
-                      <button
-                        onClick={() => onDeleteUser(user)}
-                        className="p-2 text-danger-600 hover:bg-danger-50 rounded-lg transition-colors"
-                        title={`Delete user ${user.username}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </td>
+              {users.length === 0 ? 'No users found' : 'No users match your filters'}
+            </h3>
+            <p className={cn(
+              'text-sm',
+              darkMode ? 'text-secondary-500' : 'text-secondary-500'
+            )}>
+              {users.length === 0
+                ? 'Users will appear here when they register.'
+                : 'Try adjusting your search or filter criteria.'
+              }
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className={cn(
+                'border-b',
+                darkMode ? 'border-secondary-700' : 'border-secondary-200'
+              )}>
+                <tr>
+                  <th className={cn(
+                    'text-left py-3 px-4 font-medium text-sm',
+                    darkMode ? 'text-secondary-400' : 'text-secondary-600'
+                  )}>
+                    User
+                  </th>
+                  <th className={cn(
+                    'text-left py-3 px-4 font-medium text-sm hidden sm:table-cell',
+                    darkMode ? 'text-secondary-400' : 'text-secondary-600'
+                  )}>
+                    Extension
+                  </th>
+                  <th className={cn(
+                    'text-left py-3 px-4 font-medium text-sm',
+                    darkMode ? 'text-secondary-400' : 'text-secondary-600'
+                  )}>
+                    Status
+                  </th>
+                  <th className={cn(
+                    'text-left py-3 px-4 font-medium text-sm hidden md:table-cell',
+                    darkMode ? 'text-secondary-400' : 'text-secondary-600'
+                  )}>
+                    Role
+                  </th>
+                  <th className={cn(
+                    'text-right py-3 px-4 font-medium text-sm',
+                    darkMode ? 'text-secondary-400' : 'text-secondary-600'
+                  )}>
+                    Actions
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {filteredUsers.map((user) => (
+                  <tr
+                    key={user.id}
+                    className={cn(
+                      'border-b transition-colors hover:bg-opacity-50',
+                      darkMode
+                        ? 'border-secondary-700 hover:bg-secondary-700'
+                        : 'border-secondary-100 hover:bg-secondary-50'
+                    )}
+                  >
+                    <td className="py-3 px-4">
+                      <div>
+                        <p className={cn(
+                          'font-medium text-sm sm:text-base',
+                          darkMode ? 'text-white' : 'text-secondary-900'
+                        )}>
+                          {user.username}
+                        </p>
+                        <p className={cn(
+                          'text-xs sm:text-sm',
+                          darkMode ? 'text-secondary-400' : 'text-secondary-600'
+                        )}>
+                          {user.email}
+                        </p>
+                        <p className={cn(
+                          'text-xs font-mono sm:hidden',
+                          darkMode ? 'text-secondary-400' : 'text-secondary-600'
+                        )}>
+                          Ext: {user.extension}
+                        </p>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 hidden sm:table-cell">
+                      <span className={cn(
+                        'font-mono text-sm',
+                        darkMode ? 'text-secondary-300' : 'text-secondary-700'
+                      )}>
+                        {user.extension}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center space-x-2">
+                        <div className={cn(
+                          'w-2 h-2 rounded-full',
+                          getStatusColor(user.status, 'bg')
+                        )} />
+                        <span className={cn(
+                          'text-xs sm:text-sm capitalize',
+                          getStatusColor(user.status, 'text')
+                        )}>
+                          {user.status}
+                        </span>
+                      </div>
+                      <span className={cn(
+                        'md:hidden px-2 py-1 rounded-full text-xs font-medium mt-1 inline-block',
+                        user.role === 'admin'
+                          ? 'bg-primary-100 text-primary-700'
+                          : 'bg-secondary-100 text-secondary-700'
+                      )}>
+                        {user.role}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 hidden md:table-cell">
+                      <span className={cn(
+                        'px-2 py-1 rounded-full text-xs font-medium',
+                        user.role === 'admin'
+                          ? 'bg-primary-100 text-primary-700'
+                          : 'bg-secondary-100 text-secondary-700'
+                      )}>
+                        {user.role}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      {user.role !== 'admin' && (
+                        <button
+                          onClick={() => onDeleteUser(user)}
+                          className="p-2 text-danger-600 hover:bg-danger-50 rounded-lg transition-colors"
+                          title={`Delete user ${user.username}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </motion.div>
     </div>
   );
@@ -693,6 +762,7 @@ const UsersTab = ({ users, onDeleteUser, darkMode }) => {
 const CallLogsTab = ({ callLogs, onDeleteCallLog, darkMode }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [isExporting, setIsExporting] = useState(false);
 
   const filteredLogs = callLogs.filter(log => {
     const matchesSearch = log.caller?.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -703,154 +773,211 @@ const CallLogsTab = ({ callLogs, onDeleteCallLog, darkMode }) => {
     return matchesSearch && matchesStatus;
   });
 
+  const handleExport = async (format = 'csv') => {
+    try {
+      setIsExporting(true);
+      await adminService.exportCallLogs(format);
+      toast.success(`Call logs exported as ${format.toUpperCase()}`);
+    } catch (error) {
+      console.error('Failed to export call logs:', error);
+      toast.error('Failed to export call logs');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="h-full flex flex-col overflow-hidden">
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex-1">
-          <input
-            type="text"
-            placeholder="Search call logs..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="input-primary"
-          />
+      <div className="flex-shrink-0 p-4 border-b border-secondary-200 dark:border-secondary-700">
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1">
+            <input
+              type="text"
+              placeholder="Search call logs..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="input-primary w-full"
+            />
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="input-primary sm:w-48"
+            >
+              <option value="all">All Status</option>
+              <option value="answered">Answered</option>
+              <option value="ended">Ended</option>
+              <option value="failed">Failed</option>
+              <option value="missed">Missed</option>
+            </select>
+            <button
+              onClick={() => handleExport('csv')}
+              disabled={isExporting}
+              className="btn-primary flex items-center justify-center space-x-2 whitespace-nowrap"
+            >
+              {isExporting ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              <span className="hidden sm:inline">Export CSV</span>
+              <span className="sm:hidden">Export</span>
+            </button>
+          </div>
         </div>
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="input-primary sm:w-48"
-        >
-          <option value="all">All Status</option>
-          <option value="answered">Answered</option>
-          <option value="ended">Ended</option>
-          <option value="failed">Failed</option>
-          <option value="missed">Missed</option>
-        </select>
-        <button className="btn-primary flex items-center space-x-2">
-          <Download className="w-4 h-4" />
-          <span>Export</span>
-        </button>
       </div>
 
-      {/* Call Logs Table */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className={cn(
-          'rounded-xl border overflow-hidden',
-          darkMode
-            ? 'bg-secondary-800 border-secondary-700'
-            : 'bg-white border-secondary-200'
-        )}
-      >
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className={cn(
-              'border-b',
-              darkMode ? 'border-secondary-700' : 'border-secondary-200'
+      {/* Call Logs Table - Scrollable */}
+      <div className="flex-1 overflow-hidden">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="h-full overflow-y-auto"
+        >
+          {filteredLogs.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center p-8">
+              <Phone className={cn(
+                'w-16 h-16 mb-4',
+                darkMode ? 'text-secondary-600' : 'text-secondary-400'
+              )} />
+              <h3 className={cn(
+                'text-lg font-medium mb-2',
+                darkMode ? 'text-secondary-400' : 'text-secondary-600'
+              )}>
+                {callLogs.length === 0 ? 'No call logs' : 'No logs match your filters'}
+              </h3>
+              <p className={cn(
+                'text-sm',
+                darkMode ? 'text-secondary-500' : 'text-secondary-500'
+              )}>
+                {callLogs.length === 0
+                  ? 'Call logs will appear here when users make calls.'
+                  : 'Try adjusting your search or filter criteria.'
+                }
+              </p>
+            </div>
+          ) : (
+            <div className={cn(
+              'border-x border-b rounded-b-xl overflow-hidden',
+              darkMode
+                ? 'bg-secondary-800 border-secondary-700'
+                : 'bg-white border-secondary-200'
             )}>
-              <tr>
-                <th className={cn(
-                  'text-left py-3 px-4 font-medium text-sm',
-                  darkMode ? 'text-secondary-400' : 'text-secondary-600'
-                )}>
-                  Call Details
-                </th>
-                <th className={cn(
-                  'text-left py-3 px-4 font-medium text-sm',
-                  darkMode ? 'text-secondary-400' : 'text-secondary-600'
-                )}>
-                  Duration
-                </th>
-                <th className={cn(
-                  'text-left py-3 px-4 font-medium text-sm',
-                  darkMode ? 'text-secondary-400' : 'text-secondary-600'
-                )}>
-                  Status
-                </th>
-                <th className={cn(
-                  'text-left py-3 px-4 font-medium text-sm',
-                  darkMode ? 'text-secondary-400' : 'text-secondary-600'
-                )}>
-                  Date
-                </th>
-                <th className={cn(
-                  'text-right py-3 px-4 font-medium text-sm',
-                  darkMode ? 'text-secondary-400' : 'text-secondary-600'
-                )}>
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredLogs.map((log) => (
-                <tr
-                  key={log.id}
-                  className={cn(
-                    'border-b transition-colors hover:bg-opacity-50',
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className={cn(
+                    'border-b sticky top-0 z-10',
                     darkMode
-                      ? 'border-secondary-700 hover:bg-secondary-700'
-                      : 'border-secondary-100 hover:bg-secondary-50'
-                  )}
-                >
-                  <td className="py-3 px-4">
-                    <div>
-                      <p className={cn(
-                        'font-medium',
-                        darkMode ? 'text-white' : 'text-secondary-900'
-                      )}>
-                        {log.caller?.username} → {log.callee?.username}
-                      </p>
-                      <p className={cn(
-                        'text-sm',
+                      ? 'border-secondary-700 bg-secondary-800'
+                      : 'border-secondary-200 bg-white'
+                  )}>
+                    <tr>
+                      <th className={cn(
+                        'text-left py-3 px-4 font-medium text-sm',
                         darkMode ? 'text-secondary-400' : 'text-secondary-600'
                       )}>
-                        {log.caller?.extension} → {log.callee?.extension}
-                      </p>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={cn(
-                      'font-mono text-sm',
-                      darkMode ? 'text-secondary-300' : 'text-secondary-700'
-                    )}>
-                      {formatDuration(log.duration)}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={cn(
-                      'px-2 py-1 rounded-full text-xs font-medium',
-                      log.status === 'answered' && 'bg-success-100 text-success-700',
-                      log.status === 'ended' && 'bg-secondary-100 text-secondary-700',
-                      log.status === 'failed' && 'bg-danger-100 text-danger-700',
-                      log.status === 'missed' && 'bg-warning-100 text-warning-700'
-                    )}>
-                      {log.status}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={cn(
-                      'text-sm',
-                      darkMode ? 'text-secondary-300' : 'text-secondary-700'
-                    )}>
-                      {formatDate(log.created_at)}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-right">
-                    <button
-                      onClick={() => onDeleteCallLog(log.id)}
-                      className="p-2 text-danger-600 hover:bg-danger-50 rounded-lg transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </motion.div>
+                        Call Details
+                      </th>
+                      <th className={cn(
+                        'text-left py-3 px-4 font-medium text-sm',
+                        darkMode ? 'text-secondary-400' : 'text-secondary-600'
+                      )}>
+                        Duration
+                      </th>
+                      <th className={cn(
+                        'text-left py-3 px-4 font-medium text-sm',
+                        darkMode ? 'text-secondary-400' : 'text-secondary-600'
+                      )}>
+                        Status
+                      </th>
+                      <th className={cn(
+                        'text-left py-3 px-4 font-medium text-sm',
+                        darkMode ? 'text-secondary-400' : 'text-secondary-600'
+                      )}>
+                        Date
+                      </th>
+                      <th className={cn(
+                        'text-right py-3 px-4 font-medium text-sm',
+                        darkMode ? 'text-secondary-400' : 'text-secondary-600'
+                      )}>
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredLogs.map((log) => (
+                      <tr
+                        key={log.id}
+                        className={cn(
+                          'border-b transition-colors hover:bg-opacity-50',
+                          darkMode
+                            ? 'border-secondary-700 hover:bg-secondary-700'
+                            : 'border-secondary-100 hover:bg-secondary-50'
+                        )}
+                      >
+                        <td className="py-3 px-4">
+                          <div>
+                            <p className={cn(
+                              'font-medium text-sm sm:text-base',
+                              darkMode ? 'text-white' : 'text-secondary-900'
+                            )}>
+                              {log.caller?.username} → {log.callee?.username}
+                            </p>
+                            <p className={cn(
+                              'text-xs sm:text-sm',
+                              darkMode ? 'text-secondary-400' : 'text-secondary-600'
+                            )}>
+                              {log.caller?.extension} → {log.callee?.extension}
+                            </p>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={cn(
+                            'font-mono text-xs sm:text-sm',
+                            darkMode ? 'text-secondary-300' : 'text-secondary-700'
+                          )}>
+                            {formatDuration(log.duration)}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={cn(
+                            'px-2 py-1 rounded-full text-xs font-medium',
+                            log.status === 'answered' && 'bg-success-100 text-success-700',
+                            log.status === 'ended' && 'bg-secondary-100 text-secondary-700',
+                            log.status === 'failed' && 'bg-danger-100 text-danger-700',
+                            log.status === 'missed' && 'bg-warning-100 text-warning-700'
+                          )}>
+                            {log.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={cn(
+                            'text-xs sm:text-sm',
+                            darkMode ? 'text-secondary-300' : 'text-secondary-700'
+                          )}>
+                            {formatDate(log.created_at)}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            onClick={() => onDeleteCallLog(log.id)}
+                            className="p-2 text-danger-600 hover:bg-danger-50 rounded-lg transition-colors"
+                            title="Delete call log"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </motion.div>
+      </div>
     </div>
   );
 };
@@ -872,36 +999,36 @@ const SystemTab = ({ systemStatus, darkMode }) => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div className="space-y-4 sm:space-y-6 max-w-full">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Connection Status */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           className={cn(
-            'p-6 rounded-xl border',
+            'p-4 sm:p-6 rounded-xl border',
             darkMode
               ? 'bg-secondary-800 border-secondary-700'
               : 'bg-white border-secondary-200'
           )}
         >
           <h3 className={cn(
-            'text-lg font-semibold mb-4 flex items-center space-x-2',
+            'text-base sm:text-lg font-semibold mb-4 flex items-center space-x-2',
             darkMode ? 'text-white' : 'text-secondary-900'
           )}>
-            <Wifi className="w-5 h-5" />
+            <Wifi className="w-4 h-4 sm:w-5 sm:h-5" />
             <span>Connection Status</span>
           </h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className={cn(
-                'text-sm',
+                'text-xs sm:text-sm',
                 darkMode ? 'text-secondary-400' : 'text-secondary-600'
               )}>
                 Total Clients
               </span>
               <span className={cn(
-                'font-medium',
+                'font-medium text-sm sm:text-base',
                 darkMode ? 'text-white' : 'text-secondary-900'
               )}>
                 {systemStatus.total_clients}
@@ -909,13 +1036,13 @@ const SystemTab = ({ systemStatus, darkMode }) => {
             </div>
             <div className="flex items-center justify-between">
               <span className={cn(
-                'text-sm',
+                'text-xs sm:text-sm',
                 darkMode ? 'text-secondary-400' : 'text-secondary-600'
               )}>
                 Connected Extensions
               </span>
               <span className={cn(
-                'font-medium',
+                'font-medium text-sm sm:text-base',
                 darkMode ? 'text-white' : 'text-secondary-900'
               )}>
                 {systemStatus.connected_extensions?.length || 0}
@@ -929,42 +1056,42 @@ const SystemTab = ({ systemStatus, darkMode }) => {
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           className={cn(
-            'p-6 rounded-xl border',
+            'p-4 sm:p-6 rounded-xl border',
             darkMode
               ? 'bg-secondary-800 border-secondary-700'
               : 'bg-white border-secondary-200'
           )}
         >
           <h3 className={cn(
-            'text-lg font-semibold mb-4 flex items-center space-x-2',
+            'text-base sm:text-lg font-semibold mb-4 flex items-center space-x-2',
             darkMode ? 'text-white' : 'text-secondary-900'
           )}>
-            <Database className="w-5 h-5" />
+            <Database className="w-4 h-4 sm:w-5 sm:h-5" />
             <span>System Health</span>
           </h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className={cn(
-                'text-sm',
+                'text-xs sm:text-sm',
                 darkMode ? 'text-secondary-400' : 'text-secondary-600'
               )}>
                 Database
               </span>
               <div className="flex items-center space-x-2">
                 <CheckCircle className="w-4 h-4 text-success-500" />
-                <span className="text-sm text-success-600">Connected</span>
+                <span className="text-xs sm:text-sm text-success-600">Connected</span>
               </div>
             </div>
             <div className="flex items-center justify-between">
               <span className={cn(
-                'text-sm',
+                'text-xs sm:text-sm',
                 darkMode ? 'text-secondary-400' : 'text-secondary-600'
               )}>
                 WebSocket Server
               </span>
               <div className="flex items-center space-x-2">
                 <CheckCircle className="w-4 h-4 text-success-500" />
-                <span className="text-sm text-success-600">Running</span>
+                <span className="text-xs sm:text-sm text-success-600">Running</span>
               </div>
             </div>
           </div>
@@ -982,122 +1109,170 @@ const SystemTab = ({ systemStatus, darkMode }) => {
             : 'bg-white border-secondary-200'
         )}
       >
-        <div className="p-6 border-b border-secondary-200 dark:border-secondary-700">
+        <div className="p-4 sm:p-6 border-b border-secondary-200 dark:border-secondary-700">
           <h3 className={cn(
-            'text-lg font-semibold',
+            'text-base sm:text-lg font-semibold',
             darkMode ? 'text-white' : 'text-secondary-900'
           )}>
             Extension Status Details
           </h3>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className={cn(
-              'border-b',
-              darkMode ? 'border-secondary-700' : 'border-secondary-200'
+        {!systemStatus.connection_status || systemStatus.connection_status.length === 0 ? (
+          <div className="flex flex-col items-center justify-center p-8 text-center">
+            <Wifi className={cn(
+              'w-16 h-16 mb-4',
+              darkMode ? 'text-secondary-600' : 'text-secondary-400'
+            )} />
+            <h3 className={cn(
+              'text-lg font-medium mb-2',
+              darkMode ? 'text-secondary-400' : 'text-secondary-600'
             )}>
-              <tr>
-                <th className={cn(
-                  'text-left py-3 px-4 font-medium text-sm',
-                  darkMode ? 'text-secondary-400' : 'text-secondary-600'
-                )}>
-                  Extension
-                </th>
-                <th className={cn(
-                  'text-left py-3 px-4 font-medium text-sm',
-                  darkMode ? 'text-secondary-400' : 'text-secondary-600'
-                )}>
-                  Username
-                </th>
-                <th className={cn(
-                  'text-left py-3 px-4 font-medium text-sm',
-                  darkMode ? 'text-secondary-400' : 'text-secondary-600'
-                )}>
-                  Status
-                </th>
-                <th className={cn(
-                  'text-left py-3 px-4 font-medium text-sm',
-                  darkMode ? 'text-secondary-400' : 'text-secondary-600'
-                )}>
-                  WebSocket
-                </th>
-                <th className={cn(
-                  'text-left py-3 px-4 font-medium text-sm',
-                  darkMode ? 'text-secondary-400' : 'text-secondary-600'
-                )}>
-                  Clients
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {systemStatus.connection_status?.map((status) => (
-                <tr
-                  key={status.extension}
-                  className={cn(
-                    'border-b transition-colors hover:bg-opacity-50',
-                    darkMode
-                      ? 'border-secondary-700 hover:bg-secondary-700'
-                      : 'border-secondary-100 hover:bg-secondary-50'
-                  )}
-                >
-                  <td className="py-3 px-4">
-                    <span className={cn(
-                      'font-mono text-sm',
-                      darkMode ? 'text-secondary-300' : 'text-secondary-700'
-                    )}>
-                      {status.extension}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={cn(
-                      'text-sm',
-                      darkMode ? 'text-white' : 'text-secondary-900'
-                    )}>
-                      {status.username}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4">
-                    <div className="flex items-center space-x-2">
-                      <div className={cn(
-                        'w-2 h-2 rounded-full',
-                        getStatusColor(status.status, 'bg')
-                      )} />
-                      <span className={cn(
-                        'text-sm capitalize',
-                        getStatusColor(status.status, 'text')
-                      )}>
-                        {status.status}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <div className="flex items-center space-x-2">
-                      {status.ws_connected ? (
-                        <>
-                          <CheckCircle className="w-4 h-4 text-success-500" />
-                          <span className="text-sm text-success-600">Connected</span>
-                        </>
-                      ) : (
-                        <>
-                          <XCircle className="w-4 h-4 text-danger-500" />
-                          <span className="text-sm text-danger-600">Disconnected</span>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={cn(
-                      'text-sm',
-                      darkMode ? 'text-secondary-300' : 'text-secondary-700'
-                    )}>
-                      {status.client_count}
-                    </span>
-                  </td>
+              No extension data
+            </h3>
+            <p className={cn(
+              'text-sm',
+              darkMode ? 'text-secondary-500' : 'text-secondary-500'
+            )}>
+              Extension status information will appear here when available.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className={cn(
+                'border-b',
+                darkMode ? 'border-secondary-700' : 'border-secondary-200'
+              )}>
+                <tr>
+                  <th className={cn(
+                    'text-left py-3 px-4 font-medium text-sm',
+                    darkMode ? 'text-secondary-400' : 'text-secondary-600'
+                  )}>
+                    Extension
+                  </th>
+                  <th className={cn(
+                    'text-left py-3 px-4 font-medium text-sm hidden sm:table-cell',
+                    darkMode ? 'text-secondary-400' : 'text-secondary-600'
+                  )}>
+                    Username
+                  </th>
+                  <th className={cn(
+                    'text-left py-3 px-4 font-medium text-sm',
+                    darkMode ? 'text-secondary-400' : 'text-secondary-600'
+                  )}>
+                    Status
+                  </th>
+                  <th className={cn(
+                    'text-left py-3 px-4 font-medium text-sm hidden md:table-cell',
+                    darkMode ? 'text-secondary-400' : 'text-secondary-600'
+                  )}>
+                    WebSocket
+                  </th>
+                  <th className={cn(
+                    'text-left py-3 px-4 font-medium text-sm hidden lg:table-cell',
+                    darkMode ? 'text-secondary-400' : 'text-secondary-600'
+                  )}>
+                    Clients
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {systemStatus.connection_status?.map((status) => (
+                  <tr
+                    key={status.extension}
+                    className={cn(
+                      'border-b transition-colors hover:bg-opacity-50',
+                      darkMode
+                        ? 'border-secondary-700 hover:bg-secondary-700'
+                        : 'border-secondary-100 hover:bg-secondary-50'
+                    )}
+                  >
+                    <td className="py-3 px-4">
+                      <div>
+                        <span className={cn(
+                          'font-mono text-sm',
+                          darkMode ? 'text-secondary-300' : 'text-secondary-700'
+                        )}>
+                          {status.extension}
+                        </span>
+                        <p className={cn(
+                          'text-xs sm:hidden',
+                          darkMode ? 'text-secondary-400' : 'text-secondary-600'
+                        )}>
+                          {status.username}
+                        </p>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 hidden sm:table-cell">
+                      <span className={cn(
+                        'text-sm',
+                        darkMode ? 'text-white' : 'text-secondary-900'
+                      )}>
+                        {status.username}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center space-x-2">
+                        <div className={cn(
+                          'w-2 h-2 rounded-full',
+                          getStatusColor(status.status, 'bg')
+                        )} />
+                        <span className={cn(
+                          'text-xs sm:text-sm capitalize',
+                          getStatusColor(status.status, 'text')
+                        )}>
+                          {status.status}
+                        </span>
+                      </div>
+                      <div className="md:hidden mt-1 flex items-center space-x-1">
+                        {status.ws_connected ? (
+                          <>
+                            <CheckCircle className="w-3 h-3 text-success-500" />
+                            <span className="text-xs text-success-600">WS</span>
+                          </>
+                        ) : (
+                          <>
+                            <XCircle className="w-3 h-3 text-danger-500" />
+                            <span className="text-xs text-danger-600">WS</span>
+                          </>
+                        )}
+                        <span className={cn(
+                          'text-xs lg:hidden ml-2',
+                          darkMode ? 'text-secondary-400' : 'text-secondary-600'
+                        )}>
+                          ({status.client_count})
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 hidden md:table-cell">
+                      <div className="flex items-center space-x-2">
+                        {status.ws_connected ? (
+                          <>
+                            <CheckCircle className="w-4 h-4 text-success-500" />
+                            <span className="text-sm text-success-600">Connected</span>
+                          </>
+                        ) : (
+                          <>
+                            <XCircle className="w-4 h-4 text-danger-500" />
+                            <span className="text-sm text-danger-600">Disconnected</span>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 hidden lg:table-cell">
+                      <span className={cn(
+                        'text-sm',
+                        darkMode ? 'text-secondary-300' : 'text-secondary-700'
+                      )}>
+                        {status.client_count}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </motion.div>
     </div>
   );
@@ -1127,24 +1302,24 @@ const SettingsTab = ({ darkMode }) => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div className="space-y-4 sm:space-y-6 max-w-full">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* General Settings */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           className={cn(
-            'p-6 rounded-xl border',
+            'p-4 sm:p-6 rounded-xl border',
             darkMode
               ? 'bg-secondary-800 border-secondary-700'
               : 'bg-white border-secondary-200'
           )}
         >
           <h3 className={cn(
-            'text-lg font-semibold mb-4 flex items-center space-x-2',
+            'text-base sm:text-lg font-semibold mb-4 flex items-center space-x-2',
             darkMode ? 'text-white' : 'text-secondary-900'
           )}>
-            <Settings className="w-5 h-5" />
+            <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
             <span>General Settings</span>
           </h3>
 
@@ -1223,17 +1398,17 @@ const SettingsTab = ({ darkMode }) => {
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           className={cn(
-            'p-6 rounded-xl border',
+            'p-4 sm:p-6 rounded-xl border',
             darkMode
               ? 'bg-secondary-800 border-secondary-700'
               : 'bg-white border-secondary-200'
           )}
         >
           <h3 className={cn(
-            'text-lg font-semibold mb-4 flex items-center space-x-2',
+            'text-base sm:text-lg font-semibold mb-4 flex items-center space-x-2',
             darkMode ? 'text-white' : 'text-secondary-900'
           )}>
-            <Database className="w-5 h-5" />
+            <Database className="w-4 h-4 sm:w-5 sm:h-5" />
             <span>System Configuration</span>
           </h3>
 
@@ -1321,24 +1496,24 @@ const SettingsTab = ({ darkMode }) => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className={cn(
-          'p-6 rounded-xl border',
+          'p-4 sm:p-6 rounded-xl border',
           darkMode
             ? 'bg-secondary-800 border-secondary-700'
             : 'bg-white border-secondary-200'
         )}
       >
         <h3 className={cn(
-          'text-lg font-semibold mb-4 flex items-center space-x-2',
+          'text-base sm:text-lg font-semibold mb-4 flex items-center space-x-2',
           darkMode ? 'text-white' : 'text-secondary-900'
         )}>
-          <Database className="w-5 h-5" />
+          <Database className="w-4 h-4 sm:w-5 sm:h-5" />
           <span>Data Management</span>
         </h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="flex items-center justify-between">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
             <label className={cn(
-              'text-sm font-medium',
+              'text-xs sm:text-sm font-medium',
               darkMode ? 'text-secondary-300' : 'text-secondary-700'
             )}>
               Max Call Logs
@@ -1350,7 +1525,7 @@ const SettingsTab = ({ darkMode }) => {
               value={settings.maxCallLogs}
               onChange={(e) => handleSettingChange('maxCallLogs', parseInt(e.target.value))}
               className={cn(
-                'w-24 px-2 py-1 text-sm rounded border',
+                'w-full sm:w-24 px-2 py-1 text-sm rounded border',
                 darkMode
                   ? 'bg-secondary-700 border-secondary-600 text-white'
                   : 'bg-white border-secondary-300 text-secondary-900'
@@ -1358,9 +1533,9 @@ const SettingsTab = ({ darkMode }) => {
             />
           </div>
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
             <label className={cn(
-              'text-sm font-medium',
+              'text-xs sm:text-sm font-medium',
               darkMode ? 'text-secondary-300' : 'text-secondary-700'
             )}>
               Session Timeout (hours)
@@ -1372,7 +1547,7 @@ const SettingsTab = ({ darkMode }) => {
               value={settings.sessionTimeout}
               onChange={(e) => handleSettingChange('sessionTimeout', parseInt(e.target.value))}
               className={cn(
-                'w-20 px-2 py-1 text-sm rounded border',
+                'w-full sm:w-20 px-2 py-1 text-sm rounded border',
                 darkMode
                   ? 'bg-secondary-700 border-secondary-600 text-white'
                   : 'bg-white border-secondary-300 text-secondary-900'
@@ -1380,14 +1555,41 @@ const SettingsTab = ({ darkMode }) => {
             />
           </div>
 
-          <div className="flex space-x-2">
-            <button className="flex-1 btn-secondary text-sm">
-              <Download className="w-4 h-4 mr-2" />
-              Export Settings
+          <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 md:col-span-2 xl:col-span-1">
+            <button
+              onClick={async () => {
+                try {
+                  await adminService.exportCallLogs('csv');
+                  toast.success('Settings exported successfully');
+                } catch (error) {
+                  toast.error('Failed to export settings');
+                }
+              }}
+              className="flex-1 btn-secondary text-xs sm:text-sm flex items-center justify-center"
+            >
+              <Download className="w-4 h-4 mr-1 sm:mr-2" />
+              <span>Export Settings</span>
             </button>
-            <button className="flex-1 btn-primary text-sm">
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Reset to Default
+            <button
+              onClick={() => {
+                setSettings({
+                  autoRefresh: true,
+                  refreshInterval: 30,
+                  enableNotifications: true,
+                  enableAudioAlerts: false,
+                  maxCallLogs: 1000,
+                  sessionTimeout: 24,
+                  enableDebugMode: false,
+                  asteriskHost: '172.20.10.6',
+                  backendHost: '172.20.10.4',
+                  sipPort: '8088',
+                });
+                toast.success('Settings reset to default');
+              }}
+              className="flex-1 btn-primary text-xs sm:text-sm flex items-center justify-center"
+            >
+              <RefreshCw className="w-4 h-4 mr-1 sm:mr-2" />
+              <span>Reset</span>
             </button>
           </div>
         </div>
