@@ -89,6 +89,7 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [showAdminCall, setShowAdminCall] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState({ show: false, user: null, loading: false });
+  const [deleteLogConfirmation, setDeleteLogConfirmation] = useState({ show: false, log: null, loading: false });
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Activity },
@@ -211,25 +212,46 @@ const AdminDashboard = ({ user, onLogout }) => {
     }
   };
 
-  const deleteCallLog = async (logId) => {
-    if (!window.confirm('Are you sure you want to delete this call log?')) {
-      return;
-    }
+  const showDeleteLogConfirmation = (log) => {
+    setDeleteLogConfirmation({
+      show: true,
+      log,
+      loading: false
+    });
+  };
+
+  const hideDeleteLogConfirmation = () => {
+    setDeleteLogConfirmation({
+      show: false,
+      log: null,
+      loading: false
+    });
+  };
+
+  const confirmDeleteCallLog = async () => {
+    if (!deleteLogConfirmation.log) return;
+
+    setDeleteLogConfirmation(prev => ({ ...prev, loading: true }));
 
     try {
-      const result = await adminService.deleteCallLog(logId);
+      const result = await adminService.deleteCallLog(deleteLogConfirmation.log.id);
 
       if (result.success) {
         toast.success('Call log deleted successfully');
         loadCallLogs(); // Refresh call logs without full page reload
+        hideDeleteLogConfirmation();
       } else {
         toast.error(result.error || 'Failed to delete call log');
+        setDeleteLogConfirmation(prev => ({ ...prev, loading: false }));
       }
     } catch (error) {
       console.error('Failed to delete call log:', error);
       toast.error('Failed to delete call log');
+      setDeleteLogConfirmation(prev => ({ ...prev, loading: false }));
     }
   };
+
+
 
 
 
@@ -370,7 +392,7 @@ const AdminDashboard = ({ user, onLogout }) => {
           </div>
         )}
         {activeTab === 'calls' && (
-          <CallLogsTab callLogs={callLogs} onDeleteCallLog={deleteCallLog} darkMode={darkMode} />
+          <CallLogsTab callLogs={callLogs} onDeleteCallLog={showDeleteLogConfirmation} darkMode={darkMode} />
         )}
         {activeTab === 'system' && (
           <div className="h-full overflow-y-auto p-4 sm:p-6">
@@ -395,7 +417,7 @@ const AdminDashboard = ({ user, onLogout }) => {
         currentUser={user}
       />
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete User Confirmation Modal */}
       <ConfirmationModal
         isOpen={deleteConfirmation.show}
         onClose={hideDeleteConfirmation}
@@ -410,6 +432,24 @@ const AdminDashboard = ({ user, onLogout }) => {
         cancelText="Cancel"
         type="danger"
         loading={deleteConfirmation.loading}
+        darkMode={darkMode}
+      />
+
+      {/* Delete Call Log Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={deleteLogConfirmation.show}
+        onClose={hideDeleteLogConfirmation}
+        onConfirm={confirmDeleteCallLog}
+        title="Delete Call Log"
+        message={
+          deleteLogConfirmation.log
+            ? `Are you sure you want to delete this call log between "${deleteLogConfirmation.log.caller?.username}" and "${deleteLogConfirmation.log.callee?.username}"? This action cannot be undone.`
+            : "Are you sure you want to delete this call log?"
+        }
+        confirmText="Delete Log"
+        cancelText="Cancel"
+        type="danger"
+        loading={deleteLogConfirmation.loading}
         darkMode={darkMode}
       />
     </div>
@@ -526,7 +566,7 @@ const OverviewTab = ({ stats, darkMode }) => {
           </h3>
           <div className="space-y-3">
             <button
-              onClick={() => toast.info('User management feature coming soon')}
+              onClick={() => toast.success('User management feature coming soon')}
               className="w-full btn-primary flex items-center justify-center space-x-2"
             >
               <UserPlus className="w-4 h-4" />
@@ -535,10 +575,12 @@ const OverviewTab = ({ stats, darkMode }) => {
             <button
               onClick={async () => {
                 try {
+                  console.log('[AdminDashboard] Quick export initiated from Overview tab');
                   await adminService.exportCallLogs('csv');
                   toast.success('Call logs exported successfully');
                 } catch (error) {
-                  toast.error('Failed to export call logs');
+                  console.error('[AdminDashboard] Quick export failed:', error);
+                  toast.error(`Failed to export call logs: ${error.message}`);
                 }
               }}
               className="w-full btn-secondary flex items-center justify-center space-x-2"
@@ -776,11 +818,19 @@ const CallLogsTab = ({ callLogs, onDeleteCallLog, darkMode }) => {
   const handleExport = async (format = 'csv') => {
     try {
       setIsExporting(true);
-      await adminService.exportCallLogs(format);
-      toast.success(`Call logs exported as ${format.toUpperCase()}`);
+      console.log(`[AdminDashboard] Starting export of ${filteredLogs.length} call logs as ${format}`);
+
+      // Add current filters to export
+      const filters = {};
+      if (searchTerm) filters.search = searchTerm;
+      if (filterStatus !== 'all') filters.status = filterStatus;
+
+      await adminService.exportCallLogs(format, filters);
+      toast.success(`Call logs exported as ${format.toUpperCase()} successfully`);
+      console.log(`[AdminDashboard] Export completed successfully`);
     } catch (error) {
-      console.error('Failed to export call logs:', error);
-      toast.error('Failed to export call logs');
+      console.error('[AdminDashboard] Failed to export call logs:', error);
+      toast.error(`Failed to export call logs: ${error.message}`);
     } finally {
       setIsExporting(false);
     }
@@ -962,7 +1012,7 @@ const CallLogsTab = ({ callLogs, onDeleteCallLog, darkMode }) => {
                         </td>
                         <td className="py-3 px-4 text-right">
                           <button
-                            onClick={() => onDeleteCallLog(log.id)}
+                            onClick={() => onDeleteCallLog(log)}
                             className="p-2 text-danger-600 hover:bg-danger-50 rounded-lg transition-colors"
                             title="Delete call log"
                           >
@@ -984,6 +1034,28 @@ const CallLogsTab = ({ callLogs, onDeleteCallLog, darkMode }) => {
 
 // System Status Tab Component
 const SystemTab = ({ systemStatus, darkMode }) => {
+  // Function to determine actual online status based on WebSocket connection and login status
+  const getActualStatus = (status) => {
+    // If WebSocket is connected with active clients, user is definitely online
+    if (status.ws_connected && status.client_count > 0) {
+      return 'online';
+    }
+
+    // If user has database status as online but no WebSocket connection,
+    // they might be recently logged in but not actively connected - show as away
+    if (status.status === 'online' && !status.ws_connected) {
+      return 'away';
+    }
+
+    // If no WebSocket connection, user is effectively offline regardless of database status
+    if (!status.ws_connected) {
+      return 'offline';
+    }
+
+    // For all other cases, use the database status
+    return status.status;
+  };
+
   if (!systemStatus) {
     return (
       <div className="text-center py-8">
@@ -1111,11 +1183,18 @@ const SystemTab = ({ systemStatus, darkMode }) => {
       >
         <div className="p-4 sm:p-6 border-b border-secondary-200 dark:border-secondary-700">
           <h3 className={cn(
-            'text-base sm:text-lg font-semibold',
+            'text-base sm:text-lg font-semibold mb-2',
             darkMode ? 'text-white' : 'text-secondary-900'
           )}>
             Extension Status Details
           </h3>
+          <p className={cn(
+            'text-xs sm:text-sm',
+            darkMode ? 'text-secondary-400' : 'text-secondary-600'
+          )}>
+            Status shows "online" only for extensions with active WebSocket connections.
+            Users without connections show as "offline" or "away" regardless of login status.
+          </p>
         </div>
         {!systemStatus.connection_status || systemStatus.connection_status.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-8 text-center">
@@ -1213,34 +1292,41 @@ const SystemTab = ({ systemStatus, darkMode }) => {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center space-x-2">
-                        <div className={cn(
-                          'w-2 h-2 rounded-full',
-                          getStatusColor(status.status, 'bg')
-                        )} />
-                        <span className={cn(
-                          'text-xs sm:text-sm capitalize',
-                          getStatusColor(status.status, 'text')
-                        )}>
-                          {status.status}
-                        </span>
+                        {(() => {
+                          const actualStatus = getActualStatus(status);
+                          return (
+                            <>
+                              <div className={cn(
+                                'w-2 h-2 rounded-full',
+                                getStatusColor(actualStatus, 'bg')
+                              )} />
+                              <span className={cn(
+                                'text-xs sm:text-sm capitalize',
+                                getStatusColor(actualStatus, 'text')
+                              )}>
+                                {actualStatus}
+                              </span>
+                            </>
+                          );
+                        })()}
                       </div>
                       <div className="md:hidden mt-1 flex items-center space-x-1">
                         {status.ws_connected ? (
                           <>
                             <CheckCircle className="w-3 h-3 text-success-500" />
-                            <span className="text-xs text-success-600">WS</span>
+                            <span className="text-xs text-success-600">Connected</span>
                           </>
                         ) : (
                           <>
                             <XCircle className="w-3 h-3 text-danger-500" />
-                            <span className="text-xs text-danger-600">WS</span>
+                            <span className="text-xs text-danger-600">Disconnected</span>
                           </>
                         )}
                         <span className={cn(
                           'text-xs lg:hidden ml-2',
                           darkMode ? 'text-secondary-400' : 'text-secondary-600'
                         )}>
-                          ({status.client_count})
+                          ({status.client_count} clients)
                         </span>
                       </div>
                     </td>
@@ -1260,12 +1346,20 @@ const SystemTab = ({ systemStatus, darkMode }) => {
                       </div>
                     </td>
                     <td className="py-3 px-4 hidden lg:table-cell">
-                      <span className={cn(
-                        'text-sm',
-                        darkMode ? 'text-secondary-300' : 'text-secondary-700'
-                      )}>
-                        {status.client_count}
-                      </span>
+                      <div className="flex items-center space-x-1">
+                        <span className={cn(
+                          'text-sm font-medium',
+                          darkMode ? 'text-secondary-300' : 'text-secondary-700'
+                        )}>
+                          {status.client_count}
+                        </span>
+                        <span className={cn(
+                          'text-xs',
+                          darkMode ? 'text-secondary-400' : 'text-secondary-600'
+                        )}>
+                          {status.client_count === 1 ? 'device' : 'devices'}
+                        </span>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1559,16 +1653,18 @@ const SettingsTab = ({ darkMode }) => {
             <button
               onClick={async () => {
                 try {
+                  console.log('[AdminDashboard] Exporting call logs from Settings tab');
                   await adminService.exportCallLogs('csv');
-                  toast.success('Settings exported successfully');
+                  toast.success('Call logs exported successfully');
                 } catch (error) {
-                  toast.error('Failed to export settings');
+                  console.error('[AdminDashboard] Settings export failed:', error);
+                  toast.error(`Failed to export call logs: ${error.message}`);
                 }
               }}
               className="flex-1 btn-secondary text-xs sm:text-sm flex items-center justify-center"
             >
               <Download className="w-4 h-4 mr-1 sm:mr-2" />
-              <span>Export Settings</span>
+              <span>Export Logs</span>
             </button>
             <button
               onClick={() => {

@@ -679,7 +679,9 @@ func GetRealTimeMetrics(c *gin.Context) {
 	var totalUsers, onlineUsers, activeCalls, callsToday int64
 
 	database.GetDB().Model(&models.User{}).Count(&totalUsers)
-	database.GetDB().Model(&models.User{}).Where("status = ?", "online").Count(&onlineUsers)
+	// Count online users (users who are marked as online AND have recent activity)
+	fiveMinutesAgo := time.Now().Add(-5 * time.Minute)
+	database.GetDB().Model(&models.User{}).Where("status = ? AND is_online = ? AND last_seen > ?", "online", true, fiveMinutesAgo).Count(&onlineUsers)
 	database.GetDB().Model(&models.ActiveCall{}).Count(&activeCalls)
 	database.GetDB().Model(&models.CallLog{}).Where("DATE(created_at) = DATE(NOW())").Count(&callsToday)
 

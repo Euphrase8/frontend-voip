@@ -116,7 +116,7 @@ const NotificationsPage = ({ darkMode, user }) => {
             'text-2xl font-bold',
             darkMode ? 'text-white' : 'text-secondary-900'
           )}>
-            Notifications & Logs
+            {user?.role === 'admin' ? 'Notifications & Logs' : 'Notifications'}
           </h1>
         </div>
         <div className="flex space-x-2">

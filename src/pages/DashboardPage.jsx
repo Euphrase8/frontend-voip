@@ -130,9 +130,40 @@ const DashboardPage = ({ user, onLogout, darkMode, setIncomingCall }) => {
   // Use theme context dark mode if available, fallback to prop
   const isDarkMode = themeDarkMode !== undefined ? themeDarkMode : darkMode;
 
+  // Test status service endpoint
+  const testStatusService = async () => {
+    console.log('[Dashboard] Testing status service...');
+    console.log('[Dashboard] Current user data:', {
+      user,
+      token: localStorage.getItem('token')?.substring(0, 20) + '...',
+      username: localStorage.getItem('username'),
+      extension: localStorage.getItem('extension')
+    });
+
+    // First test the endpoint
+    const result = await statusService.testStatusEndpoint();
+    console.log('[Dashboard] Status service test result:', result);
+
+    // Then try a manual status update
+    try {
+      console.log('[Dashboard] Attempting manual status update...');
+      await statusService.updateStatus('online');
+      console.log('[Dashboard] Manual status update successful');
+    } catch (error) {
+      console.error('[Dashboard] Manual status update failed:', error);
+    }
+
+    if (result.success) {
+      alert('Status service test successful! Check console for details.');
+    } else {
+      alert(`Status service test failed: ${result.error}. Check console for details.`);
+    }
+  };
+
   // Initialize status service for online/offline tracking
   useEffect(() => {
     if (user) {
+      console.log('[Dashboard] Initializing status service for user:', user);
       statusService.initialize();
     }
 
@@ -422,6 +453,14 @@ const DashboardPage = ({ user, onLogout, darkMode, setIncomingCall }) => {
               title="Settings"
             >
               <Settings className="w-4 h-4" />
+            </button>
+            {/* Temporary debugging button */}
+            <button
+              onClick={testStatusService}
+              className="p-2 rounded-lg transition-colors text-warning-600 hover:bg-warning-50"
+              title="Test Status Service (Debug)"
+            >
+              🔧
             </button>
             <button
               onClick={handleLogout}

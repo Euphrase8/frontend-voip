@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import {
   FiPhoneCall as PhoneCall,
   FiDelete as Delete,
-  FiTrash2 as Trash2
+  FiTrash2 as Trash2,
+  FiUser as User,
+  FiUsers as Users
 } from 'react-icons/fi';
 import { call } from '../services/call';
 import CallingPage from './CallingPage';
@@ -146,171 +149,346 @@ const HomePage = ({ darkMode = false, onCall }) => {
   }
 
   return (
-    <div className="h-full flex flex-col lg:items-center lg:justify-center">
-      {/* Desktop: Centered Container, Mobile: Full Height */}
-      <div className="w-full lg:max-w-md lg:mx-auto h-full lg:h-auto flex flex-col lg:space-y-6">
-        {/* Header */}
-        <div className="text-center mb-4 lg:mb-6 flex-shrink-0">
-          <h2 className={cn(
-            "text-xl lg:text-2xl font-bold mb-2",
-            isDark ? "text-white" : "text-slate-800"
-          )}>
-            Make a Call
-          </h2>
+    <div className="h-full flex flex-col overflow-hidden">
+      {/* Header Section - Compact on mobile */}
+      <div className="flex-shrink-0 p-3 sm:p-4 lg:p-6 border-b border-secondary-200 dark:border-secondary-700">
+        <div className="text-center">
+          <div className="flex items-center justify-center space-x-2 sm:space-x-3 mb-2 sm:mb-3">
+            <PhoneCall className={cn(
+              'w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8',
+              isDark ? 'text-primary-400' : 'text-primary-600'
+            )} />
+            <h1 className={cn(
+              "text-lg sm:text-xl lg:text-2xl xl:text-3xl font-bold",
+              isDark ? "text-white" : "text-secondary-900"
+            )}>
+              VoIP Dialer
+            </h1>
+          </div>
           <p className={cn(
-            "text-xs lg:text-sm font-medium",
-            isDark ? "text-slate-300" : "text-slate-600"
+            "text-xs sm:text-sm lg:text-base",
+            isDark ? "text-secondary-400" : "text-secondary-600"
           )}>
-            Enter an extension to start calling
+            Professional Voice Communication System
           </p>
         </div>
+      </div>
 
-        {/* Extension Display */}
-        <div className={cn(
-          "p-4 lg:p-6 rounded-2xl lg:rounded-3xl border-2 text-center shadow-lg flex-shrink-0",
-          isDark
-            ? "bg-slate-800 border-slate-700"
-            : "bg-white border-indigo-100"
-        )}>
-          {/* Decorative header bar */}
-          <div className={cn(
-            'h-1 rounded-full mb-3 lg:mb-4 mx-auto w-12 lg:w-16',
-            isDark ? 'bg-indigo-600' : 'bg-indigo-500'
-          )}></div>
+      {/* Main Content - No scrolling on desktop, optimized for mobile */}
+      <div className="flex-1 overflow-hidden lg:overflow-visible">
+        <div className="h-full flex flex-col lg:items-center lg:justify-center p-3 sm:p-4 lg:p-6">
+          {/* Responsive Container */}
+          <div className="w-full max-w-sm sm:max-w-md lg:max-w-lg xl:max-w-xl mx-auto flex flex-col space-y-4 sm:space-y-6 lg:space-y-8 h-full lg:h-auto">
 
-          <div className="mb-3 lg:mb-4">
-            <label className={cn(
-              "block text-xs lg:text-sm font-semibold mb-2 lg:mb-3",
-              isDark ? "text-slate-300" : "text-slate-700"
-            )}>
-              Extension Number
-            </label>
-            <div className={cn(
-              "text-2xl lg:text-3xl font-mono font-bold min-h-[2.5rem] lg:min-h-[3rem] flex items-center justify-center p-3 lg:p-4 rounded-xl lg:rounded-2xl border-2 shadow-inner",
-              isDark
-                ? "text-white border-slate-600 bg-slate-700"
-                : "text-slate-800 border-slate-200 bg-slate-50"
-            )}>
-              {extension || "Enter extension"}
-            </div>
-          </div>
+            {/* Welcome Section */}
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-center"
+            >
+              <h2 className={cn(
+                "text-lg sm:text-xl lg:text-2xl font-semibold mb-2",
+                isDark ? "text-white" : "text-secondary-900"
+              )}>
+                Make a Call
+              </h2>
+              <p className={cn(
+                "text-sm sm:text-base",
+                isDark ? "text-secondary-400" : "text-secondary-600"
+              )}>
+                Enter a 4-digit extension number to connect with other users
+              </p>
+            </motion.div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-2 lg:gap-3 justify-center">
-            <button
-              onClick={handleCall}
-              disabled={!extension || loading}
+            {/* Extension Display - Compact and Responsive */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.2 }}
               className={cn(
-                "flex items-center space-x-1 lg:space-x-2 px-4 lg:px-6 py-2 lg:py-3 rounded-xl lg:rounded-2xl font-semibold transition-all duration-200 shadow-lg border-2 text-sm lg:text-base",
-                "disabled:opacity-50 disabled:cursor-not-allowed",
-                "active:scale-95 transform transition-transform duration-100",
-                !extension || loading
-                  ? "bg-slate-300 text-slate-500 border-slate-200"
-                  : "bg-emerald-500 hover:bg-emerald-600 text-white border-emerald-400 hover:border-emerald-500 hover:shadow-xl"
+                "p-3 sm:p-4 lg:p-6 rounded-xl sm:rounded-2xl border shadow-lg flex-shrink-0",
+                isDark
+                  ? "bg-secondary-800 border-secondary-700"
+                  : "bg-white border-secondary-200"
               )}
             >
-              {loading ? (
-                <>
-                  <div className="w-3 lg:w-4 h-3 lg:h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Calling...</span>
-                </>
-              ) : (
-                <>
-                  <PhoneCall className="w-3 lg:w-4 h-3 lg:h-4" />
-                  <span>Call</span>
-                </>
-              )}
-            </button>
+              {/* Status Indicator */}
+              <div className="flex items-center justify-center mb-3 sm:mb-4">
+                <div className={cn(
+                  'w-2.5 sm:w-3 h-2.5 sm:h-3 rounded-full mr-1.5 sm:mr-2',
+                  isDark ? 'bg-primary-500' : 'bg-primary-600'
+                )} />
+                <span className={cn(
+                  'text-xs sm:text-sm font-medium',
+                  isDark ? 'text-secondary-300' : 'text-secondary-700'
+                )}>
+                  Ready to dial
+                </span>
+              </div>
 
-            <button
-              onClick={() => setExtension('')}
-              disabled={!extension}
-              className={cn(
-                "flex items-center space-x-1 lg:space-x-2 px-3 lg:px-4 py-2 lg:py-3 rounded-xl lg:rounded-2xl font-semibold transition-all duration-200 shadow-lg border-2 text-sm lg:text-base",
-                "disabled:opacity-50 disabled:cursor-not-allowed",
-                "active:scale-95 transform transition-transform duration-100",
-                !extension
-                  ? "bg-slate-200 text-slate-400 border-slate-100"
-                  : "bg-red-500 hover:bg-red-600 text-white border-red-400 hover:border-red-500"
-              )}
-            >
-              <Trash2 className="w-3 lg:w-4 h-3 lg:h-4" />
-              <span>Clear</span>
-            </button>
-          </div>
-        </div>
+              <div className="mb-3 sm:mb-4 lg:mb-6">
+                <label className={cn(
+                  "block text-xs sm:text-sm lg:text-base font-semibold mb-2 sm:mb-3",
+                  isDark ? "text-secondary-300" : "text-secondary-700"
+                )}>
+                  Extension Number
+                </label>
+                <div className={cn(
+                  "text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-mono font-bold min-h-[2.5rem] sm:min-h-[3rem] lg:min-h-[4rem] flex items-center justify-center p-3 sm:p-4 rounded-lg sm:rounded-xl border-2 transition-all duration-200",
+                  extension
+                    ? (isDark
+                        ? "text-white border-primary-500 bg-secondary-700 shadow-inner"
+                        : "text-secondary-900 border-primary-500 bg-primary-50 shadow-inner")
+                    : (isDark
+                        ? "text-secondary-500 border-secondary-600 bg-secondary-700"
+                        : "text-secondary-400 border-secondary-300 bg-secondary-50")
+                )}>
+                  {extension || "----"}
+                </div>
+                {error && (
+                  <p className="text-danger-600 text-xs sm:text-sm mt-2 text-center">{error}</p>
+                )}
+              </div>
 
-        {/* Static Professional Keypad */}
-        <div className={cn(
-          "flex-1 lg:flex-none p-4 lg:p-6 rounded-2xl lg:rounded-3xl border-2 shadow-lg flex flex-col",
-          isDark
-            ? "bg-slate-800 border-slate-700"
-            : "bg-white border-indigo-100"
-        )}>
-          {/* Decorative header bar */}
-          <div className={cn(
-            'h-1 rounded-full mb-3 lg:mb-4 mx-auto w-12 lg:w-16 flex-shrink-0',
-            isDark ? 'bg-indigo-600' : 'bg-indigo-500'
-          )}></div>
-
-          <h3 className={cn(
-            "text-base lg:text-lg font-bold mb-4 lg:mb-6 text-center flex-shrink-0",
-            isDark ? "text-white" : "text-slate-800"
-          )}>
-            Keypad
-          </h3>
-
-          {/* Keypad Grid - Static and Centered */}
-          <div className="flex-1 flex flex-col justify-center lg:justify-start">
-            <div className="grid grid-cols-3 gap-2 lg:gap-3 mb-3 lg:mb-4 max-w-xs mx-auto">
-              {keypadButtons.map((btn) => (
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <button
-                  key={btn.value}
-                  onClick={() => handleKeypadClick(btn.value)}
+                  onClick={handleCall}
+                  disabled={!extension || loading}
                   className={cn(
-                    "relative p-3 lg:p-4 rounded-xl lg:rounded-2xl font-bold transition-all duration-200 shadow-lg border-2 touch-target",
-                    "focus:outline-none focus:ring-2 focus:ring-indigo-500",
-                    "w-16 h-16 lg:w-20 lg:h-20 flex flex-col items-center justify-center",
-                    "active:scale-95 transform transition-transform duration-100 hover:scale-105",
-                    isDark
-                      ? "bg-slate-700 hover:bg-slate-600 text-white border-slate-600 hover:border-slate-500"
-                      : "bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200 hover:border-slate-300 hover:shadow-xl"
+                    "flex items-center justify-center space-x-2 px-6 py-3 rounded-xl font-semibold transition-all duration-200 shadow-lg border-2 text-sm sm:text-base",
+                    "disabled:opacity-50 disabled:cursor-not-allowed",
+                    "active:scale-95 transform transition-transform duration-100",
+                    !extension || loading
+                      ? (isDark ? "bg-secondary-700 text-secondary-500 border-secondary-600" : "bg-secondary-300 text-secondary-500 border-secondary-200")
+                      : "bg-success-500 hover:bg-success-600 text-white border-success-400 hover:border-success-500 hover:shadow-xl"
                   )}
-                  aria-label={`Dial ${btn.value}`}
                 >
-                  <span className="text-lg lg:text-xl font-bold">{btn.label}</span>
-                  {btn.sub && (
-                    <span className={cn(
-                      "text-xs font-medium",
-                      isDark ? "text-slate-400" : "text-slate-500"
-                    )}>
-                      {btn.sub}
-                    </span>
+                  {loading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Calling...</span>
+                    </>
+                  ) : (
+                    <>
+                      <PhoneCall className="w-4 h-4" />
+                      <span>Call Extension</span>
+                    </>
                   )}
                 </button>
-              ))}
-            </div>
+                <button
+                  onClick={() => setExtension('')}
+                  disabled={!extension}
+                  className={cn(
+                    "flex items-center justify-center space-x-2 px-6 py-3 rounded-xl font-semibold transition-all duration-200 shadow-lg border-2 text-sm sm:text-base",
+                    "disabled:opacity-50 disabled:cursor-not-allowed",
+                    "active:scale-95 transform transition-transform duration-100",
+                    !extension
+                      ? (isDark ? "bg-secondary-700 text-secondary-500 border-secondary-600" : "bg-secondary-300 text-secondary-500 border-secondary-200")
+                      : "bg-danger-500 hover:bg-danger-600 text-white border-danger-400 hover:border-danger-500 hover:shadow-xl"
+                  )}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Clear</span>
+                </button>
+              </div>
+            </motion.div>
 
-            {/* Delete Button */}
-            <div className="max-w-xs mx-auto w-full">
-              <button
-                onClick={() => handleKeypadClick('delete')}
-                disabled={!extension}
+            {/* Professional Features */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="grid grid-cols-1 sm:grid-cols-3 gap-4"
+            >
+              <div className={cn(
+                "p-4 rounded-xl border text-center",
+                isDark ? "bg-secondary-800 border-secondary-700" : "bg-white border-secondary-200"
+              )}>
+                <PhoneCall className={cn(
+                  "w-8 h-8 mx-auto mb-2",
+                  isDark ? "text-primary-400" : "text-primary-600"
+                )} />
+                <h3 className={cn(
+                  "font-semibold text-sm",
+                  isDark ? "text-white" : "text-secondary-900"
+                )}>
+                  HD Voice Quality
+                </h3>
+                <p className={cn(
+                  "text-xs mt-1",
+                  isDark ? "text-secondary-400" : "text-secondary-600"
+                )}>
+                  Crystal clear audio
+                </p>
+              </div>
+
+              <div className={cn(
+                "p-4 rounded-xl border text-center",
+                isDark ? "bg-secondary-800 border-secondary-700" : "bg-white border-secondary-200"
+              )}>
+                <User className={cn(
+                  "w-8 h-8 mx-auto mb-2",
+                  isDark ? "text-success-400" : "text-success-600"
+                )} />
+                <h3 className={cn(
+                  "font-semibold text-sm",
+                  isDark ? "text-white" : "text-secondary-900"
+                )}>
+                  Instant Connect
+                </h3>
+                <p className={cn(
+                  "text-xs mt-1",
+                  isDark ? "text-secondary-400" : "text-secondary-600"
+                )}>
+                  Fast call setup
+                </p>
+              </div>
+
+              <div className={cn(
+                "p-4 rounded-xl border text-center",
+                isDark ? "bg-secondary-800 border-secondary-700" : "bg-white border-secondary-200"
+              )}>
+                <Users className={cn(
+                  "w-8 h-8 mx-auto mb-2",
+                  isDark ? "text-warning-400" : "text-warning-600"
+                )} />
+                <h3 className={cn(
+                  "font-semibold text-sm",
+                  isDark ? "text-white" : "text-secondary-900"
+                )}>
+                  Multi-Device
+                </h3>
+                <p className={cn(
+                  "text-xs mt-1",
+                  isDark ? "text-secondary-400" : "text-secondary-600"
+                )}>
+                  Works everywhere
+                </p>
+              </div>
+            </motion.div>
+
+            {/* Recent Calls */}
+            {recentCalls.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
                 className={cn(
-                  "w-full p-3 lg:p-4 rounded-xl lg:rounded-2xl font-semibold transition-all duration-200 shadow-lg border-2 touch-target",
-                  "focus:outline-none focus:ring-2 focus:ring-indigo-500",
-                  "flex items-center justify-center space-x-2 text-sm lg:text-base",
-                  "disabled:opacity-50 disabled:cursor-not-allowed",
-                  "active:scale-95 transform transition-transform duration-100",
-                  !extension
-                    ? "bg-slate-200 text-slate-400 border-slate-100"
-                    : "bg-red-500 hover:bg-red-600 text-white border-red-400 hover:border-red-500 hover:shadow-xl"
+                  "p-4 rounded-xl border",
+                  isDark ? "bg-secondary-800 border-secondary-700" : "bg-white border-secondary-200"
                 )}
               >
-                <Delete className="w-4 lg:w-5 h-4 lg:h-5" />
-                <span>Delete</span>
-              </button>
+                <h3 className={cn(
+                  "font-semibold mb-3 flex items-center space-x-2",
+                  isDark ? "text-white" : "text-secondary-900"
+                )}>
+                  <PhoneCall className="w-4 h-4" />
+                  <span>Recent Calls</span>
+                </h3>
+                <div className="space-y-2">
+                  {recentCalls.slice(0, 3).map((call, index) => (
+                    <div
+                      key={index}
+                      className={cn(
+                        "flex items-center justify-between p-2 rounded-lg",
+                        isDark ? "bg-secondary-700" : "bg-secondary-50"
+                      )}
+                    >
+                      <span className={cn(
+                        "font-mono text-sm",
+                        isDark ? "text-white" : "text-secondary-900"
+                      )}>
+                        {call.extension}
+                      </span>
+                      <span className={cn(
+                        "text-xs",
+                        isDark ? "text-secondary-400" : "text-secondary-600"
+                      )}>
+                        {call.timestamp.toLocaleTimeString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {/* Responsive Professional Keypad */}
+            <div className={cn(
+              "flex-1 lg:flex-none p-3 sm:p-4 lg:p-6 rounded-xl sm:rounded-2xl lg:rounded-3xl border-2 shadow-lg flex flex-col min-h-0",
+              isDark
+                ? "bg-slate-800 border-slate-700"
+                : "bg-white border-indigo-100"
+            )}>
+              {/* Decorative header bar */}
+              <div className={cn(
+                'h-1 rounded-full mb-2 sm:mb-3 lg:mb-4 mx-auto w-10 sm:w-12 lg:w-16 flex-shrink-0',
+                isDark ? 'bg-indigo-600' : 'bg-indigo-500'
+              )}></div>
+
+              <h3 className={cn(
+                "text-sm sm:text-base lg:text-lg font-bold mb-3 sm:mb-4 lg:mb-6 text-center flex-shrink-0",
+                isDark ? "text-white" : "text-slate-800"
+              )}>
+                Keypad
+              </h3>
+
+              {/* Keypad Grid - Responsive and Centered */}
+              <div className="flex-1 flex flex-col justify-center lg:justify-start min-h-0">
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-2 lg:gap-3 mb-2 sm:mb-3 lg:mb-4 w-full max-w-[240px] sm:max-w-xs mx-auto">
+                  {keypadButtons.map((btn) => (
+                    <button
+                      key={btn.value}
+                      onClick={() => handleKeypadClick(btn.value)}
+                      className={cn(
+                        "relative p-2 sm:p-3 lg:p-4 rounded-lg sm:rounded-xl lg:rounded-2xl font-bold transition-all duration-200 shadow-lg border-2 touch-target",
+                        "focus:outline-none focus:ring-2 focus:ring-indigo-500",
+                        "aspect-square flex flex-col items-center justify-center text-center",
+                        "active:scale-95 transform transition-transform duration-100 hover:scale-105",
+                        "min-h-[48px] sm:min-h-[56px] lg:min-h-[64px]", // Ensure minimum touch target
+                        isDark
+                          ? "bg-slate-700 hover:bg-slate-600 text-white border-slate-600 hover:border-slate-500"
+                          : "bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200 hover:border-slate-300 hover:shadow-xl"
+                      )}
+                      aria-label={`Dial ${btn.value}`}
+                    >
+                      <span className="text-base sm:text-lg lg:text-xl font-bold leading-none">{btn.label}</span>
+                      {btn.sub && (
+                        <span className={cn(
+                          "text-xs font-medium leading-none mt-0.5",
+                          isDark ? "text-slate-400" : "text-slate-500"
+                        )}>
+                          {btn.sub}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Delete Button */}
+                <div className="w-full max-w-[240px] sm:max-w-xs mx-auto">
+                  <button
+                    onClick={() => handleKeypadClick('delete')}
+                    disabled={!extension}
+                    className={cn(
+                      "w-full p-2.5 sm:p-3 lg:p-4 rounded-lg sm:rounded-xl lg:rounded-2xl font-semibold transition-all duration-200 shadow-lg border-2 touch-target",
+                      "focus:outline-none focus:ring-2 focus:ring-indigo-500",
+                      "flex items-center justify-center space-x-1.5 sm:space-x-2 text-xs sm:text-sm lg:text-base",
+                      "disabled:opacity-50 disabled:cursor-not-allowed",
+                      "active:scale-95 transform transition-transform duration-100",
+                      "min-h-[44px] sm:min-h-[48px] lg:min-h-[52px]", // Ensure minimum touch target
+                      !extension
+                        ? "bg-slate-200 text-slate-400 border-slate-100"
+                        : "bg-red-500 hover:bg-red-600 text-white border-red-400 hover:border-red-500 hover:shadow-xl"
+                    )}
+                  >
+                    <Delete className="w-3.5 sm:w-4 lg:w-5 h-3.5 sm:h-4 lg:h-5" />
+                    <span>Delete</span>
+                  </button>
+                </div>
+              </div>
             </div>
+
           </div>
         </div>
       </div>

@@ -174,9 +174,11 @@ func GetSystemStats(c *gin.Context) {
 	var totalUsers int64
 	database.GetDB().Model(&models.User{}).Count(&totalUsers)
 
-	// Count online users
+	// Count online users (users who are marked as online AND have recent activity)
 	var onlineUsers int64
-	database.GetDB().Model(&models.User{}).Where("status = ?", "online").Count(&onlineUsers)
+	// Consider users online if they have status = "online" AND is_online = true AND last_seen within last 5 minutes
+	fiveMinutesAgo := time.Now().Add(-5 * time.Minute)
+	database.GetDB().Model(&models.User{}).Where("status = ? AND is_online = ? AND last_seen > ?", "online", true, fiveMinutesAgo).Count(&onlineUsers)
 
 	// Count active calls
 	var activeCalls int64

@@ -80,13 +80,32 @@ class StatusService {
   async updateStatus(status) {
     try {
       const token = localStorage.getItem('token');
+      const user = localStorage.getItem('username');
+      const extension = localStorage.getItem('extension');
+
       if (!token) {
         console.warn('[StatusService] No authentication token found');
         throw new Error('No authentication token');
       }
 
-      console.log(`[StatusService] Updating status to: ${status}`);
+      if (!user || !extension) {
+        console.warn('[StatusService] Missing user data', { user, extension });
+        throw new Error('Missing user authentication data');
+      }
+
+      // Validate status value
+      const validStatuses = ['online', 'offline', 'busy', 'away'];
+      if (!validStatuses.includes(status)) {
+        console.error('[StatusService] Invalid status value:', status);
+        throw new Error(`Invalid status: ${status}`);
+      }
+
+      console.log(`[StatusService] Updating status to: ${status} for user: ${user} (${extension})`);
       console.log(`[StatusService] Using API URL: ${CONFIG.API_URL}`);
+      console.log(`[StatusService] Token length: ${token.length}`);
+
+      const requestBody = { status };
+      console.log(`[StatusService] Request body:`, requestBody);
 
       const response = await fetch(`${CONFIG.API_URL}/protected/status`, {
         method: 'PUT',
@@ -94,13 +113,31 @@ class StatusService {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(requestBody),
       });
 
+      console.log(`[StatusService] Response status: ${response.status}`);
+      console.log(`[StatusService] Response headers:`, Object.fromEntries(response.headers.entries()));
+
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[StatusService] HTTP error! status: ${response.status}, response: ${errorText}`);
-        throw new Error(`HTTP error! status: ${response.status}`);
+        let errorText;
+        try {
+          errorText = await response.text();
+          console.error(`[StatusService] Error response body: ${errorText}`);
+        } catch (e) {
+          errorText = 'Could not read error response';
+          console.error(`[StatusService] Could not read error response:`, e);
+        }
+
+        // Try to parse as JSON for more details
+        try {
+          const errorJson = JSON.parse(errorText);
+          console.error(`[StatusService] Parsed error:`, errorJson);
+        } catch (e) {
+          // Not JSON, that's fine
+        }
+
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
       }
 
       const data = await response.json();
@@ -116,6 +153,16 @@ class StatusService {
       return data;
     } catch (error) {
       console.error('[StatusService] Failed to update status:', error);
+
+      // If it's a 500 error, let's add some additional context
+      if (error.message.includes('500')) {
+        console.error('[StatusService] Server error detected. This might be due to:');
+        console.error('- Database connection issues');
+        console.error('- Invalid JWT token');
+        console.error('- Backend service problems');
+        console.error('- Missing user record in database');
+      }
+
       throw error;
     }
   }
@@ -175,28 +222,49 @@ class StatusService {
   initialize() {
     // Check if user is authenticated before initializing
     const token = localStorage.getItem('token');
-    if (!token) {
-      console.warn('[StatusService] Cannot initialize without authentication token');
+    const user = localStorage.getItem('username');
+    const extension = localStorage.getItem('extension');
+
+    if (!token || !user || !extension) {
+      console.warn('[StatusService] Cannot initialize without complete authentication data', {
+        hasToken: !!token,
+        hasUser: !!user,
+        hasExtension: !!extension
+      });
       return;
     }
 
-    console.log('[StatusService] Initializing status service...');
+    console.log('[StatusService] Initializing status service for user:', user, 'extension:', extension);
 
-    // Start heartbeat when service initializes
-    this.startHeartbeat();
+    // Add a small delay before starting heartbeat to ensure everything is ready
+    setTimeout(() => {
+      this.startHeartbeat();
+    }, 1000);
 
-    // Handle page visibility changes
+    // Handle page visibility changes with debouncing
+    let visibilityTimeout;
     document.addEventListener('visibilitychange', () => {
-      this.handleVisibilityChange();
+      clearTimeout(visibilityTimeout);
+      visibilityTimeout = setTimeout(() => {
+        this.handleVisibilityChange();
+      }, 500);
     });
 
-    // Handle window focus/blur
+    // Handle window focus/blur with debouncing
+    let focusTimeout;
     window.addEventListener('focus', () => {
-      this.setOnline();
+      clearTimeout(focusTimeout);
+      focusTimeout = setTimeout(() => {
+        this.setOnline();
+      }, 500);
     });
 
+    let blurTimeout;
     window.addEventListener('blur', () => {
-      this.setAway();
+      clearTimeout(blurTimeout);
+      blurTimeout = setTimeout(() => {
+        this.setAway();
+      }, 1000); // Longer delay for blur to avoid rapid status changes
     });
 
     // Handle page unload
@@ -212,10 +280,77 @@ class StatusService {
     console.log('[StatusService] Status service initialized successfully');
   }
 
+  // Test authentication and status endpoint
+  async testStatusEndpoint() {
+    try {
+      const token = localStorage.getItem('token');
+      const user = localStorage.getItem('username');
+      const extension = localStorage.getItem('extension');
+
+      console.log('[StatusService] Testing status endpoint...');
+      console.log('[StatusService] Auth data:', {
+        hasToken: !!token,
+        tokenLength: token?.length,
+        user,
+        extension
+      });
+
+      if (!token) {
+        throw new Error('No token available');
+      }
+
+      // First test the profile endpoint to verify authentication
+      const profileResponse = await fetch(`${CONFIG.API_URL}/protected/profile`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('[StatusService] Profile endpoint response:', profileResponse.status);
+
+      if (!profileResponse.ok) {
+        const profileError = await profileResponse.text();
+        console.error('[StatusService] Profile endpoint failed:', profileError);
+        throw new Error(`Profile check failed: ${profileResponse.status}`);
+      }
+
+      const profileData = await profileResponse.json();
+      console.log('[StatusService] Profile data:', profileData);
+
+      // Now test a simple status update
+      const testResponse = await fetch(`${CONFIG.API_URL}/protected/status`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: 'online' }),
+      });
+
+      console.log('[StatusService] Status test response:', testResponse.status);
+
+      if (!testResponse.ok) {
+        const statusError = await testResponse.text();
+        console.error('[StatusService] Status endpoint failed:', statusError);
+        throw new Error(`Status test failed: ${testResponse.status}`);
+      }
+
+      const statusData = await testResponse.json();
+      console.log('[StatusService] Status test successful:', statusData);
+
+      return { success: true, profile: profileData, status: statusData };
+    } catch (error) {
+      console.error('[StatusService] Endpoint test failed:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
   // Cleanup
   cleanup() {
     this.stopHeartbeat();
-    
+
     // Remove event listeners
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
     window.removeEventListener('focus', this.setOnline);
@@ -223,7 +358,7 @@ class StatusService {
     window.removeEventListener('beforeunload', this.setOffline);
     window.removeEventListener('unload', this.setOffline);
 
-    console.log('Status service cleaned up');
+    console.log('[StatusService] Status service cleaned up');
   }
 }
 

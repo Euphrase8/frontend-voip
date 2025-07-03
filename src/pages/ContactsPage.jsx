@@ -140,110 +140,141 @@ const ContactsPage = ({ darkMode = false, onCall, userID }) => {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="text-center"
-      >
-        <h2 className={cn(
-          "text-2xl font-bold mb-2",
-          isDark ? "text-white" : "text-secondary-900"
-        )}>
-          Contacts
-        </h2>
-        <p className={cn(
-          "text-sm",
-          isDark ? "text-secondary-400" : "text-secondary-600"
-        )}>
-          {filteredContacts.length} contact{filteredContacts.length !== 1 ? 's' : ''} available
-        </p>
-      </motion.div>
+      <div className="flex-shrink-0 p-4 sm:p-6 border-b border-secondary-200 dark:border-secondary-700">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <Users className={cn(
+              'w-6 h-6',
+              isDark ? 'text-primary-400' : 'text-primary-600'
+            )} />
+            <div>
+              <h1 className={cn(
+                'text-xl sm:text-2xl font-bold',
+                isDark ? 'text-white' : 'text-secondary-900'
+              )}>
+                Contacts
+              </h1>
+              <p className={cn(
+                'text-xs sm:text-sm',
+                isDark ? 'text-secondary-400' : 'text-secondary-600'
+              )}>
+                {filteredContacts.length} contact{filteredContacts.length !== 1 ? 's' : ''} available
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            disabled={loading}
+            className={cn(
+              'p-2 rounded-lg transition-colors',
+              loading && 'animate-spin',
+              isDark
+                ? 'bg-secondary-700 hover:bg-secondary-600 text-white'
+                : 'bg-secondary-100 hover:bg-secondary-200 text-secondary-700'
+            )}
+            title="Refresh contacts"
+          >
+            <PhoneCall className="w-4 h-4 sm:w-5 sm:h-5" />
+          </button>
+        </div>
+      </div>
 
       {/* Search Bar */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.2 }}
-        className="relative"
-      >
-        <Search className={cn(
-          "absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5",
-          isDark ? "text-secondary-400" : "text-secondary-500"
-        )} />
-        <input
-          type="text"
-          placeholder="Search contacts..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className={cn(
-            "w-full pl-10 pr-4 py-3 rounded-lg border transition-all duration-200",
-            "focus:ring-2 focus:ring-primary-500 focus:border-primary-500",
-            isDark
-              ? "bg-secondary-800 border-secondary-600 text-white placeholder-secondary-400"
-              : "bg-white border-secondary-300 text-secondary-900 placeholder-secondary-500"
-          )}
-        />
-      </motion.div>
+      <div className="flex-shrink-0 p-4 sm:p-6 border-b border-secondary-200 dark:border-secondary-700">
+        <div className="relative">
+          <Search className={cn(
+            "absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5",
+            isDark ? "text-secondary-400" : "text-secondary-500"
+          )} />
+          <input
+            type="text"
+            placeholder="Search contacts by name, extension, or email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className={cn(
+              "w-full pl-10 sm:pl-12 pr-4 py-2 sm:py-3 rounded-lg border transition-all duration-200",
+              "focus:ring-2 focus:ring-primary-500 focus:border-primary-500",
+              isDark
+                ? "bg-secondary-800 border-secondary-600 text-white placeholder-secondary-400"
+                : "bg-white border-secondary-300 text-secondary-900 placeholder-secondary-500"
+            )}
+          />
+        </div>
+      </div>
 
-      {/* Contacts List */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className={cn(
-          "rounded-2xl border",
-          isDark
-            ? "bg-secondary-800 border-secondary-700"
-            : "bg-white border-secondary-200"
-        )}
-      >
-        {loading ? (
-          <div className="p-8 text-center">
-            <div className="w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className={cn(
-              "text-sm",
-              isDark ? "text-secondary-400" : "text-secondary-600"
-            )}>
-              Loading contacts...
-            </p>
-          </div>
-        ) : filteredContacts.length === 0 ? (
-          <div className="p-8 text-center">
-            <Users className={cn(
-              "w-12 h-12 mx-auto mb-4",
-              isDark ? "text-secondary-500" : "text-secondary-400"
-            )} />
-            <h3 className={cn(
-              "text-lg font-medium mb-2",
-              isDark ? "text-white" : "text-secondary-900"
-            )}>
-              {searchTerm ? 'No contacts found' : 'No contacts available'}
-            </h3>
-            <p className={cn(
-              "text-sm",
-              isDark ? "text-secondary-400" : "text-secondary-600"
-            )}>
-              {searchTerm
-                ? 'Try adjusting your search terms'
-                : 'No other users are currently available'
-              }
-            </p>
-          </div>
-        ) : (
-          <div className="p-6 space-y-4 max-h-96 overflow-y-auto custom-scrollbar">
-            {filteredContacts.map((contact) => (
-              <Contact
-                key={contact.id}
-                contact={contact}
-                onCall={handleCall}
-                darkMode={darkMode}
-              />
-            ))}
-          </div>
-        )}
-      </motion.div>
+      {/* Contacts List - Scrollable */}
+      <div className="flex-1 overflow-hidden">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="h-full overflow-y-auto"
+        >
+          {loading ? (
+            <div className="flex flex-col items-center justify-center h-full text-center p-8">
+              <div className="w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full animate-spin mb-4" />
+              <h3 className={cn(
+                'text-lg font-medium mb-2',
+                isDark ? 'text-secondary-400' : 'text-secondary-600'
+              )}>
+                Loading contacts...
+              </h3>
+              <p className={cn(
+                'text-sm',
+                isDark ? 'text-secondary-500' : 'text-secondary-500'
+              )}>
+                Please wait while we fetch your contacts.
+              </p>
+            </div>
+          ) : filteredContacts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center p-8">
+              <Users className={cn(
+                "w-16 h-16 mb-4",
+                isDark ? "text-secondary-600" : "text-secondary-400"
+              )} />
+              <h3 className={cn(
+                "text-lg font-medium mb-2",
+                isDark ? "text-secondary-400" : "text-secondary-600"
+              )}>
+                {searchTerm ? 'No contacts found' : 'No contacts available'}
+              </h3>
+              <p className={cn(
+                "text-sm",
+                isDark ? "text-secondary-500" : "text-secondary-500"
+              )}>
+                {searchTerm
+                  ? 'Try adjusting your search terms or check the spelling.'
+                  : 'No other users are currently registered in the system.'
+                }
+              </p>
+            </div>
+          ) : (
+            <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
+              {filteredContacts.map((contact) => (
+                <motion.div
+                  key={contact.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: contact.id * 0.05 }}
+                  className={cn(
+                    'p-4 rounded-xl border transition-all duration-200 hover:shadow-md',
+                    isDark
+                      ? 'bg-secondary-800 border-secondary-700 hover:bg-secondary-750'
+                      : 'bg-white border-secondary-200 hover:bg-secondary-50'
+                  )}
+                >
+                  <Contact
+                    contact={contact}
+                    onCall={handleCall}
+                    darkMode={isDark}
+                  />
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+      </div>
     </div>
   );
 };
