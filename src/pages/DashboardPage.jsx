@@ -9,7 +9,7 @@ import {
   FiGrid as Grid,
   FiLogOut as LogOut,
   FiBell as Bell,
-  FiShield as Shield
+
 } from "react-icons/fi";
 import HomePage from "./HomePage";
 import SettingsPage from "./SettingsPage";
@@ -18,8 +18,8 @@ import CallLogsPage from "./CallLogsPage";
 import CallingPage from "./CallingPage";
 import IncomingCallPage from "./IncomingCallPage";
 import SettingsModal from "../components/SettingsModal";
-import NotificationsPanel from "../components/NotificationsPanel";
-import AdminCallPanel from "../components/AdminCallPanel";
+import NotificationsPage from "./NotificationsPage";
+
 import { call, hangupCall } from "../services/call";
 import webrtcCallService from "../services/webrtcCallService";
 import ConnectionStatus from "../components/ConnectionStatus";
@@ -63,6 +63,7 @@ const BottomNav = ({ currentPage, onNavigate, isDarkMode }) => {
     { id: "settings", label: "Settings", icon: Settings },
     { id: "contacts", label: "Contacts", icon: Users },
     { id: "calllogs", label: "Call Logs", icon: Clock },
+    { id: "notifications", label: "Notifications", icon: Bell },
   ];
 
   return (
@@ -119,8 +120,8 @@ const DashboardPage = ({ user, onLogout, darkMode, setIncomingCall }) => {
   const [notification, setNotification] = useState(null);
   const [incomingCall, setLocalIncomingCall] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [showAdminCall, setShowAdminCall] = useState(false);
+
+
   const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
@@ -376,12 +377,14 @@ const DashboardPage = ({ user, onLogout, darkMode, setIncomingCall }) => {
           {/* Right Section */}
           <div className="flex items-center space-x-2">
             <button
-              onClick={() => setShowNotifications(true)}
+              onClick={() => setCurrentPage("notifications")}
               className={cn(
                 "p-2 rounded-lg transition-colors relative",
-                isDarkMode
-                  ? "hover:bg-secondary-800 text-secondary-400 hover:text-white"
-                  : "hover:bg-secondary-100 text-secondary-600 hover:text-secondary-900"
+                currentPage === "notifications"
+                  ? "bg-primary-100 text-primary-600"
+                  : isDarkMode
+                    ? "hover:bg-secondary-800 text-secondary-400 hover:text-white"
+                    : "hover:bg-secondary-100 text-secondary-600 hover:text-secondary-900"
               )}
               title="Notifications & Logs"
             >
@@ -452,10 +455,7 @@ const DashboardPage = ({ user, onLogout, darkMode, setIncomingCall }) => {
               { id: "settings", label: "Settings", icon: Settings },
               { id: "contacts", label: "Contacts", icon: Users },
               { id: "calllogs", label: "Call Logs", icon: Clock },
-              ...(user?.role === 'admin' ? [
-                { id: "admin", label: "Admin Panel", icon: Shield },
-                { id: "admin-call", label: "Admin Call", icon: Phone, action: () => setShowAdminCall(true) }
-              ] : []),
+              { id: "notifications", label: "Notifications", icon: Bell },
             ].map((item) => {
               const Icon = item.icon;
               const isActive = currentPage === item.id;
@@ -463,15 +463,7 @@ const DashboardPage = ({ user, onLogout, darkMode, setIncomingCall }) => {
               return (
                 <motion.button
                   key={item.id}
-                  onClick={() => {
-                    if (item.action) {
-                      item.action();
-                    } else if (item.id === 'admin') {
-                      navigate('/admin');
-                    } else {
-                      setCurrentPage(item.id);
-                    }
-                  }}
+                  onClick={() => setCurrentPage(item.id)}
                   whileHover={{ x: 2 }}
                   whileTap={{ scale: 0.98 }}
                   className={cn(
@@ -599,6 +591,16 @@ const DashboardPage = ({ user, onLogout, darkMode, setIncomingCall }) => {
                   </div>
                 </div>
               )}
+              {currentPage === "notifications" && (
+                <div className={cn(
+                  "h-full rounded-xl border",
+                  isDarkMode
+                    ? "bg-secondary-800 border-secondary-700"
+                    : "bg-white border-secondary-200"
+                )}>
+                  <NotificationsPage darkMode={isDarkMode} user={user} />
+                </div>
+              )}
               {currentPage === "calling" && activeCallContact && (
                 <CallingPage
                   contact={activeCallContact}
@@ -623,22 +625,9 @@ const DashboardPage = ({ user, onLogout, darkMode, setIncomingCall }) => {
         darkMode={isDarkMode}
       />
 
-      {/* Notifications Panel */}
-      <NotificationsPanel
-        isOpen={showNotifications}
-        onClose={() => setShowNotifications(false)}
-        darkMode={isDarkMode}
-      />
 
-      {/* Admin Call Panel */}
-      {user?.role === 'admin' && (
-        <AdminCallPanel
-          isOpen={showAdminCall}
-          onClose={() => setShowAdminCall(false)}
-          darkMode={isDarkMode}
-          currentUser={user}
-        />
-      )}
+
+
 
       {/* Connection Status Monitor */}
       <ConnectionStatus />

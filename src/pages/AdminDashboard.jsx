@@ -16,13 +16,17 @@ import {
   FiTrendingUp as TrendingUp,
   FiShield as Shield,
   FiDatabase as Database,
-  FiWifi as Wifi
+  FiWifi as Wifi,
+  FiBell as Bell
 } from 'react-icons/fi';
 import { useTheme } from '../contexts/ThemeContext';
 import { cn, formatDate, formatDuration, getStatusColor } from '../utils/ui';
 import toast from 'react-hot-toast';
 import adminService from '../services/adminService';
 import CONFIG from '../services/config';
+import AdminCallPanel from '../components/AdminCallPanel';
+import NotificationsPage from './NotificationsPage';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 // StatCard Component
 const StatCard = ({ title, value, icon: Icon, color = 'primary', trend }) => {
@@ -83,12 +87,15 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [systemStatus, setSystemStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showAdminCall, setShowAdminCall] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState({ show: false, user: null, loading: false });
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Activity },
     { id: 'users', label: 'User Management', icon: Users },
     { id: 'calls', label: 'Call Logs', icon: Phone },
     { id: 'system', label: 'System Status', icon: Wifi },
+    { id: 'notifications', label: 'Notifications & Logs', icon: Bell },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
@@ -172,24 +179,55 @@ const AdminDashboard = ({ user, onLogout }) => {
     }
   };
 
-  const deleteUser = async (userId) => {
-    if (!window.confirm('Are you sure you want to delete this user?')) {
+  const showDeleteConfirmation = (user) => {
+    setDeleteConfirmation({ show: true, user, loading: false });
+  };
+
+  const hideDeleteConfirmation = () => {
+    setDeleteConfirmation({ show: false, user: null, loading: false });
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!deleteConfirmation.user) return;
+
+    setDeleteConfirmation(prev => ({ ...prev, loading: true }));
+
+    try {
+      const result = await adminService.deleteUser(deleteConfirmation.user.id);
+
+      if (result.success) {
+        toast.success(`User "${deleteConfirmation.user.username}" deleted successfully`);
+        loadUsers();
+        loadStats();
+        hideDeleteConfirmation();
+      } else {
+        toast.error(result.error || 'Failed to delete user');
+        setDeleteConfirmation(prev => ({ ...prev, loading: false }));
+      }
+    } catch (error) {
+      console.error('Failed to delete user:', error);
+      toast.error(`Failed to delete user: ${error.message}`);
+      setDeleteConfirmation(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  const deleteCallLog = async (logId) => {
+    if (!window.confirm('Are you sure you want to delete this call log?')) {
       return;
     }
 
     try {
-      const result = await adminService.deleteUser(userId);
+      const result = await adminService.deleteCallLog(logId);
 
       if (result.success) {
-        toast.success('User deleted successfully');
-        loadUsers();
-        loadStats();
+        toast.success('Call log deleted successfully');
+        loadCallLogs(); // Refresh call logs without full page reload
       } else {
-        toast.error(result.error || 'Failed to delete user');
+        toast.error(result.error || 'Failed to delete call log');
       }
     } catch (error) {
-      console.error('Failed to delete user:', error);
-      toast.error('Failed to delete user');
+      console.error('Failed to delete call log:', error);
+      toast.error('Failed to delete call log');
     }
   };
 
@@ -246,13 +284,20 @@ const AdminDashboard = ({ user, onLogout }) => {
           </div>
           <div className="flex items-center space-x-3">
             <button
+              onClick={() => setShowAdminCall(true)}
+              className="btn-primary flex items-center space-x-2"
+            >
+              <Phone className="w-4 h-4" />
+              <span>Admin Call</span>
+            </button>
+            <button
               onClick={loadDashboardData}
               disabled={refreshing}
               className={cn(
                 'p-2 rounded-lg transition-colors',
                 refreshing && 'animate-spin',
-                darkMode 
-                  ? 'bg-secondary-700 hover:bg-secondary-600 text-white' 
+                darkMode
+                  ? 'bg-secondary-700 hover:bg-secondary-600 text-white'
                   : 'bg-secondary-100 hover:bg-secondary-200 text-secondary-700'
               )}
             >
@@ -308,18 +353,47 @@ const AdminDashboard = ({ user, onLogout }) => {
           <OverviewTab stats={stats} darkMode={darkMode} />
         )}
         {activeTab === 'users' && (
-          <UsersTab users={users} onDeleteUser={deleteUser} darkMode={darkMode} />
+          <UsersTab users={users} onDeleteUser={showDeleteConfirmation} darkMode={darkMode} />
         )}
         {activeTab === 'calls' && (
-          <CallLogsTab callLogs={callLogs} darkMode={darkMode} />
+          <CallLogsTab callLogs={callLogs} onDeleteCallLog={deleteCallLog} darkMode={darkMode} />
         )}
         {activeTab === 'system' && (
           <SystemTab systemStatus={systemStatus} darkMode={darkMode} />
+        )}
+        {activeTab === 'notifications' && (
+          <NotificationsPage darkMode={darkMode} user={user} />
         )}
         {activeTab === 'settings' && (
           <SettingsTab darkMode={darkMode} />
         )}
       </div>
+
+      {/* Admin Call Panel */}
+      <AdminCallPanel
+        isOpen={showAdminCall}
+        onClose={() => setShowAdminCall(false)}
+        darkMode={darkMode}
+        currentUser={user}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={deleteConfirmation.show}
+        onClose={hideDeleteConfirmation}
+        onConfirm={confirmDeleteUser}
+        title="Delete User"
+        message={
+          deleteConfirmation.user
+            ? `Are you sure you want to delete the user "${deleteConfirmation.user.username}"? This action cannot be undone and will permanently remove all user data including call logs and settings.`
+            : "Are you sure you want to delete this user?"
+        }
+        confirmText="Delete User"
+        cancelText="Cancel"
+        type="danger"
+        loading={deleteConfirmation.loading}
+        darkMode={darkMode}
+      />
     </div>
   );
 };
@@ -597,8 +671,9 @@ const UsersTab = ({ users, onDeleteUser, darkMode }) => {
                   <td className="py-3 px-4 text-right">
                     {user.role !== 'admin' && (
                       <button
-                        onClick={() => onDeleteUser(user.id)}
+                        onClick={() => onDeleteUser(user)}
                         className="p-2 text-danger-600 hover:bg-danger-50 rounded-lg transition-colors"
+                        title={`Delete user ${user.username}`}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -615,7 +690,7 @@ const UsersTab = ({ users, onDeleteUser, darkMode }) => {
 };
 
 // Call Logs Tab Component
-const CallLogsTab = ({ callLogs, darkMode }) => {
+const CallLogsTab = ({ callLogs, onDeleteCallLog, darkMode }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
 
@@ -627,33 +702,6 @@ const CallLogsTab = ({ callLogs, darkMode }) => {
     const matchesStatus = filterStatus === 'all' || log.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
-
-  const deleteCallLog = async (logId) => {
-    if (!window.confirm('Are you sure you want to delete this call log?')) {
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/protected/admin/call-logs/${logId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        toast.success('Call log deleted successfully');
-        // Refresh call logs
-        window.location.reload();
-      } else {
-        toast.error('Failed to delete call log');
-      }
-    } catch (error) {
-      console.error('Failed to delete call log:', error);
-      toast.error('Failed to delete call log');
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -791,7 +839,7 @@ const CallLogsTab = ({ callLogs, darkMode }) => {
                   </td>
                   <td className="py-3 px-4 text-right">
                     <button
-                      onClick={() => deleteCallLog(log.id)}
+                      onClick={() => onDeleteCallLog(log.id)}
                       className="p-2 text-danger-600 hover:bg-danger-50 rounded-lg transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />

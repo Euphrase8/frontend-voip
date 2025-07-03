@@ -70,9 +70,10 @@ class AdminService {
           email: user.email || user.Email,
           extension: user.extension || user.Extension,
           role: user.role || user.Role,
-          status: user.status || user.Status || 'offline',
+          status: this.determineUserStatus(user),
           created_at: user.created_at || user.CreatedAt,
-          last_login: user.last_login || user.LastLogin
+          last_login: user.last_login || user.LastLogin,
+          is_online: user.is_online || user.IsOnline || false
         }))
       };
     } catch (error) {
@@ -85,6 +86,31 @@ class AdminService {
     }
   }
 
+  // Determine user status based on various factors
+  determineUserStatus(user) {
+    // Check if user is explicitly marked as online
+    if (user.is_online || user.IsOnline) {
+      return 'online';
+    }
+
+    // Check last login time (if within last 5 minutes, consider online)
+    const lastLogin = user.last_login || user.LastLogin;
+    if (lastLogin) {
+      const lastLoginTime = new Date(lastLogin);
+      const now = new Date();
+      const diffMinutes = (now - lastLoginTime) / (1000 * 60);
+
+      if (diffMinutes <= 5) {
+        return 'online';
+      } else if (diffMinutes <= 30) {
+        return 'away';
+      }
+    }
+
+    // Default to offline
+    return 'offline';
+  }
+
   // Delete user
   async deleteUser(userId) {
     try {
@@ -94,14 +120,44 @@ class AdminService {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        let errorMessage = `HTTP error! status: ${response.status}`;
+
+        // Try to get more specific error message from response
+        try {
+          const errorData = await response.json();
+          if (errorData.error) {
+            errorMessage = errorData.error;
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          }
+        } catch (parseError) {
+          // If we can't parse the error response, use the status code
+          if (response.status === 404) {
+            errorMessage = 'User not found';
+          } else if (response.status === 403) {
+            errorMessage = 'Permission denied';
+          } else if (response.status === 500) {
+            errorMessage = 'Server error occurred';
+          }
+        }
+
+        return {
+          success: false,
+          error: errorMessage
+        };
       }
 
       const data = await response.json();
-      return data;
+      return {
+        success: true,
+        ...data
+      };
     } catch (error) {
       console.error('Failed to delete user:', error);
-      throw error;
+      return {
+        success: false,
+        error: error.message || 'Network error occurred'
+      };
     }
   }
 

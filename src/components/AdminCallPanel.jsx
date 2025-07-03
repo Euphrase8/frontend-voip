@@ -12,7 +12,7 @@ import {
   FiRefreshCw as Refresh
 } from 'react-icons/fi';
 import { cn } from '../utils/ui';
-import { call } from '../services/call';
+
 import adminService from '../services/adminService';
 import notificationService from '../utils/notificationService';
 import toast from 'react-hot-toast';
@@ -79,27 +79,37 @@ const AdminCallPanel = ({ isOpen, onClose, darkMode, currentUser }) => {
       return;
     }
 
+    if (!currentUser?.extension) {
+      toast.error('Admin user has no extension assigned');
+      return;
+    }
+
     try {
       setCalling(targetUser.id);
-      
+
       notificationService.addNotification(
         'info',
         'Admin Call Initiated',
         `Calling ${targetUser.username} (${targetUser.extension})...`
       );
 
-      const result = await call(targetUser.extension);
-      
-      notificationService.callConnected(targetUser.extension);
-      toast.success(`Call initiated to ${targetUser.username}`);
-      
-      // Close panel after successful call
-      setTimeout(() => {
-        onClose();
-      }, 1000);
-      
+      // Use admin call method with both caller and target extensions
+      const result = await adminService.adminCall(targetUser.extension, currentUser.extension);
+
+      if (result.success) {
+        notificationService.callConnected(targetUser.extension);
+        toast.success(`Call initiated to ${targetUser.username}`);
+
+        // Close panel after successful call
+        setTimeout(() => {
+          onClose();
+        }, 1000);
+      } else {
+        throw new Error(result.error || 'Admin call failed');
+      }
+
     } catch (error) {
-      console.error('Call failed:', error);
+      console.error('Admin call failed:', error);
       notificationService.callFailed(targetUser.extension, error.message);
       toast.error(`Failed to call ${targetUser.username}: ${error.message}`);
     } finally {
