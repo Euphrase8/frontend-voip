@@ -533,3 +533,180 @@ func initiateWebRTCCall(c *gin.Context, userID uint, username, extension string,
 		"priority": "1",
 	})
 }
+
+// DeleteCallLog deletes a specific call log (admin only)
+func DeleteCallLog(c *gin.Context) {
+	logID := c.Param("id")
+	if logID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Call log ID parameter required",
+		})
+		return
+	}
+
+	// Check if call log exists
+	var callLog models.CallLog
+	if err := database.GetDB().First(&callLog, logID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Call log not found",
+		})
+		return
+	}
+
+	// Delete call log
+	if err := database.GetDB().Delete(&callLog).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to delete call log",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Call log deleted successfully",
+	})
+}
+
+// BulkDeleteCallLogs deletes multiple call logs (admin only)
+func BulkDeleteCallLogs(c *gin.Context) {
+	var req struct {
+		LogIDs []uint `json:"log_ids" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request format: " + err.Error(),
+		})
+		return
+	}
+
+	if len(req.LogIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "No log IDs provided",
+		})
+		return
+	}
+
+	// Delete call logs
+	result := database.GetDB().Where("id IN ?", req.LogIDs).Delete(&models.CallLog{})
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to delete call logs",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":       true,
+		"message":       fmt.Sprintf("Successfully deleted %d call logs", result.RowsAffected),
+		"deleted_count": result.RowsAffected,
+	})
+}
+
+// ExportCallLogs exports call logs in various formats (admin only)
+func ExportCallLogs(c *gin.Context) {
+	format := c.DefaultQuery("format", "csv")
+
+	// Get all call logs with user information
+	var callLogs []models.CallLog
+	if err := database.GetDB().Preload("Caller").Preload("Callee").Order("created_at DESC").Find(&callLogs).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to fetch call logs",
+		})
+		return
+	}
+
+	switch format {
+	case "csv":
+		exportCallLogsCSV(c, callLogs)
+	case "json":
+		exportCallLogsJSON(c, callLogs)
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Unsupported format. Use 'csv' or 'json'",
+		})
+	}
+}
+
+// exportCallLogsCSV exports call logs as CSV
+func exportCallLogsCSV(c *gin.Context, callLogs []models.CallLog) {
+	c.Header("Content-Type", "text/csv")
+	c.Header("Content-Disposition", "attachment; filename=call-logs.csv")
+
+	// Write CSV header
+	csvData := "ID,Caller,Caller Extension,Callee,Callee Extension,Start Time,End Time,Duration,Status,Direction,Channel\n"
+
+	// Write data rows
+	for _, log := range callLogs {
+		endTime := ""
+		if log.EndTime != nil {
+			endTime = log.EndTime.Format("2006-01-02 15:04:05")
+		}
+
+		csvData += fmt.Sprintf("%d,%s,%s,%s,%s,%s,%s,%d,%s,%s,%s\n",
+			log.ID,
+			log.Caller.Username,
+			log.Caller.Extension,
+			log.Callee.Username,
+			log.Callee.Extension,
+			log.StartTime.Format("2006-01-02 15:04:05"),
+			endTime,
+			log.Duration,
+			log.Status,
+			log.Direction,
+			log.Channel,
+		)
+	}
+
+	c.String(http.StatusOK, csvData)
+}
+
+// exportCallLogsJSON exports call logs as JSON
+func exportCallLogsJSON(c *gin.Context, callLogs []models.CallLog) {
+	c.Header("Content-Type", "application/json")
+	c.Header("Content-Disposition", "attachment; filename=call-logs.json")
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":     true,
+		"call_logs":   callLogs,
+		"exported_at": time.Now().Format(time.RFC3339),
+	})
+}
+
+// GetRealTimeMetrics returns real-time system metrics (admin only)
+func GetRealTimeMetrics(c *gin.Context) {
+	// Get current statistics
+	var totalUsers, onlineUsers, activeCalls, callsToday int64
+
+	database.GetDB().Model(&models.User{}).Count(&totalUsers)
+	database.GetDB().Model(&models.User{}).Where("status = ?", "online").Count(&onlineUsers)
+	database.GetDB().Model(&models.ActiveCall{}).Count(&activeCalls)
+	database.GetDB().Model(&models.CallLog{}).Where("DATE(created_at) = DATE(NOW())").Count(&callsToday)
+
+	// Get WebSocket connections
+	hub := websocket.GetHub()
+	wsConnections := 0
+	connectedExtensions := []string{}
+	if hub != nil {
+		wsConnections = hub.GetClientCount()
+		connectedExtensions = hub.GetConnectedExtensions()
+	}
+
+	// Get recent call activity (last 10 calls)
+	var recentCalls []models.CallLog
+	database.GetDB().Preload("Caller").Preload("Callee").Order("created_at DESC").Limit(10).Find(&recentCalls)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":   true,
+		"timestamp": time.Now().Format(time.RFC3339),
+		"metrics": gin.H{
+			"total_users":          totalUsers,
+			"online_users":         onlineUsers,
+			"active_calls":         activeCalls,
+			"calls_today":          callsToday,
+			"ws_connections":       wsConnections,
+			"connected_extensions": connectedExtensions,
+		},
+		"recent_calls": recentCalls,
+	})
+}

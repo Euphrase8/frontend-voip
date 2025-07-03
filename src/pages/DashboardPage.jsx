@@ -1,23 +1,31 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { motion } from "framer-motion";
 import {
-  Phone,
-  Favorite,
-  Contacts,
-  History,
-} from "@mui/icons-material";
+  FiPhone as Phone,
+  FiSettings as Settings,
+  FiUsers as Users,
+  FiClock as Clock,
+  FiGrid as Grid,
+  FiLogOut as LogOut,
+  FiBell as Bell,
+  FiShield as Shield
+} from "react-icons/fi";
 import HomePage from "./HomePage";
-import FavoritesPage from "./FavouritesPage";
+import SettingsPage from "./SettingsPage";
 import ContactsPage from "./ContactsPage";
 import CallLogsPage from "./CallLogsPage";
 import CallingPage from "./CallingPage";
 import IncomingCallPage from "./IncomingCallPage";
-import VoipPhone from "../components/VoipPhone";
-import Sidebar from "../components/sidebar";
-import TopNav from "../components/TopNav";
-import { call, answerCall, hangupCall } from "../services/call";
+import SettingsModal from "../components/SettingsModal";
+import NotificationsPanel from "../components/NotificationsPanel";
+import AdminCallPanel from "../components/AdminCallPanel";
+import { call, hangupCall } from "../services/call";
 import webrtcCallService from "../services/webrtcCallService";
 import ConnectionStatus from "../components/ConnectionStatus";
+import { useTheme } from "../contexts/ThemeContext";
+import notificationService from "../utils/notificationService";
+import { cn } from "../utils/ui";
 
 const initialContacts = [
   {
@@ -49,43 +57,93 @@ const initialContacts = [
   },
 ];
 
-const BottomNav = ({ currentPage, onNavigate }) => {
+const BottomNav = ({ currentPage, onNavigate, isDarkMode }) => {
   const navItems = [
-    { id: "keypad", label: "Keypad", icon: <Phone /> },
-    { id: "favorites", label: "Favorites", icon: <Favorite /> },
-    { id: "contacts", label: "Contacts", icon: <Contacts /> },
-    { id: "calllogs", label: "Call Logs", icon: <History /> },
+    { id: "keypad", label: "Keypad", icon: Phone },
+    { id: "settings", label: "Settings", icon: Settings },
+    { id: "contacts", label: "Contacts", icon: Users },
+    { id: "calllogs", label: "Call Logs", icon: Clock },
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 p-2 flex justify-between bg-gray-800/80 shadow-2xl md:hidden z-40">
-      {navItems.map((item) => (
-        <button
-          key={item.id}
-          onClick={() => onNavigate(item.id)}
-          className={`p-3 flex flex-col items-center rounded-lg transition-all ${
-            currentPage === item.id
-              ? "text-white bg-blue-500/30"
-              : "text-gray-400 hover:text-white"
-          }`}
-        >
-          {item.icon}
-          <span className="text-xs">{item.label}</span>
-        </button>
-      ))}
-    </div>
+    <motion.div
+      initial={{ y: 100 }}
+      animate={{ y: 0 }}
+      className={cn(
+        "fixed bottom-0 left-0 right-0 lg:hidden z-40 safe-area-bottom",
+        "border-t",
+        isDarkMode
+          ? "bg-secondary-900 border-secondary-700"
+          : "bg-white border-secondary-200"
+      )}
+    >
+      <div className="flex justify-around items-center py-2 px-2 pb-safe">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = currentPage === item.id;
+
+          return (
+            <motion.button
+              key={item.id}
+              onClick={() => onNavigate(item.id)}
+              whileTap={{ scale: 0.95 }}
+              className={cn(
+                "flex flex-col items-center p-2 rounded-lg transition-all duration-200 min-w-0 flex-1",
+                isActive
+                  ? cn(
+                      "bg-primary-500 text-white",
+                      isDarkMode && "bg-primary-600"
+                    )
+                  : cn(
+                      "text-secondary-500 hover:text-primary-600 hover:bg-primary-50",
+                      isDarkMode && "text-secondary-400 hover:text-primary-400 hover:bg-secondary-800"
+                    )
+              )}
+            >
+              <Icon className="w-4 h-4 mb-1 flex-shrink-0" />
+              <span className="text-xs font-medium truncate">{item.label}</span>
+            </motion.button>
+          );
+        })}
+      </div>
+    </motion.div>
   );
 };
 
-const DashboardPage = ({ user, onLogout, darkMode, toggleDarkMode, setIncomingCall }) => {
+const DashboardPage = ({ user, onLogout, darkMode, setIncomingCall }) => {
+  const { darkMode: themeDarkMode, toggleDarkMode } = useTheme();
   const [contacts, setContacts] = useState(initialContacts);
   const [callStatus, setCallStatus] = useState(null);
   const [activeCallContact, setActiveCallContact] = useState(null);
   const [currentPage, setCurrentPage] = useState("keypad");
   const [notification, setNotification] = useState(null);
   const [incomingCall, setLocalIncomingCall] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showAdminCall, setShowAdminCall] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Use theme context dark mode if available, fallback to prop
+  const isDarkMode = themeDarkMode !== undefined ? themeDarkMode : darkMode;
+
+  // Update unread notification count
+  useEffect(() => {
+    const updateUnreadCount = () => {
+      setUnreadCount(notificationService.getUnreadCount());
+    };
+
+    // Initial count
+    updateUnreadCount();
+
+    // Listen for changes
+    const unsubscribe = notificationService.addListener(() => {
+      updateUnreadCount();
+    });
+
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     if (location.state?.success) {
@@ -155,8 +213,20 @@ const DashboardPage = ({ user, onLogout, darkMode, toggleDarkMode, setIncomingCa
     setActiveCallContact(contact);
     try {
       setCallStatus(`Initiating call to ${contact.name}...`);
-      const { message, priority, channel } = await call(contact.extension);
+
+      // Add notification for call attempt
+      notificationService.addNotification(
+        'info',
+        'Initiating Call',
+        `Calling ${contact.name || contact.extension}...`
+      );
+
+      const { channel } = await call(contact.extension);
       setCallStatus("Connected");
+
+      // Add notification for successful connection
+      notificationService.callConnected(contact.extension);
+
       setCurrentPage("calling");
       navigate("/calling", {
         state: {
@@ -169,6 +239,10 @@ const DashboardPage = ({ user, onLogout, darkMode, toggleDarkMode, setIncomingCa
     } catch (error) {
       console.error("[Dashboard] Call error:", error);
       setCallStatus("Call failed");
+
+      // Add notification for call failure
+      notificationService.callFailed(contact.extension, error.message);
+
       setTimeout(() => {
         setCallStatus(null);
         setActiveCallContact(null);
@@ -181,9 +255,19 @@ const DashboardPage = ({ user, onLogout, darkMode, toggleDarkMode, setIncomingCa
     if (activeCallContact && callStatus) {
       try {
         await hangupCall(`PJSIP/${activeCallContact.extension}`);
+
+        // Add notification for call ended
+        notificationService.callEnded(activeCallContact.extension, 'Unknown duration');
       } catch (error) {
         console.error("[Dashboard] End call error:", error);
         setNotification({ message: "Failed to end call", type: "error" });
+
+        // Add notification for end call failure
+        notificationService.addNotification(
+          'error',
+          'End Call Failed',
+          `Failed to end call with ${activeCallContact.extension}: ${error.message}`
+        );
       }
     }
     setCallStatus(null);
@@ -192,13 +276,7 @@ const DashboardPage = ({ user, onLogout, darkMode, toggleDarkMode, setIncomingCa
     navigate("/dashboard");
   };
 
-  const toggleFavorite = (contactId) => {
-    setContacts((prev) =>
-      prev.map((c) =>
-        c.id === contactId ? { ...c, isFavorite: !c.isFavorite } : c
-      )
-    );
-  };
+
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -213,80 +291,15 @@ const DashboardPage = ({ user, onLogout, darkMode, toggleDarkMode, setIncomingCa
     }, 1000);
   };
 
-  const handleAcceptCall = async () => {
-    if (!incomingCall) return;
-    try {
-      setCallStatus(`Connecting to ${incomingCall.caller}...`);
-      const { message } = await answerCall(incomingCall.channel);
-      setCallStatus("Connected");
-      setActiveCallContact({
-        name: `Caller ${incomingCall.caller}`,
-        extension: incomingCall.caller,
-      });
-      setCurrentPage("calling");
-      navigate("/calling", {
-        state: {
-          contact: {
-            name: `Caller ${incomingCall.caller}`,
-            extension: incomingCall.caller,
-          },
-          callStatus: "Connected",
-          isOutgoing: false,
-          channel: incomingCall.channel,
-        },
-      });
-    } catch (error) {
-      console.error("[Dashboard] Accept call error:", error);
-      setNotification({ message: error.message || "Failed to accept call", type: "error" });
-    }
-    setLocalIncomingCall(null);
-    setIncomingCall(null);
-  };
 
-  const handleDeclineCall = async () => {
-    if (!incomingCall) return;
-    try {
-      await hangupCall(incomingCall.channel);
-      setNotification({
-        message: `Declined call from ${incomingCall.caller}`,
-        type: "info",
-      });
-    } catch (error) {
-      console.error("[Dashboard] Decline call error:", error);
-      setNotification({ message: "Failed to decline call", type: "error" });
-    }
-    setLocalIncomingCall(null);
-    setIncomingCall(null);
-  };
 
   return (
-    <div
-      className={`relative w-full min-h-screen ${
-        darkMode ? "bg-gray-900 text-white" : "bg-gradient-to-br from-blue-700 via-indigo-700 to-purple-700 text-black"
-      } overflow-hidden`}
-    >
-      {/* Animated Background Dots */}
-      <div className="absolute inset-0 opacity-10 pointer-events-none">
-        <div className="absolute w-3 h-3 bg-blue-400 rounded-full animate-pulse" style={{ top: "20%", left: "30%" }} />
-        <div className="absolute w-2 h-2 bg-purple-400 rounded-full animate-pulse delay-1000" style={{ top: "40%", right: "25%" }} />
-        <div className="absolute w-4 h-4 bg-indigo-400 rounded-full animate-pulse delay-2000" style={{ bottom: "15%", left: "45%" }} />
-      </div>
-
-      {/* Notification */}
-      {notification && (
-        <div
-          className={`fixed top-16 right-4 z-50 p-3 rounded-lg shadow-lg ${
-            notification.type === "success"
-              ? "bg-green-500/80"
-              : notification.type === "error"
-              ? "bg-red-500/80"
-              : "bg-blue-500/80"
-          }`}
-        >
-          <span className="text-sm font-medium">{notification.message}</span>
-        </div>
-      )}
-
+    <div className={cn(
+      "h-screen w-screen overflow-hidden flex flex-col",
+      isDarkMode
+        ? "bg-secondary-900"
+        : "bg-slate-50"
+    )}>
       {/* Incoming Call UI */}
       {incomingCall && (
         <IncomingCallPage
@@ -310,105 +323,322 @@ const DashboardPage = ({ user, onLogout, darkMode, toggleDarkMode, setIncomingCa
         />
       )}
 
-      {/* Header & Sidebar */}
-      <TopNav
-        username={user?.username || "Guest"}
-        extension={user?.extension}
-        callStatus={callStatus}
-        onLogout={handleLogout}
-        darkMode={darkMode}
-        toggleDarkMode={toggleDarkMode}
-      />
-      <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} darkMode={darkMode} />
+      {/* Fixed Header */}
+      <motion.header
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className={cn(
+          "flex-shrink-0 z-30 border-b",
+          isDarkMode
+            ? "bg-secondary-900 border-secondary-700"
+            : "bg-white border-secondary-200"
+        )}
+      >
+        <div className="flex items-center justify-between px-4 lg:px-6 py-3 h-16">
+          {/* Left Section */}
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-primary-500 rounded-lg flex items-center justify-center">
+              <Phone className="w-4 h-4 text-white" />
+            </div>
+            <div className="hidden sm:block">
+              <h1 className={cn(
+                "text-lg font-semibold",
+                isDarkMode ? "text-white" : "text-secondary-900"
+              )}>
+                VoIP Dashboard
+              </h1>
+              <p className={cn(
+                "text-xs",
+                isDarkMode ? "text-secondary-400" : "text-secondary-600"
+              )}>
+                {user?.username} (Ext: {user?.extension})
+              </p>
+            </div>
+          </div>
 
-      {/* Incoming Call Modal */}
-      {incomingCall && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl max-w-sm w-full mx-4">
-            <div className="text-center">
-              <div className="mb-4">
-                <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-2">
-                  <Phone className="w-8 h-8 text-white" />
+          {/* Center Section - Call Status */}
+          {callStatus && (
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              className={cn(
+                "hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium",
+                callStatus.includes("Connected")
+                  ? "bg-success-100 text-success-700"
+                  : "bg-warning-100 text-warning-700"
+              )}
+            >
+              <div className="w-1.5 h-1.5 bg-current rounded-full animate-pulse" />
+              <span>{callStatus}</span>
+            </motion.div>
+          )}
+
+          {/* Right Section */}
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setShowNotifications(true)}
+              className={cn(
+                "p-2 rounded-lg transition-colors relative",
+                isDarkMode
+                  ? "hover:bg-secondary-800 text-secondary-400 hover:text-white"
+                  : "hover:bg-secondary-100 text-secondary-600 hover:text-secondary-900"
+              )}
+              title="Notifications & Logs"
+            >
+              <Bell className="w-4 h-4" />
+              {/* Notification badge */}
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-danger-500 text-white text-xs rounded-full flex items-center justify-center px-1">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setShowSettings(true)}
+              className={cn(
+                "p-2 rounded-lg transition-colors",
+                isDarkMode
+                  ? "hover:bg-secondary-800 text-secondary-400 hover:text-white"
+                  : "hover:bg-secondary-100 text-secondary-600 hover:text-secondary-900"
+              )}
+              title="Settings"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleLogout}
+              className="p-2 rounded-lg transition-colors text-danger-600 hover:bg-danger-50"
+              title="Logout"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </motion.header>
+
+      {/* Notification Display */}
+      {notification && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          className={cn(
+            "fixed top-20 right-4 z-50 p-4 rounded-lg shadow-lg max-w-sm",
+            notification.type === 'success' ? 'bg-success-500 text-white' :
+            notification.type === 'error' ? 'bg-danger-500 text-white' :
+            'bg-primary-500 text-white'
+          )}
+        >
+          <p className="text-sm font-medium">{notification.message}</p>
+        </motion.div>
+      )}
+
+      {/* Main Content Area */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Fixed Sidebar */}
+        <motion.aside
+          initial={{ x: -20, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          className={cn(
+            "hidden lg:flex flex-col w-64 border-r flex-shrink-0",
+            isDarkMode
+              ? "bg-secondary-900 border-secondary-700"
+              : "bg-white border-secondary-200"
+          )}
+        >
+          <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+            {[
+              { id: "keypad", label: "Keypad", icon: Grid },
+              { id: "settings", label: "Settings", icon: Settings },
+              { id: "contacts", label: "Contacts", icon: Users },
+              { id: "calllogs", label: "Call Logs", icon: Clock },
+              ...(user?.role === 'admin' ? [
+                { id: "admin", label: "Admin Panel", icon: Shield },
+                { id: "admin-call", label: "Admin Call", icon: Phone, action: () => setShowAdminCall(true) }
+              ] : []),
+            ].map((item) => {
+              const Icon = item.icon;
+              const isActive = currentPage === item.id;
+
+              return (
+                <motion.button
+                  key={item.id}
+                  onClick={() => {
+                    if (item.action) {
+                      item.action();
+                    } else if (item.id === 'admin') {
+                      navigate('/admin');
+                    } else {
+                      setCurrentPage(item.id);
+                    }
+                  }}
+                  whileHover={{ x: 2 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={cn(
+                    "w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200 text-left text-sm",
+                    isActive
+                      ? cn(
+                          "bg-primary-500 text-white shadow-md",
+                          isDarkMode && "bg-primary-600"
+                        )
+                      : cn(
+                          "text-secondary-600 hover:text-primary-600 hover:bg-primary-50",
+                          isDarkMode && "text-secondary-400 hover:text-primary-400 hover:bg-secondary-800"
+                        )
+                  )}
+                >
+                  <Icon className="w-4 h-4 flex-shrink-0" />
+                  <span className="font-medium">{item.label}</span>
+                </motion.button>
+              );
+            })}
+          </nav>
+        </motion.aside>
+
+        {/* Incoming Call Modal */}
+        {incomingCall && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl max-w-sm w-full mx-4">
+              <div className="text-center">
+                <div className="mb-4">
+                  <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                    <Phone className="w-8 h-8 text-white" />
+                  </div>
+                  <h3 className="text-lg font-semibold">Incoming Call</h3>
+                  <p className="text-gray-600 dark:text-gray-300">
+                    {incomingCall.fromUsername || `Extension ${incomingCall.from}`}
+                  </p>
                 </div>
-                <h3 className="text-lg font-semibold">Incoming Call</h3>
-                <p className="text-gray-600 dark:text-gray-300">
-                  {incomingCall.fromUsername || `Extension ${incomingCall.from}`}
-                </p>
-              </div>
-              <div className="flex space-x-4">
-                <button
-                  onClick={() => {
-                    incomingCall.onAccept();
-                    setLocalIncomingCall(null);
-                  }}
-                  className="flex-1 bg-green-500 hover:bg-green-600 text-white py-3 px-4 rounded-xl font-medium transition-colors"
-                >
-                  Accept
-                </button>
-                <button
-                  onClick={() => {
-                    incomingCall.onReject();
-                    setLocalIncomingCall(null);
-                  }}
-                  className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 px-4 rounded-xl font-medium transition-colors"
-                >
-                  Reject
-                </button>
+                <div className="flex space-x-4">
+                  <button
+                    onClick={() => {
+                      incomingCall.onAccept();
+                      setLocalIncomingCall(null);
+                    }}
+                    className="flex-1 bg-green-500 hover:bg-green-600 text-white py-3 px-4 rounded-xl font-medium transition-colors"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={() => {
+                      incomingCall.onReject();
+                      setLocalIncomingCall(null);
+                    }}
+                    className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 px-4 rounded-xl font-medium transition-colors"
+                  >
+                    Reject
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Page Body */}
-      <div className="flex-grow px-4 md:pl-[280px] py-4 pb-[60px]">
-        <div className="glass-effect p-6 rounded-2xl shadow-xl mb-6 max-w-4xl mx-auto mt-12">
-          <h1 className="text-2xl font-bold mb-2">
-            Welcome{user?.extension ? ` (Ext: ${user.extension})` : ""}!
-          </h1>
-          <p>
-            {callStatus
-              ? `You're currently ${callStatus.toLowerCase()}.`
-              : "Ready to make a call? Use the keypad or quick dial."}
-          </p>
-        </div>
-
-        <div className="max-w-4xl mx-auto">
-          {currentPage === "keypad" && (
-            <div className="glass-effect p-6 rounded-2xl shadow-xl animate-fadeIn">
-              <HomePage onCall={startCall} darkMode={darkMode} />
-            </div>
-          )}
-          {currentPage === "favorites" && (
-            <FavoritesPage
-              contacts={contacts}
-              onCall={startCall}
-              onToggleFavorite={toggleFavorite}
-              darkMode={darkMode}
-            />
-          )}
-          {currentPage === "contacts" && (
-            <ContactsPage
-              onCall={startCall}
-              darkMode={darkMode}
-              userID={user?.username}
-            />
-          )}
-          {currentPage === "calllogs" && <CallLogsPage darkMode={darkMode} />}
-          {currentPage === "calling" && activeCallContact && (
-            <CallingPage
-              contact={activeCallContact}
-              callStatus={callStatus}
-              onEndCall={endCall}
-              channel={`PJSIP/${activeCallContact.extension}`}
-              darkMode={darkMode}
-            />
-          )}
-        </div>
+        {/* Main Content */}
+        <main className="flex-1 overflow-hidden flex flex-col">
+          {/* Content Area */}
+          <div className="flex-1 overflow-y-auto p-4 lg:p-6 pb-20 lg:pb-6">
+            <motion.div
+              key={currentPage}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+              className="h-full min-h-0"
+            >
+              {currentPage === "keypad" && (
+                <div className={cn(
+                  "h-full rounded-xl border overflow-hidden",
+                  isDarkMode
+                    ? "bg-secondary-800 border-secondary-700"
+                    : "bg-white border-secondary-200"
+                )}>
+                  <div className="p-4 lg:p-6 h-full overflow-hidden">
+                    <HomePage onCall={startCall} darkMode={isDarkMode} />
+                  </div>
+                </div>
+              )}
+              {currentPage === "settings" && (
+                <div className={cn(
+                  "h-full rounded-xl border",
+                  isDarkMode
+                    ? "bg-secondary-800 border-secondary-700"
+                    : "bg-white border-secondary-200"
+                )}>
+                  <SettingsPage
+                    darkMode={isDarkMode}
+                    onToggleDarkMode={toggleDarkMode}
+                    user={user}
+                  />
+                </div>
+              )}
+              {currentPage === "contacts" && (
+                <div className={cn(
+                  "h-full rounded-xl border",
+                  isDarkMode
+                    ? "bg-secondary-800 border-secondary-700"
+                    : "bg-white border-secondary-200"
+                )}>
+                  <div className="p-4 lg:p-6 h-full">
+                    <ContactsPage
+                      onCall={startCall}
+                      darkMode={isDarkMode}
+                      userID={user?.username}
+                    />
+                  </div>
+                </div>
+              )}
+              {currentPage === "calllogs" && (
+                <div className={cn(
+                  "h-full rounded-xl border",
+                  isDarkMode
+                    ? "bg-secondary-800 border-secondary-700"
+                    : "bg-white border-secondary-200"
+                )}>
+                  <div className="p-4 lg:p-6 h-full">
+                    <CallLogsPage darkMode={isDarkMode} user={user} onCall={(extension) => startCall({ extension, name: `Extension ${extension}` })} />
+                  </div>
+                </div>
+              )}
+              {currentPage === "calling" && activeCallContact && (
+                <CallingPage
+                  contact={activeCallContact}
+                  callStatus={callStatus}
+                  onEndCall={endCall}
+                  channel={`PJSIP/${activeCallContact.extension}`}
+                  darkMode={isDarkMode}
+                />
+              )}
+            </motion.div>
+          </div>
+        </main>
       </div>
 
-      {/* Bottom Navigation */}
-      <BottomNav currentPage={currentPage} onNavigate={setCurrentPage} />
+      {/* Bottom Navigation for Mobile */}
+      <BottomNav currentPage={currentPage} onNavigate={setCurrentPage} isDarkMode={isDarkMode} />
+
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        darkMode={isDarkMode}
+      />
+
+      {/* Notifications Panel */}
+      <NotificationsPanel
+        isOpen={showNotifications}
+        onClose={() => setShowNotifications(false)}
+        darkMode={isDarkMode}
+      />
+
+      {/* Admin Call Panel */}
+      {user?.role === 'admin' && (
+        <AdminCallPanel
+          isOpen={showAdminCall}
+          onClose={() => setShowAdminCall(false)}
+          darkMode={isDarkMode}
+          currentUser={user}
+        />
+      )}
 
       {/* Connection Status Monitor */}
       <ConnectionStatus />

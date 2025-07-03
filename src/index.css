@@ -1,21 +1,294 @@
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@100;200;300;400;500;600;700;800&display=swap');
+
+@layer base {
+  * {
+    @apply border-gray-200;
+  }
+
+  html, body {
+    @apply bg-white text-gray-900 font-sans;
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Prevent zoom on iOS */
+    -webkit-text-size-adjust: 100%;
+    /* Prevent pull-to-refresh */
+    overscroll-behavior: none;
+  }
+
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  code {
+    @apply font-mono;
+  }
+
+  /* Prevent scrolling on mobile */
+  @media (max-width: 1024px) {
+    html, body {
+      position: fixed;
+      width: 100%;
+      height: 100%;
+    }
+  }
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+@layer components {
+  /* Glass morphism effect */
+  .glass-effect {
+    @apply bg-white/10 backdrop-blur-md border border-white/20;
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  }
+
+  .glass-effect-dark {
+    @apply bg-gray-900/20 backdrop-blur-md border border-gray-700/30;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  }
+
+  /* Professional button styles */
+  .btn-primary {
+    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5;
+  }
+
+  .btn-secondary {
+    @apply bg-secondary-100 hover:bg-secondary-200 text-secondary-900 font-medium py-2.5 px-4 rounded-lg transition-all duration-200 border border-secondary-300;
+  }
+
+  .btn-success {
+    @apply bg-success-600 hover:bg-success-700 text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl;
+  }
+
+  .btn-danger {
+    @apply bg-danger-600 hover:bg-danger-700 text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl;
+  }
+
+  .btn-warning {
+    @apply bg-warning-600 hover:bg-warning-700 text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl;
+  }
+
+  /* Professional input styles */
+  .input-primary {
+    @apply w-full px-4 py-3 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 bg-white/50 backdrop-blur-sm;
+  }
+
+  .input-primary:focus {
+    @apply outline-none shadow-lg;
+  }
+
+  /* Professional card styles */
+  .card {
+    @apply bg-white rounded-xl shadow-elegant border border-secondary-200 overflow-hidden;
+  }
+
+  .card-dark {
+    @apply bg-secondary-800 rounded-xl shadow-elegant-lg border border-secondary-700 overflow-hidden;
+  }
+
+  /* Status indicators */
+  .status-online {
+    @apply bg-status-online;
+  }
+
+  .status-offline {
+    @apply bg-status-offline;
+  }
+
+  .status-busy {
+    @apply bg-status-busy;
+  }
+
+  .status-away {
+    @apply bg-status-away;
+  }
+
+  /* Call status indicators */
+  .call-incoming {
+    @apply bg-call-incoming;
+  }
+
+  .call-outgoing {
+    @apply bg-call-outgoing;
+  }
+
+  .call-missed {
+    @apply bg-call-missed;
+  }
+
+  .call-active {
+    @apply bg-call-active;
+  }
+
+  /* Professional navigation */
+  .nav-item {
+    @apply flex items-center px-4 py-3 text-secondary-700 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all duration-200 cursor-pointer;
+  }
+
+  .nav-item-active {
+    @apply bg-primary-100 text-primary-700 border-r-2 border-primary-600;
+  }
+
+  .nav-item-dark {
+    @apply text-secondary-300 hover:text-white hover:bg-secondary-700;
+  }
+
+  .nav-item-dark-active {
+    @apply bg-secondary-700 text-white border-r-2 border-primary-500;
+  }
 }
-/* Hide scrollbar but keep scroll */
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;     /* Firefox */
+
+@layer utilities {
+  /* Hide scrollbar but keep scroll */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;     /* Firefox */
+  }
+
+  /* Custom scrollbar */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-secondary-100 rounded-full;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-secondary-400 rounded-full hover:bg-secondary-500;
+  }
+
+  /* Professional shadows */
+  .shadow-elegant {
+    box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.1);
+  }
+
+  .shadow-elegant-lg {
+    box-shadow: 0 10px 40px 0 rgba(0, 0, 0, 0.15);
+  }
+
+  /* Animation utilities */
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-in-out;
+  }
+
+  .animate-fade-in-up {
+    animation: fadeInUp 0.6s ease-out;
+  }
+
+  .animate-slide-in-right {
+    animation: slideInRight 0.3s ease-out;
+  }
+
+  .animate-slide-in-left {
+    animation: slideInLeft 0.3s ease-out;
+  }
+
+  /* Mobile safe area utilities */
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .pb-safe {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+
+  /* Static layout utilities */
+  .layout-static {
+    position: static !important;
+    overflow: hidden !important;
+  }
+
+  .content-static {
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* Improved mobile touch targets */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Mobile-first responsive utilities */
+  .mobile-container {
+    @apply h-screen overflow-hidden;
+  }
+
+  .mobile-content {
+    @apply h-full overflow-y-auto;
+  }
+
+  /* Prevent text selection on mobile UI elements */
+  .no-select {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+
+  /* Better mobile scrolling */
+  .mobile-scroll {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+
+  /* Hide elements on specific screen sizes */
+  .hide-mobile {
+    @apply block lg:block;
+  }
+
+  @media (max-width: 1023px) {
+    .hide-mobile {
+      display: none !important;
+    }
+  }
+
+  .show-mobile {
+    @apply hidden lg:hidden;
+  }
+
+  @media (max-width: 1023px) {
+    .show-mobile {
+      display: block !important;
+    }
+  }
+
+  /* Keypad specific utilities */
+  .keypad-container {
+    @apply h-full flex flex-col;
+  }
+
+  .keypad-centered {
+    @apply lg:items-center lg:justify-center;
+  }
+
+  .keypad-static {
+    @apply overflow-hidden;
+  }
+
+  /* Mobile keypad adjustments */
+  @media (max-width: 1023px) {
+    .keypad-container {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .keypad-grid {
+      touch-action: manipulation;
+    }
+  }
 }

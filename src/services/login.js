@@ -69,7 +69,8 @@ export const login = async (username, password) => {
 
       localStorage.setItem('token', token);
       localStorage.setItem('extension', extension);
-      console.log('[login.js] Login successful, stored:', { token, extension });
+      localStorage.setItem('userRole', user.role || 'user'); // Store user role
+      console.log('[login.js] Login successful, stored:', { token, extension, role: user.role });
 
       // ✅ Connect to WebSocket after successful login
       connectWebSocket();
@@ -79,7 +80,11 @@ export const login = async (username, password) => {
         token,
         extension,
         message: message || 'Login successful',
-        user: { username: user.username, extension },
+        user: {
+          username: user.username,
+          extension,
+          role: user.role || 'user'
+        },
       };
     } else {
       console.error('[login.js] Invalid response:', response.data);
@@ -105,5 +110,6 @@ export const login = async (username, password) => {
 export const logout = () => {
   localStorage.removeItem('token');
   localStorage.removeItem('extension');
+  localStorage.removeItem('userRole');
   console.log('[login.js] Logged out');
 };

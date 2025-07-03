@@ -1,20 +1,28 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { TextField } from '@mui/material';
-import { Phone } from '@mui/icons-material';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  FiPhoneCall as PhoneCall,
+  FiDelete as Delete,
+  FiTrash2 as Trash2
+} from 'react-icons/fi';
 import { call } from '../services/call';
 import CallingPage from './CallingPage';
+import { useTheme } from '../contexts/ThemeContext';
+import { cn } from '../utils/ui';
+import toast from 'react-hot-toast';
 
-const HomePage = ({ darkMode = false }) => {
+const HomePage = ({ darkMode = false, onCall }) => {
   const [extension, setExtension] = useState('');
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showCallingPage, setShowCallingPage] = useState(false);
-  const [notification, setNotification] = useState(null);
   const [callData, setCallData] = useState(null);
+  const [recentCalls, setRecentCalls] = useState([]);
+  const [error, setError] = useState(null);
+  const [notification, setNotification] = useState(null);
+  const { darkMode: themeDarkMode } = useTheme();
+  const isDark = darkMode || themeDarkMode;
 
   const initiateCall = useCallback(async (ext) => {
     setLoading(true);
-    setError('');
 
     try {
       const callResult = await call(ext);
@@ -28,24 +36,32 @@ const HomePage = ({ darkMode = false }) => {
         extension: ext
       });
 
-      setNotification({ message: `Dialing ${ext}...`, type: 'info' });
+      toast.success(`Dialing ${ext}...`);
       setShowCallingPage(true);
-      setTimeout(() => setNotification(null), 3000);
+
+      // Add to recent calls
+      const newCall = {
+        extension: ext,
+        timestamp: new Date(),
+        type: 'outgoing'
+      };
+      setRecentCalls(prev => [newCall, ...prev.slice(0, 4)]);
+
+      // Call parent handler if provided
+      if (onCall) {
+        onCall(ext);
+      }
     } catch (err) {
       console.error('[HomePage] Call initiation failed:', err);
-      setError('Failed to initiate call. Please try again.');
-      setNotification({ message: 'Call failed', type: 'error' });
-      setTimeout(() => setNotification(null), 3000);
+      toast.error('Failed to initiate call. Please try again.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [onCall]);
 
   const handleCall = useCallback(() => {
-    if (!extension || !/^\d{4}$/.test(extension)) {
-      setError('Please enter a valid 4-digit extension');
-      setNotification({ message: 'Invalid extension', type: 'error' });
-      setTimeout(() => setNotification(null), 3000);
+    if (!extension || !/^\d{3,6}$/.test(extension)) {
+      toast.error('Please enter a valid extension (3-6 digits)');
       return;
     }
     initiateCall(extension);
@@ -76,14 +92,14 @@ const HomePage = ({ darkMode = false }) => {
   }, [extension, handleCall, initiateCall]);
 
   const handleKeypadClick = (value) => {
-    if (extension.length < 4) {
+    if (value === 'delete') {
+      setExtension(prev => prev.slice(0, -1));
+      return;
+    }
+
+    if (extension.length < 6) {
       const newExtension = extension + value;
       setExtension(newExtension);
-      setError('');
-
-      if (newExtension.length === 4) {
-        initiateCall(newExtension);
-      }
     }
   };
 
@@ -100,7 +116,20 @@ const HomePage = ({ darkMode = false }) => {
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const keypadButtons = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
+  const keypadButtons = [
+    { value: '1', label: '1', sub: '' },
+    { value: '2', label: '2', sub: 'ABC' },
+    { value: '3', label: '3', sub: 'DEF' },
+    { value: '4', label: '4', sub: 'GHI' },
+    { value: '5', label: '5', sub: 'JKL' },
+    { value: '6', label: '6', sub: 'MNO' },
+    { value: '7', label: '7', sub: 'PQRS' },
+    { value: '8', label: '8', sub: 'TUV' },
+    { value: '9', label: '9', sub: 'WXYZ' },
+    { value: '*', label: '*', sub: '' },
+    { value: '0', label: '0', sub: '+' },
+    { value: '#', label: '#', sub: '' },
+  ];
 
   if (showCallingPage) {
     return (
@@ -117,127 +146,172 @@ const HomePage = ({ darkMode = false }) => {
   }
 
   return (
-    <div className="relative w-full max-w-[90vw] xs:max-w-[85vw] sm:max-w-[80vw] md:max-w-md mx-auto overflow-hidden">
-      {/* Notification Toast */}
-      {notification && (
-        <div
-          className={`fixed top-16 right-2 xs:right-4 z-50 glass-effect p-2 xs:p-3 rounded-lg shadow-lg animate-[fadeInUp_0.6s_ease-out_forwards] ${
-            notification.type === 'success'
-              ? 'bg-green-500/80'
-              : notification.type === 'error'
-              ? 'bg-red-500/80'
-              : 'bg-blue-500/80'
-          }`}
-          role="alert"
-          aria-live="polite"
-        >
-          <span className={`text-xs xs:text-sm sm:text-base font-medium ${darkMode ? 'text-white' : 'text-black'}`}>
-            {notification.message}
-          </span>
+    <div className="h-full flex flex-col lg:items-center lg:justify-center">
+      {/* Desktop: Centered Container, Mobile: Full Height */}
+      <div className="w-full lg:max-w-md lg:mx-auto h-full lg:h-auto flex flex-col lg:space-y-6">
+        {/* Header */}
+        <div className="text-center mb-4 lg:mb-6 flex-shrink-0">
+          <h2 className={cn(
+            "text-xl lg:text-2xl font-bold mb-2",
+            isDark ? "text-white" : "text-slate-800"
+          )}>
+            Make a Call
+          </h2>
+          <p className={cn(
+            "text-xs lg:text-sm font-medium",
+            isDark ? "text-slate-300" : "text-slate-600"
+          )}>
+            Enter an extension to start calling
+          </p>
         </div>
-      )}
 
-      <div
-        className="glass-effect p-4 xs:p-5 sm:p-6 rounded-3xl shadow-2xl transform transition-all duration-500 animate-[fadeInUp_0.6s_ease-out_forwards] min-h-[400px] max-h-[80vh]"
-        style={{ background: darkMode ? 'rgba(30, 30, 30, 0.2)' : 'rgba(239, 246, 255, 0.8)' }}
-      >
-        <h2
-          className={`text-lg xs:text-xl sm:text-2xl font-bold mb-4 text-center flex items-center justify-center ${
-            darkMode ? 'text-white' : 'text-black'
-          } animate-[fadeInUp_0.8s_ease-out_forwards]`}
-        >
-          <Phone
-            className={`mr-2 w-5 h-5 xs:w-6 xs:h-6 animate-bounce ${
-              darkMode ? 'text-white' : 'text-black'
-            }`}
-          />
-          Dial Extension
-        </h2>
+        {/* Extension Display */}
+        <div className={cn(
+          "p-4 lg:p-6 rounded-2xl lg:rounded-3xl border-2 text-center shadow-lg flex-shrink-0",
+          isDark
+            ? "bg-slate-800 border-slate-700"
+            : "bg-white border-indigo-100"
+        )}>
+          {/* Decorative header bar */}
+          <div className={cn(
+            'h-1 rounded-full mb-3 lg:mb-4 mx-auto w-12 lg:w-16',
+            isDark ? 'bg-indigo-600' : 'bg-indigo-500'
+          )}></div>
 
-        {error && (
-          <div
-            className={`${
-              darkMode ? 'bg-red-500/20 text-red-400' : 'bg-red-100/80 text-red-900'
-            } p-2 xs:p-3 rounded-lg mb-4 text-xs xs:text-sm sm:text-base animate-[fadeInUp_1s_ease-out_forwards]`}
-            role="alert"
-          >
-            {error}
+          <div className="mb-3 lg:mb-4">
+            <label className={cn(
+              "block text-xs lg:text-sm font-semibold mb-2 lg:mb-3",
+              isDark ? "text-slate-300" : "text-slate-700"
+            )}>
+              Extension Number
+            </label>
+            <div className={cn(
+              "text-2xl lg:text-3xl font-mono font-bold min-h-[2.5rem] lg:min-h-[3rem] flex items-center justify-center p-3 lg:p-4 rounded-xl lg:rounded-2xl border-2 shadow-inner",
+              isDark
+                ? "text-white border-slate-600 bg-slate-700"
+                : "text-slate-800 border-slate-200 bg-slate-50"
+            )}>
+              {extension || "Enter extension"}
+            </div>
           </div>
-        )}
 
-        <div className="mb-4 relative animate-[fadeInUp_1s_ease-out_forwards]">
-          <TextField
-            type="text"
-            value={extension}
-            readOnly
-            variant="outlined"
-            fullWidth
-            placeholder="Enter extension"
-            className="glass-effect rounded-lg"
-            InputProps={{
-              className: `text-center text-xs xs:text-sm sm:text-base ${
-                darkMode ? 'bg-gray-800/50 text-white' : 'bg-blue-100/80 text-black'
-              }`,
-              'aria-label': 'Current extension',
-            }}
-          />
-          {/* Dial Indicator */}
-          {extension && (
-            <div className="absolute top-1/2 right-2 xs:right-4 transform -translate-y-1/2 flex space-x-1">
-              {[...extension].map((_, i) => (
-                <div
-                  key={i}
-                  className="w-2 h-2 bg-blue-400 rounded-full"
-                  style={{ animationDelay: `${i * 0.2}s` }}
-                ></div>
+          {/* Action Buttons */}
+          <div className="flex gap-2 lg:gap-3 justify-center">
+            <button
+              onClick={handleCall}
+              disabled={!extension || loading}
+              className={cn(
+                "flex items-center space-x-1 lg:space-x-2 px-4 lg:px-6 py-2 lg:py-3 rounded-xl lg:rounded-2xl font-semibold transition-all duration-200 shadow-lg border-2 text-sm lg:text-base",
+                "disabled:opacity-50 disabled:cursor-not-allowed",
+                "active:scale-95 transform transition-transform duration-100",
+                !extension || loading
+                  ? "bg-slate-300 text-slate-500 border-slate-200"
+                  : "bg-emerald-500 hover:bg-emerald-600 text-white border-emerald-400 hover:border-emerald-500 hover:shadow-xl"
+              )}
+            >
+              {loading ? (
+                <>
+                  <div className="w-3 lg:w-4 h-3 lg:h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Calling...</span>
+                </>
+              ) : (
+                <>
+                  <PhoneCall className="w-3 lg:w-4 h-3 lg:h-4" />
+                  <span>Call</span>
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={() => setExtension('')}
+              disabled={!extension}
+              className={cn(
+                "flex items-center space-x-1 lg:space-x-2 px-3 lg:px-4 py-2 lg:py-3 rounded-xl lg:rounded-2xl font-semibold transition-all duration-200 shadow-lg border-2 text-sm lg:text-base",
+                "disabled:opacity-50 disabled:cursor-not-allowed",
+                "active:scale-95 transform transition-transform duration-100",
+                !extension
+                  ? "bg-slate-200 text-slate-400 border-slate-100"
+                  : "bg-red-500 hover:bg-red-600 text-white border-red-400 hover:border-red-500"
+              )}
+            >
+              <Trash2 className="w-3 lg:w-4 h-3 lg:h-4" />
+              <span>Clear</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Static Professional Keypad */}
+        <div className={cn(
+          "flex-1 lg:flex-none p-4 lg:p-6 rounded-2xl lg:rounded-3xl border-2 shadow-lg flex flex-col",
+          isDark
+            ? "bg-slate-800 border-slate-700"
+            : "bg-white border-indigo-100"
+        )}>
+          {/* Decorative header bar */}
+          <div className={cn(
+            'h-1 rounded-full mb-3 lg:mb-4 mx-auto w-12 lg:w-16 flex-shrink-0',
+            isDark ? 'bg-indigo-600' : 'bg-indigo-500'
+          )}></div>
+
+          <h3 className={cn(
+            "text-base lg:text-lg font-bold mb-4 lg:mb-6 text-center flex-shrink-0",
+            isDark ? "text-white" : "text-slate-800"
+          )}>
+            Keypad
+          </h3>
+
+          {/* Keypad Grid - Static and Centered */}
+          <div className="flex-1 flex flex-col justify-center lg:justify-start">
+            <div className="grid grid-cols-3 gap-2 lg:gap-3 mb-3 lg:mb-4 max-w-xs mx-auto">
+              {keypadButtons.map((btn) => (
+                <button
+                  key={btn.value}
+                  onClick={() => handleKeypadClick(btn.value)}
+                  className={cn(
+                    "relative p-3 lg:p-4 rounded-xl lg:rounded-2xl font-bold transition-all duration-200 shadow-lg border-2 touch-target",
+                    "focus:outline-none focus:ring-2 focus:ring-indigo-500",
+                    "w-16 h-16 lg:w-20 lg:h-20 flex flex-col items-center justify-center",
+                    "active:scale-95 transform transition-transform duration-100 hover:scale-105",
+                    isDark
+                      ? "bg-slate-700 hover:bg-slate-600 text-white border-slate-600 hover:border-slate-500"
+                      : "bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200 hover:border-slate-300 hover:shadow-xl"
+                  )}
+                  aria-label={`Dial ${btn.value}`}
+                >
+                  <span className="text-lg lg:text-xl font-bold">{btn.label}</span>
+                  {btn.sub && (
+                    <span className={cn(
+                      "text-xs font-medium",
+                      isDark ? "text-slate-400" : "text-slate-500"
+                    )}>
+                      {btn.sub}
+                    </span>
+                  )}
+                </button>
               ))}
             </div>
-          )}
-        </div>
 
-        <div className="grid grid-cols-3 gap-1 xs:gap-2 sm:gap-3 mb-4 animate-[fadeInUp_1.2s_ease-out_forwards]">
-          {keypadButtons.map((btn) => (
-            <button
-              key={btn}
-              onClick={() => handleKeypadClick(btn)}
-              className={`p-4 xs:p-4 sm:p-5 rounded-full text-xs xs:text-sm sm:text-base font-semibold transition-all duration-300 transform hover:scale-110 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[44px] min-h-[44px] shadow-md hover:shadow-lg ${
-                darkMode
-                  ? 'bg-gray-800/50 hover:bg-gray-700/50 text-white'
-                  : 'bg-blue-100/80 hover:bg-blue-200/80 text-black'
-              }`}
-              aria-label={`Dial ${btn}`}
-            >
-              {btn}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex space-x-1 xs:space-x-2 sm:space-x-3 animate-[fadeInUp_1.4s_ease-out_forwards]">
-          <button
-            onClick={handleClear}
-            className={`flex-1 p-3 xs:p-4 sm:p-4 rounded-lg text-xs xs:text-sm sm:text-base font-semibold transition-all duration-300 transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-gray-500 shadow-md hover:shadow-lg min-w-[100px] min-h-[44px] ${
-              darkMode
-                ? 'bg-gray-600 hover:bg-gray-700 text-white'
-                : 'bg-blue-200 hover:bg-blue-300 text-black'
-            }`}
-            aria-label="Clear extension"
-          >
-            Clear
-          </button>
-          <button
-            onClick={handleCall}
-            disabled={loading}
-            className={`flex-1 p-3 xs:p-4 sm:p-4 rounded-lg text-xs xs:text-sm sm:text-base font-semibold transition-all duration-300 transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-md hover:shadow-lg min-w-[100px] min-h-[44px] ${
-              loading
-                ? 'opacity-50 cursor-not-allowed'
-                : darkMode
-                ? 'bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800 text-white'
-                : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-black'
-            }`}
-            aria-label="Make call"
-          >
-            {loading ? 'Calling...' : 'Call'}
-          </button>
+            {/* Delete Button */}
+            <div className="max-w-xs mx-auto w-full">
+              <button
+                onClick={() => handleKeypadClick('delete')}
+                disabled={!extension}
+                className={cn(
+                  "w-full p-3 lg:p-4 rounded-xl lg:rounded-2xl font-semibold transition-all duration-200 shadow-lg border-2 touch-target",
+                  "focus:outline-none focus:ring-2 focus:ring-indigo-500",
+                  "flex items-center justify-center space-x-2 text-sm lg:text-base",
+                  "disabled:opacity-50 disabled:cursor-not-allowed",
+                  "active:scale-95 transform transition-transform duration-100",
+                  !extension
+                    ? "bg-slate-200 text-slate-400 border-slate-100"
+                    : "bg-red-500 hover:bg-red-600 text-white border-red-400 hover:border-red-500 hover:shadow-xl"
+                )}
+              >
+                <Delete className="w-4 lg:w-5 h-4 lg:h-5" />
+                <span>Delete</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

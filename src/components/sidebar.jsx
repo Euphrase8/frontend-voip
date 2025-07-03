@@ -1,6 +1,6 @@
-import { Phone, Favorite, Contacts, History, Call } from "@mui/icons-material";
+import { Phone, Favorite, Contacts, History, Call, AdminPanelSettings } from "@mui/icons-material";
 
-const Sidebar = ({ currentPage, onNavigate, darkMode }) => {
+const Sidebar = ({ currentPage, onNavigate, darkMode, user }) => {
   const navItems = [
     { id: "keypad", label: "Keypad", icon: <Phone /> },
     { id: "favorites", label: "Favorites", icon: <Favorite /> },
@@ -8,6 +8,11 @@ const Sidebar = ({ currentPage, onNavigate, darkMode }) => {
     { id: "calllogs", label: "Call Logs", icon: <History /> },
     { id: "callings", label: "Register", icon: <Call /> }, // New item for Calling page
   ];
+
+  // Add admin panel option if user is admin
+  if (user?.role === 'admin') {
+    navItems.push({ id: "admin", label: "Admin Panel", icon: <AdminPanelSettings /> });
+  }
 
   return (
     <div

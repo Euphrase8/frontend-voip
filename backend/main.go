@@ -110,6 +110,10 @@ func main() {
 			admin.GET("/users", handlers.GetUsers)
 			admin.DELETE("/users/:id", handlers.DeleteUser)
 			admin.GET("/stats", handlers.GetSystemStats)
+			admin.DELETE("/call-logs/:id", handlers.DeleteCallLog)
+			admin.DELETE("/call-logs/bulk-delete", handlers.BulkDeleteCallLogs)
+			admin.GET("/export/call-logs", handlers.ExportCallLogs)
+			admin.GET("/metrics/realtime", handlers.GetRealTimeMetrics)
 		}
 	}
 

@@ -1,84 +1,103 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Avatar, TextField, Tooltip } from '@mui/material';
-import { Phone } from '@mui/icons-material';
+import { motion } from 'framer-motion';
+import {
+  FiPhone as Phone,
+  FiSearch as Search,
+  FiUser as User,
+  FiUsers as Users,
+  FiPhoneCall as PhoneCall,
+  FiStar as Star,
+  FiMoreVertical as MoreVertical
+} from 'react-icons/fi';
 import { getUsers } from '../services/users';
 import { getExtension } from '../services/login';
 import { call } from '../services/call';
+import { useTheme } from '../contexts/ThemeContext';
+import { cn, getInitials, getAvatarColor } from '../utils/ui';
+import toast from 'react-hot-toast';
 
 const Contact = ({ contact, onCall, darkMode }) => {
-  const priorityColor = {
-    high: 'bg-red-500',
-    medium: 'bg-yellow-500',
-    low: 'bg-green-500',
-  };
+  const { darkMode: themeDarkMode } = useTheme();
+  const isDark = darkMode || themeDarkMode;
 
   return (
-    <div
-      className={`flex items-center justify-between p-3 rounded-xl glass-effect border border-white/20 transform transition-all duration-300 hover:shadow-[0_0_10px_rgba(59,130,246,0.4)] hover:scale-105 mb-3 ${
-        darkMode ? 'bg-gray-800/30' : 'bg-white/20'
-      }`}
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ scale: 1.02 }}
+      className={cn(
+        "p-4 rounded-xl border transition-all duration-200 cursor-pointer",
+        isDark
+          ? "bg-secondary-800 border-secondary-700 hover:bg-secondary-700"
+          : "bg-white border-secondary-200 hover:bg-secondary-50 shadow-sm hover:shadow-md"
+      )}
     >
-      <div className="flex items-center space-x-4">
-        <div className="relative">
-          <Avatar
-            alt={`${contact.name}'s avatar`}
-            src={contact.avatar}
-            className="w-10 h-10 rounded-full object-cover border-2 border-white/40 shadow-md"
-          />
-          <div className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 opacity-50 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.5)]"></div>
-        </div>
-        <div>
-          <div className="flex items-center space-x-2">
-            <span className={`w-3 h-3 rounded-full ${priorityColor[contact.priority]} animate-pulse`} />
-            <span className={`text-base font-medium ${darkMode ? 'text-white' : 'text-white'}`}>
-              {contact.name}
-            </span>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <div className={cn(
+            "w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold",
+            getAvatarColor(contact.username || contact.name)
+          )}>
+            {getInitials(contact.username || contact.name)}
           </div>
-          <span
-            className={`block text-sm ${
-              contact.status === 'online' ? 'text-green-400 animate-pulse' : 'text-gray-400'
-            }`}
+          <div>
+            <h3 className={cn(
+              "font-semibold",
+              isDark ? "text-white" : "text-secondary-900"
+            )}>
+              {contact.username || contact.name}
+            </h3>
+            <p className={cn(
+              "text-sm",
+              isDark ? "text-secondary-400" : "text-secondary-600"
+            )}>
+              Extension: {contact.extension}
+            </p>
+            {contact.email && (
+              <p className={cn(
+                "text-xs",
+                isDark ? "text-secondary-500" : "text-secondary-500"
+              )}>
+                {contact.email}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => onCall(contact.extension)}
+            className="p-3 bg-primary-600 hover:bg-primary-700 text-white rounded-full transition-colors duration-200 shadow-lg hover:shadow-xl"
+            aria-label={`Call ${contact.username || contact.name}`}
           >
-            {contact.status}
-          </span>
+            <PhoneCall className="w-4 h-4" />
+          </motion.button>
         </div>
       </div>
-      <Tooltip title={contact.status === 'online' ? `Call ${contact.name}` : 'Contact is offline'}>
-        <button
-          onClick={() => contact.status === 'online' && onCall(contact)}
-          className={`px-4 py-2 rounded-lg text-white text-sm font-semibold flex items-center space-x-2 transition-all duration-300 hover:scale-110 ${
-            contact.status === 'online'
-              ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700'
-              : 'bg-gray-500 cursor-not-allowed'
-          }`}
-          disabled={contact.status !== 'online'}
-        >
-          <Phone className="text-base animate-pulse" />
-          <span>Call</span>
-        </button>
-      </Tooltip>
-    </div>
+    </motion.div>
   );
 };
 
-const ContactsPage = ({ darkMode = false }) => {
+const ContactsPage = ({ darkMode = false, onCall, userID }) => {
   const navigate = useNavigate();
   const [contacts, setContacts] = useState([]);
-  const [notification, setNotification] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(true);
+  const { darkMode: themeDarkMode } = useTheme();
+  const isDark = darkMode || themeDarkMode;
 
   useEffect(() => {
     const fetchContacts = async () => {
       try {
+        setLoading(true);
         const currentUserExtension = getExtension();
         const users = await getUsers();
 
         const filtered = users
-          .filter(
-            (user) =>
-              user.status === 'online' &&
-              `${user.extension}` !== `${currentUserExtension}`
-          )
+          .filter((user) => `${user.extension}` !== `${currentUserExtension}`)
           .map((user) => ({
             ...user,
             channel: `PJSIP/${user.extension}`,
@@ -88,100 +107,143 @@ const ContactsPage = ({ darkMode = false }) => {
         setContacts(filtered);
       } catch (error) {
         console.error('Error fetching users:', error.message);
-        setNotification({ message: 'Failed to load contacts', type: 'error' });
-        setTimeout(() => setNotification(null), 3000);
+        toast.error('Failed to load contacts');
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchContacts();
   }, []);
 
-  const handleCall = async (contact) => {
+  const handleCall = async (extension) => {
     try {
-      await call(contact.extension);
-      setNotification({ message: `Calling ${contact.name}...`, type: 'info' });
-      navigate('/calling', {
-        state: {
-          contact: {
-            name: contact.name,
-            extension: contact.extension,
-            avatar: contact.avatar,
-          },
-          callStatus: 'Dialing...',
-          isOutgoing: true,
-        },
-      });
-      setTimeout(() => setNotification(null), 3000);
+      if (onCall) {
+        onCall(extension);
+      } else {
+        await call(extension);
+        toast.success(`Calling ${extension}...`);
+        navigate('/calling', { state: { extension } });
+      }
     } catch (error) {
-      console.error('Call error:', error.message);
-      setNotification({ message: `Failed to call ${contact.name}`, type: 'error' });
-      setTimeout(() => setNotification(null), 3000);
+      console.error('Error initiating call:', error.message);
+      toast.error('Failed to initiate call');
     }
   };
 
+  // Filter contacts based on search term
+  const filteredContacts = contacts.filter(contact =>
+    contact.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    contact.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    contact.extension?.includes(searchTerm) ||
+    contact.email?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
-    <div className="relative w-full max-w-lg mx-auto">
-      {notification && (
-        <div
-          className={`fixed top-20 right-4 z-50 p-3 rounded-lg shadow-lg ${
-            notification.type === 'info'
-              ? 'bg-blue-500/80'
-              : notification.type === 'error'
-              ? 'bg-red-500/80'
-              : 'bg-green-500/80'
-          }`}
-        >
-          <span className="text-sm font-medium text-white">
-            {notification.message}
-          </span>
-        </div>
-      )}
-
-      <div
-        className="glass-effect p-6 rounded-2xl shadow-xl border border-white/20"
-        style={{
-          background: darkMode
-            ? 'rgba(30, 30, 30, 0.25)'
-            : 'rgba(255, 255, 255, 0.2)',
-        }}
+    <div className="space-y-6">
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="text-center"
       >
-        <h2
-          className={`text-xl font-semibold mb-6 flex items-center space-x-2 ${
-            darkMode ? 'text-white' : 'text-white'
-          }`}
-        >
-          <Phone className="animate-bounce" />
-          <span>Contacts</span>
+        <h2 className={cn(
+          "text-2xl font-bold mb-2",
+          isDark ? "text-white" : "text-secondary-900"
+        )}>
+          Contacts
         </h2>
+        <p className={cn(
+          "text-sm",
+          isDark ? "text-secondary-400" : "text-secondary-600"
+        )}>
+          {filteredContacts.length} contact{filteredContacts.length !== 1 ? 's' : ''} available
+        </p>
+      </motion.div>
 
-        <TextField
-          variant="outlined"
-          fullWidth
+      {/* Search Bar */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.2 }}
+        className="relative"
+      >
+        <Search className={cn(
+          "absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5",
+          isDark ? "text-secondary-400" : "text-secondary-500"
+        )} />
+        <input
+          type="text"
           placeholder="Search contacts..."
-          className="glass-effect mb-4"
-          InputProps={{
-            className: `text-white ${
-              darkMode ? 'bg-gray-800/50' : 'bg-gray-700/50'
-            }`,
-          }}
-          disabled
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className={cn(
+            "w-full pl-10 pr-4 py-3 rounded-lg border transition-all duration-200",
+            "focus:ring-2 focus:ring-primary-500 focus:border-primary-500",
+            isDark
+              ? "bg-secondary-800 border-secondary-600 text-white placeholder-secondary-400"
+              : "bg-white border-secondary-300 text-secondary-900 placeholder-secondary-500"
+          )}
         />
+      </motion.div>
 
-        <div className="space-y-4 max-h-96 overflow-y-auto no-scrollbar">
-          {contacts.length > 0 ? (
-            contacts.map((contact) => (
+      {/* Contacts List */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className={cn(
+          "rounded-2xl border",
+          isDark
+            ? "bg-secondary-800 border-secondary-700"
+            : "bg-white border-secondary-200"
+        )}
+      >
+        {loading ? (
+          <div className="p-8 text-center">
+            <div className="w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className={cn(
+              "text-sm",
+              isDark ? "text-secondary-400" : "text-secondary-600"
+            )}>
+              Loading contacts...
+            </p>
+          </div>
+        ) : filteredContacts.length === 0 ? (
+          <div className="p-8 text-center">
+            <Users className={cn(
+              "w-12 h-12 mx-auto mb-4",
+              isDark ? "text-secondary-500" : "text-secondary-400"
+            )} />
+            <h3 className={cn(
+              "text-lg font-medium mb-2",
+              isDark ? "text-white" : "text-secondary-900"
+            )}>
+              {searchTerm ? 'No contacts found' : 'No contacts available'}
+            </h3>
+            <p className={cn(
+              "text-sm",
+              isDark ? "text-secondary-400" : "text-secondary-600"
+            )}>
+              {searchTerm
+                ? 'Try adjusting your search terms'
+                : 'No other users are currently available'
+              }
+            </p>
+          </div>
+        ) : (
+          <div className="p-6 space-y-4 max-h-96 overflow-y-auto custom-scrollbar">
+            {filteredContacts.map((contact) => (
               <Contact
                 key={contact.id}
                 contact={contact}
                 onCall={handleCall}
                 darkMode={darkMode}
               />
-            ))
-          ) : (
-            <p className="text-center text-white">No contacts available</p>
-          )}
-        </div>
-      </div>
+            ))}
+          </div>
+        )}
+      </motion.div>
     </div>
   );
 };

@@ -117,8 +117,8 @@ class ConfigService {
       api_url: `http://${backendHost}:8080`,
       ws_url: `ws://${backendHost}:8080/ws`,
       asterisk: {
-        host: '172.20.10.14',
-        ws_url: 'ws://172.20.10.14:8088/ws',
+        host: '172.20.10.6',
+        ws_url: 'ws://172.20.10.6:8088/ws',
       },
       environment: 'development',
       debug: true,

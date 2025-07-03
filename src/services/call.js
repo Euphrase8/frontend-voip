@@ -25,10 +25,55 @@ const getAuthHeaders = () => {
 
 export const getAppMediaStream = async () => {
   try {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      throw new Error("getUserMedia is not supported in this browser or not available over HTTP.");
+    console.log('[call.js] Requesting media stream...');
+
+    // Try multiple methods for getUserMedia
+    let stream = null;
+
+    // Method 1: Modern getUserMedia
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(MEDIA_CONSTRAINTS);
+      } catch (modernError) {
+        console.warn('[call.js] Modern getUserMedia failed:', modernError);
+
+        // Try basic constraints
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        } catch (basicError) {
+          console.warn('[call.js] Basic getUserMedia failed:', basicError);
+        }
+      }
     }
-    const stream = await navigator.mediaDevices.getUserMedia(MEDIA_CONSTRAINTS);
+
+    // Method 2: Legacy getUserMedia fallback
+    if (!stream) {
+      const getUserMedia = navigator.getUserMedia ||
+                         navigator.webkitGetUserMedia ||
+                         navigator.mozGetUserMedia ||
+                         navigator.msGetUserMedia;
+
+      if (getUserMedia) {
+        console.log('[call.js] Trying legacy getUserMedia...');
+        stream = await new Promise((resolve, reject) => {
+          getUserMedia.call(navigator, MEDIA_CONSTRAINTS, resolve, reject);
+        });
+      }
+    }
+
+    if (!stream) {
+      const isHTTP = window.location.protocol === 'http:' &&
+                    window.location.hostname !== 'localhost' &&
+                    window.location.hostname !== '127.0.0.1';
+
+      if (isHTTP) {
+        throw new Error("Microphone access not available. For HTTP sites, please:\n1. Enable microphone in browser settings\n2. Use HTTPS for better compatibility\n3. Try Chrome with --unsafely-treat-insecure-origin-as-secure flag");
+      } else {
+        throw new Error("getUserMedia is not supported in this browser.");
+      }
+    }
+
+    console.log('[call.js] Media stream obtained successfully');
     return stream;
   } catch (err) {
     console.error('[call.js] Failed to access microphone:', err);

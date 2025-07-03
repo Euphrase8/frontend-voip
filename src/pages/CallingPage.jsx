@@ -1,12 +1,31 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Avatar, IconButton, Tooltip, Button } from '@mui/material';
-import { Call, CallEnd, Mic, MicOff, VolumeUp, VolumeOff, SignalCellularAlt, Phone } from '@mui/icons-material';
+import { motion } from 'framer-motion';
+import {
+  FiPhone as Phone,
+  FiPhoneOff as PhoneOff,
+  FiMic as Mic,
+  FiMicOff as MicOff,
+  FiVolume2 as Volume,
+  FiVolumeX as VolumeOff,
+  FiUser as User,
+  FiClock as Clock
+} from 'react-icons/fi';
 import PropTypes from 'prop-types';
 import { connectWebSocket, sendWebSocketMessage } from '../services/websocketservice';
 import { hangupCall } from '../services/call';
 import { hangup } from '../services/hang';
 import webrtcCallService from '../services/webrtcCallService';
+import { cn, getInitials } from '../utils/ui';
+import {
+  buildButtonClass,
+  buildCardClass,
+  buildNotificationClass,
+  responsiveStyles,
+  touchTargetStyles,
+  animationStyles,
+  callStatusStyles
+} from '../utils/styling';
 
 const CallingPage = ({
   darkMode = false,
@@ -41,501 +60,531 @@ const CallingPage = ({
   const wsRef = useRef(null);
   const hangupInProgressRef = useRef(false);
 
-  useEffect(() => {
-    // Validate navigation state with more detailed error handling
-    if (!contact) {
-      console.error('[CallingPage] No contact data provided in navigation state');
-      setNotification({ message: 'No call data provided. Redirecting...', type: 'error' });
-      if (onEndCall) {
-        setTimeout(() => onEndCall(), 2000);
-      } else {
-        setTimeout(() => navigate('/dashboard'), 2000);
-      }
-      return;
-    }
-
-    if (!contact.extension) {
-      console.error('[CallingPage] Contact missing extension:', contact);
-      setNotification({ message: 'Invalid contact data - missing extension. Redirecting...', type: 'error' });
-      if (onEndCall) {
-        setTimeout(() => onEndCall(), 2000);
-      } else {
-        setTimeout(() => navigate('/dashboard'), 2000);
-      }
-      return;
-    }
-
-    // Ensure contact has a name, fallback to extension
-    if (!contact.name) {
-      contact.name = `Extension ${contact.extension}`;
-    }
-
-    console.log('[CallingPage] Call data validated:', { contact, currentCallStatus, isOutgoing, channel, transport });
-    console.log('[CallingPage] Navigation state:', location.state);
-    console.log('[CallingPage] Props:', { propContact, propCallStatus, propIsOutgoing, propChannel, propTransport });
-
-    // Check if this is a WebRTC call and set up status listener
-    const isWebRTCCall = channel && channel.startsWith('webrtc-call-');
-    if (isWebRTCCall) {
-      console.log('[CallingPage] Setting up WebRTC call status listener');
-
-      // Listen for WebRTC call status updates
-      const originalOnCallStatusChange = webrtcCallService.onCallStatusChange;
-      webrtcCallService.onCallStatusChange = (status) => {
-        console.log('[CallingPage] WebRTC status update:', status);
-        setCurrentCallStatus(status);
-
-        // Call original handler if it exists
-        if (originalOnCallStatusChange) {
-          originalOnCallStatusChange(status);
-        }
-      };
-
-      // Cleanup function to restore original handler
-      return () => {
-        webrtcCallService.onCallStatusChange = originalOnCallStatusChange;
-      };
-    }
-
-    // Set up WebSocket connection for real-time updates
-    const setupWebSocket = () => {
-      const wsUrl = `ws://localhost:8080/ws?extension=${encodeURIComponent(contact.extension)}`;
-      wsRef.current = new WebSocket(wsUrl);
-
-      wsRef.current.onopen = () => {
-        console.log('[CallingPage] WebSocket connected');
-        setWsConnected(true);
-      };
-
-      wsRef.current.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          console.log('[CallingPage] WebSocket message:', message);
-
-          switch (message.type) {
-            case 'call_answered':
-              console.log('[CallingPage] Call answered - starting timer');
-              setCurrentCallStatus('Connected');
-              setIsConnected(true);
-
-              // Start call timer when call is answered
-              if (!callStartTimeRef.current) {
-                callStartTimeRef.current = Date.now();
-                const updateCallTime = () => {
-                  if (callStartTimeRef.current) {
-                    setCallTime(Math.floor((Date.now() - callStartTimeRef.current) / 1000));
-                    animationFrameRef.current = requestAnimationFrame(updateCallTime);
-                  }
-                };
-                animationFrameRef.current = requestAnimationFrame(updateCallTime);
-              }
-
-              setNotification({ message: 'Call connected', type: 'success' });
-              setTimeout(() => setNotification(null), 3000);
-              break;
-            case 'call_ended':
-            case 'hangup':
-              setCurrentCallStatus('Call Ended');
-              setIsConnected(false);
-              setNotification({ message: 'Call ended', type: 'info' });
-              // Navigate faster when call is ended remotely
-              if (onEndCall) {
-                setTimeout(() => onEndCall(), 800);
-              } else {
-                setTimeout(() => navigate('/dashboard'), 800);
-              }
-              break;
-            case 'call_status':
-              if (message.status) {
-                setCurrentCallStatus(message.status);
-                if (message.status === 'Connected') {
-                  setIsConnected(true);
-                }
-              }
-              break;
-          }
-        } catch (error) {
-          console.error('[CallingPage] Failed to parse WebSocket message:', error);
-        }
-      };
-
-      wsRef.current.onclose = () => {
-        console.log('[CallingPage] WebSocket disconnected');
-        setWsConnected(false);
-      };
-
-      wsRef.current.onerror = (error) => {
-        console.error('[CallingPage] WebSocket error:', error);
-        setWsConnected(false);
-      };
-    };
-
-    setupWebSocket();
-
-    // Start call timer only if call is actually connected (not just during dialing)
-    if (isConnected && currentCallStatus === 'Connected' && !callStartTimeRef.current) {
-      console.log('[CallingPage] Starting call timer - call is connected');
-      callStartTimeRef.current = Date.now();
-      const updateCallTime = () => {
-        if (callStartTimeRef.current) {
-          setCallTime(Math.floor((Date.now() - callStartTimeRef.current) / 1000));
-          animationFrameRef.current = requestAnimationFrame(updateCallTime);
-        }
-      };
-      animationFrameRef.current = requestAnimationFrame(updateCallTime);
-    }
-
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, [contact?.extension, navigate]);
-
-  // Handle call status changes and timer management
-  useEffect(() => {
-    if (currentCallStatus === 'Connected' && !isConnected) {
-      console.log('[CallingPage] Call status changed to Connected - starting timer');
-      setIsConnected(true);
-
-      // Start timer only when call is truly connected
-      if (!callStartTimeRef.current) {
-        callStartTimeRef.current = Date.now();
-        const updateCallTime = () => {
-          if (callStartTimeRef.current) {
-            setCallTime(Math.floor((Date.now() - callStartTimeRef.current) / 1000));
-            animationFrameRef.current = requestAnimationFrame(updateCallTime);
-          }
-        };
-        animationFrameRef.current = requestAnimationFrame(updateCallTime);
-      }
-    } else if (currentCallStatus === 'Call Ended' || currentCallStatus === 'Disconnected') {
-      console.log('[CallingPage] Call ended - stopping timer');
-      setIsConnected(false);
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
-    }
-  }, [currentCallStatus, isConnected]);
-
+  // Format time helper
   const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const secs = (seconds % 60).toString().padStart(2, '0');
-    return `${mins}:${secs}`;
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Handle call end
   const handleEndCall = async () => {
-    // Prevent multiple hangup attempts
-    if (hangupInProgressRef.current) {
-      console.log('[CallingPage] Hangup already in progress, ignoring duplicate call');
-      return;
-    }
-
+    if (hangupInProgressRef.current) return;
     hangupInProgressRef.current = true;
 
     try {
-      console.log('[CallingPage] Ending call on channel:', channel);
-      console.log('[CallingPage] Contact:', contact);
-      console.log('[CallingPage] Transport:', transport);
-
-      // Immediately update UI state for faster response
-      setCurrentCallStatus('Call Ended');
-      setIsConnected(false);
+      setCurrentCallStatus('Ending call...');
       setNotification({ message: 'Ending call...', type: 'info' });
 
-      // Close WebSocket connection immediately
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
+      // Determine if this is a WebRTC call or SIP call
+      const isWebRTCCall = channel && (channel.startsWith('webrtc-call-') || channel.includes('webrtc'));
 
-      // Stop call timer immediately
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
+      if (isWebRTCCall) {
+        // For WebRTC calls, use the WebRTC service
+        console.log('[CallingPage] Ending WebRTC call');
+        webrtcCallService.endCall();
+      } else if (channel) {
+        // For SIP calls, use the hangup service
+        console.log('[CallingPage] Ending SIP call with channel:', channel);
+        await hangup(channel);
 
-      // Send hangup messages in parallel for faster execution
-      const hangupPromises = [];
-
-      // Send hangup message via WebSocket if still connected
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        hangupPromises.push(
-          sendWebSocketMessage({
-            type: "hangup",
-            to: contact.extension,
-            channel: channel,
-            transport: transport || "transport-ws",
-          }).catch(err => console.warn('[CallingPage] WebSocket hangup failed:', err))
-        );
-      }
-
-      // Also try hangup via API - use appropriate hangup method based on channel type
-      if (channel && channel.trim() !== '' && channel !== 'undefined' && channel !== 'null') {
-        console.log('[CallingPage] Attempting hangup for channel:', channel);
-        if (channel.startsWith('webrtc-call-') || channel.startsWith('PJSIP/')) {
-          // Use the hangup API for WebRTC and SIP calls
-          hangupPromises.push(
-            hangup(channel).catch(err => console.warn('[CallingPage] API hangup failed:', err))
-          );
-        } else {
-          // Use SIP hangup for traditional SIP sessions
-          hangupPromises.push(
-            hangupCall(channel).catch(err => console.warn('[CallingPage] SIP hangup failed:', err))
-          );
+        // Also try the hangupCall function as fallback
+        try {
+          await hangupCall(channel);
+        } catch (fallbackError) {
+          console.warn('[CallingPage] Fallback hangup failed:', fallbackError);
         }
       } else {
-        console.warn('[CallingPage] No valid channel available for hangup, channel:', channel);
+        // No channel available, try WebRTC service anyway
+        console.log('[CallingPage] No channel available, trying WebRTC service');
+        webrtcCallService.endCall();
       }
 
-      // Execute hangup operations in parallel (don't wait for completion)
-      Promise.allSettled(hangupPromises).then(() => {
-        console.log('[CallingPage] All hangup operations completed');
-      });
+      setNotification({ message: 'Call ended successfully', type: 'success' });
 
-      // Navigate back immediately without waiting for hangup completion
-      setNotification({ message: 'Call ended', type: 'success' });
-
-      // Use onEndCall prop if available (for direct component usage), otherwise navigate
-      if (onEndCall) {
-        setTimeout(() => onEndCall(), 500);
-      } else {
-        setTimeout(() => navigate('/dashboard'), 500); // Reduced delay for faster navigation
-      }
+      // Wait a moment to show the success message
+      setTimeout(() => {
+        if (onEndCall) {
+          onEndCall();
+        } else {
+          navigate(-1);
+        }
+      }, 1000);
 
     } catch (error) {
-      console.error('[CallingPage] End call error:', error);
-      setNotification({ message: `Call ended with errors`, type: 'warning' });
-      // Still navigate back even if there are errors
-      if (onEndCall) {
-        setTimeout(() => onEndCall(), 1000);
-      } else {
-        setTimeout(() => navigate('/dashboard'), 1000);
-      }
+      console.error('[CallingPage] Error ending call:', error);
+      setNotification({
+        message: `Failed to end call: ${error.message || 'Unknown error'}`,
+        type: 'error'
+      });
+
+      // Still navigate away after showing error
+      setTimeout(() => {
+        if (onEndCall) {
+          onEndCall();
+        } else {
+          navigate(-1);
+        }
+      }, 2000);
     } finally {
-      // Reset hangup flag
       hangupInProgressRef.current = false;
     }
   };
 
+  // Handle mute toggle
   const handleMuteToggle = () => {
-    setIsMuted((prev) => {
-      const newState = !prev;
-      // Try to find audio tracks in media streams
-      const audioElements = document.querySelectorAll('audio');
-      audioElements.forEach(audio => {
-        if (audio.srcObject && audio.srcObject.getAudioTracks) {
-          audio.srcObject.getAudioTracks().forEach(track => {
-            track.enabled = !newState;
-          });
-        }
-      });
-
-      console.log(`[CallingPage] Microphone ${newState ? 'muted' : 'unmuted'}`);
-      setNotification({
-        message: `Microphone ${newState ? 'muted' : 'unmuted'}`,
-        type: 'info'
-      });
-      setTimeout(() => setNotification(null), 2000);
-      return newState;
-    });
+    setIsMuted(!isMuted);
+    // Add actual mute logic here
   };
 
+  // Handle speaker toggle
   const handleSpeakerToggle = () => {
-    setIsSpeakerOn((prev) => {
-      const newState = !prev;
-      const audioElements = document.querySelectorAll('audio');
-      audioElements.forEach(audio => {
-        audio.muted = !newState;
-      });
-
-      console.log(`[CallingPage] Speaker ${newState ? 'on' : 'off'}`);
-      setNotification({
-        message: `Speaker ${newState ? 'on' : 'off'}`,
-        type: 'info'
-      });
-      setTimeout(() => setNotification(null), 2000);
-      return newState;
-    });
+    setIsSpeakerOn(!isSpeakerOn);
+    // Add actual speaker logic here
   };
+
+  // Update call timer
+  useEffect(() => {
+    let interval;
+    if (isConnected && callStartTimeRef.current) {
+      interval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - callStartTimeRef.current) / 1000);
+        setCallTime(elapsed);
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isConnected]);
+
+  // Set call start time when connected
+  useEffect(() => {
+    if (currentCallStatus === 'Connected' && !callStartTimeRef.current) {
+      callStartTimeRef.current = Date.now();
+      setIsConnected(true);
+    }
+  }, [currentCallStatus]);
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4 sm:p-6 animate-[fadeInUp_0.6s_ease-out_forwards]">
+    <div className={cn(
+      'min-h-screen flex items-center justify-center relative overflow-hidden',
+      // Mobile-first responsive padding
+      'px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8 lg:px-8 lg:py-10',
+      darkMode
+        ? 'bg-slate-900'
+        : 'bg-indigo-50'
+    )}>
+      {/* Decorative Background Elements - Responsive */}
+      <div className="absolute inset-0">
+        {/* Top decorative circles - Hidden on small screens, visible on larger */}
+        <div className="hidden sm:block absolute top-8 left-8 w-16 h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 bg-indigo-200 rounded-full opacity-30"></div>
+        <div className="hidden md:block absolute top-16 right-12 w-12 h-12 lg:w-16 lg:h-16 bg-purple-200 rounded-full opacity-40"></div>
+        <div className="hidden lg:block absolute top-32 left-1/4 w-10 h-10 lg:w-12 lg:h-12 bg-pink-200 rounded-full opacity-35"></div>
+
+        {/* Middle decorative elements - Responsive sizing */}
+        <div className="hidden sm:block absolute top-1/2 left-2 sm:left-4 w-12 h-12 md:w-16 md:h-16 lg:w-20 lg:h-20 bg-blue-200 rounded-full opacity-25"></div>
+        <div className="hidden md:block absolute top-1/2 right-4 lg:right-8 w-10 h-10 lg:w-14 lg:h-14 bg-emerald-200 rounded-full opacity-30"></div>
+
+        {/* Bottom decorative circles - Responsive */}
+        <div className="hidden sm:block absolute bottom-16 left-8 lg:left-16 w-14 h-14 lg:w-18 lg:h-18 bg-amber-200 rounded-full opacity-35"></div>
+        <div className="hidden md:block absolute bottom-8 right-1/4 w-16 h-16 lg:w-22 lg:h-22 bg-rose-200 rounded-full opacity-30"></div>
+        <div className="hidden lg:block absolute bottom-24 right-4 w-8 h-8 lg:w-10 lg:h-10 bg-cyan-200 rounded-full opacity-40"></div>
+
+        {/* Decorative squares - Hidden on mobile */}
+        <div className="hidden md:block absolute top-1/4 right-1/3 w-6 h-6 lg:w-8 lg:h-8 bg-violet-200 rounded-lg opacity-25 rotate-45"></div>
+        <div className="hidden lg:block absolute bottom-1/3 left-1/3 w-5 h-5 lg:w-6 lg:h-6 bg-teal-200 rounded-lg opacity-30 rotate-12"></div>
+      </div>
+
+      {/* Professional Notification */}
       {notification && (
-        <div
-          className={`fixed top-20 right-4 sm:right-6 z-50 glass-effect p-3 sm:p-4 rounded-lg shadow-lg animate-[fadeInUp_0.6s_ease-out_forwards] ${
-            notification.type === 'success'
-              ? 'bg-green-500/80'
-              : notification.type === 'error'
-              ? 'bg-red-500/80'
-              : 'bg-blue-500/80'
-          }`}
-          role="alert"
-          aria-live="polite"
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={buildNotificationClass(
+            notification.type === 'success' ? 'success' :
+            notification.type === 'error' ? 'danger' :
+            notification.type === 'warning' ? 'warning' : 'info'
+          )}
         >
-          <span className="text-xs sm:text-sm font-medium text-white">{notification.message}</span>
-        </div>
+          <div className="flex items-center space-x-2">
+            <div className={cn(
+              'w-2 h-2 rounded-full animate-pulse',
+              notification.type === 'success' ? 'bg-success-600' :
+              notification.type === 'error' ? 'bg-danger-600' :
+              notification.type === 'warning' ? 'bg-warning-600' : 'bg-primary-600'
+            )}></div>
+            <span className="font-medium">{notification.message}</span>
+          </div>
+        </motion.div>
       )}
 
-      <div
-        className="w-full max-w-[90%] sm:max-w-md glass-effect p-6 sm:p-8 rounded-2xl shadow-xl border border-white/20 transform transition-all duration-500 hover:shadow-[0_0_15px_rgba(59,130,246,0.4)] animate-[fadeInUp_0.8s_ease-out_forwards]"
-        style={{
-          background: darkMode
-            ? "rgba(30, 30, 30, 0.25)"
-            : "rgba(255, 255, 255, 0.2)",
-        }}
-      >
-        {/* Header with contact info */}
-        <div className="flex items-center space-x-4 mb-6 animate-[fadeInUp_1s_ease-out_forwards]">
-          <Avatar
-            alt={contact?.name || 'Contact'}
-            src={contact?.avatar}
-            className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border-3 border-white/40 shadow-md"
-            sx={{
-              bgcolor: contact?.avatar ? 'transparent' : '#6366f1',
-              color: 'white',
-              fontSize: '1.2rem',
-              fontWeight: 'bold'
-            }}
+      {/* Desktop Layout Container */}
+      <div className="w-full max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center lg:justify-center lg:space-x-8 xl:space-x-12">
+
+        {/* Main Calling Card - Enhanced for Desktop */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className={cn(
+            // Responsive width and max-width for different screen sizes
+            'w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl',
+            'mx-auto lg:mx-0 relative z-10 rounded-2xl sm:rounded-3xl shadow-2xl border-2',
+            // Enhanced mobile-first responsive design
+            'min-h-[500px] sm:min-h-[550px] md:min-h-[600px] lg:min-h-[650px]',
+            darkMode
+              ? 'bg-slate-800 border-slate-700'
+              : 'bg-white border-indigo-100'
+          )}
+        >
+        {/* Decorative header bar - Responsive height */}
+        <div className={cn(
+          'h-1.5 sm:h-2 rounded-t-2xl sm:rounded-t-3xl',
+          darkMode ? 'bg-indigo-600' : 'bg-indigo-500'
+        )}></div>
+
+        <div className="p-4 sm:p-6 md:p-8 lg:p-10">
+          {/* Header - Enhanced Mobile Responsive */}
+          <div className="text-center mb-4 sm:mb-6 md:mb-8">
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+              className={cn(
+                // Responsive avatar sizing for different screen sizes
+                'inline-flex items-center justify-center rounded-full mb-3 sm:mb-4 shadow-lg border-4',
+                'w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-28 lg:h-28',
+                darkMode
+                  ? 'bg-indigo-600 border-indigo-500'
+                  : 'bg-indigo-500 border-indigo-400'
+              )}
+            >
+              {contact?.avatar ? (
+                <img
+                  src={contact.avatar}
+                  alt={contact.name || 'Contact'}
+                  className="w-full h-full rounded-full object-cover"
+                />
+              ) : (
+                <span className={cn(
+                  'font-bold text-white',
+                  // Responsive text sizing
+                  'text-lg sm:text-xl md:text-2xl lg:text-3xl'
+                )}>
+                  {getInitials(contact?.name || contact?.extension || 'U')}
+                </span>
+              )}
+            </motion.div>
+
+            <motion.h1
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className={cn(
+                // Responsive title sizing
+                'text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold mb-1 sm:mb-2',
+                // Better line height for mobile
+                'leading-tight',
+                darkMode ? 'text-white' : 'text-slate-800'
+              )}
+            >
+              {contact?.name || `Extension ${contact?.extension}` || 'Unknown'}
+            </motion.h1>
+
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+              className={cn(
+                // Responsive subtitle sizing
+                'text-xs sm:text-sm md:text-base mb-2 sm:mb-3 font-medium',
+                darkMode ? 'text-slate-300' : 'text-slate-600'
+              )}
+            >
+              {isOutgoing ? 'Outgoing Call' : 'Incoming Call'}
+            </motion.p>
+
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              className={cn(
+                // Responsive status indicator
+                'inline-flex items-center justify-center space-x-1.5 sm:space-x-2',
+                'text-xs sm:text-sm md:text-base font-medium',
+                'px-3 sm:px-4 py-1.5 sm:py-2 rounded-full',
+                // Better mobile touch target
+                'min-h-[32px] sm:min-h-[36px]',
+                darkMode
+                  ? 'text-slate-300 bg-slate-700'
+                  : 'text-slate-600 bg-slate-100'
+              )}
+            >
+              <Clock className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+              <span className="truncate">
+                {isConnected ? formatTime(callTime) : currentCallStatus}
+              </span>
+            </motion.div>
+          </div>
+
+          {/* Call Status Indicator - Enhanced Mobile */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.6 }}
+            className="flex justify-center mb-4 sm:mb-6 md:mb-8"
           >
-            {!contact?.avatar && (contact?.name ? contact.name.charAt(0).toUpperCase() : contact?.extension?.charAt(0) || '?')}
-          </Avatar>
-          <div>
-            <h2
-              className={`text-xl sm:text-2xl font-bold ${
-                darkMode ? "text-white" : "text-white"
-              } animate-pulse`}
-              aria-live="polite"
-              style={{ textShadow: "0 1px 2px rgba(0, 0, 0, 0.5)" }}
-            >
-              📞 {isOutgoing ? 'Calling' : 'Incoming Call'}
-            </h2>
-            <p
-              className={`text-base sm:text-lg font-semibold ${
-                darkMode ? "text-blue-200" : "text-blue-200"
-              }`}
-            >
-              {isOutgoing ? `Calling: ${contact?.name || `Extension ${contact?.extension}`}` : `From: ${contact?.name || `Extension ${contact?.extension}`}`}
-            </p>
-            <p
-              className={`text-sm ${
-                darkMode ? "text-gray-400" : "text-gray-300"
-              } mt-1 flex items-center space-x-2`}
-            >
-              <span>Status: {currentCallStatus}</span>
-              <SignalCellularAlt
-                className={`text-sm ${wsConnected ? 'text-green-400' : 'text-gray-300'}`}
-                title={wsConnected ? 'Connected' : 'Disconnected'}
-              />
-            </p>
-            <p
-              className={`text-sm ${
-                darkMode ? "text-gray-400" : "text-gray-300"
-              } mt-1`}
-            >
-              Duration: {isConnected && callStartTimeRef.current ? formatTime(callTime) : (currentCallStatus === 'Connected' ? 'Connecting...' : '00:00')}
-            </p>
-          </div>
-        </div>
-
-        {/* Call status indicator */}
-        <div className="flex justify-center mb-6 animate-[fadeInUp_1.2s_ease-out_forwards]">
-          <div className="relative">
-            <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full flex items-center justify-center ${
+            <div className={cn(
+              // Responsive status indicator sizing
+              'w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 lg:w-24 lg:h-24',
+              'rounded-full flex items-center justify-center shadow-lg border-4',
               isConnected
-                ? 'bg-green-500/20 border-2 border-green-400'
-                : currentCallStatus === 'Connecting...' || currentCallStatus === 'Ringing'
-                ? 'bg-blue-500/20 border-2 border-blue-400 animate-pulse'
-                : 'bg-gray-500/20 border-2 border-gray-400'
-            }`}>
-              <Phone className={`text-2xl sm:text-3xl ${
-                isConnected ? 'text-green-400' : 'text-blue-400'
-              }`} />
+                ? 'bg-emerald-500 border-emerald-400 text-white'
+                : currentCallStatus === 'Ringing'
+                ? 'bg-amber-500 border-amber-400 text-white animate-pulse'
+                : 'bg-blue-500 border-blue-400 text-white'
+            )}>
+              <Phone className="w-4 h-4 sm:w-6 sm:h-6 md:w-8 md:h-8 lg:w-10 lg:h-10" />
             </div>
-            {isConnected && (
-              <div className="absolute inset-0 rounded-full bg-green-400/10 animate-ping"></div>
-            )}
-          </div>
-        </div>
+          </motion.div>
 
-        {/* Call quality indicator */}
-        <div className="flex justify-center mb-6 animate-[fadeInUp_1.4s_ease-out_forwards]">
-          <Tooltip title="Connection Quality">
-            <div className="flex space-x-1">
-              {[1, 2, 3, 4].map((i) => (
-                <div
-                  key={i}
-                  className={`w-2 h-6 rounded-full ${
-                    isConnected && wsConnected
-                      ? 'bg-green-400 animate-[pulse_2s_infinite]'
-                      : wsConnected
-                      ? 'bg-yellow-400'
-                      : 'bg-gray-500'
-                  }`}
-                  style={{ animationDelay: `${i * 0.2}s` }}
-                ></div>
-              ))}
-            </div>
-          </Tooltip>
-        </div>
-
-        {/* Audio controls */}
-        <div className="flex justify-center space-x-6 mb-6 animate-[fadeInUp_1.6s_ease-out_forwards]">
-          <Tooltip title={isMuted ? 'Unmute Microphone' : 'Mute Microphone'}>
-            <IconButton
+          {/* Call Controls - Enhanced Mobile Touch Targets */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7 }}
+            className="flex justify-center space-x-3 sm:space-x-4 md:space-x-6 mb-4 sm:mb-6"
+          >
+            {/* Mute Button - Enhanced Mobile */}
+            <button
               onClick={handleMuteToggle}
-              className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full glass-effect text-white transition-all transform hover:scale-110 focus:ring-4 focus:ring-blue-500/60 ${
+              className={cn(
+                // Better mobile touch targets and responsive sizing
+                'p-2.5 sm:p-3 md:p-4 rounded-xl sm:rounded-2xl',
+                'transition-all duration-200 shadow-lg border-2',
+                // Mobile-friendly hover states
+                'active:scale-95 sm:hover:scale-105',
+                // Minimum touch target size for mobile
+                'min-w-[44px] min-h-[44px] sm:min-w-[48px] sm:min-h-[48px]',
+                'flex items-center justify-center',
                 isMuted
-                  ? 'bg-red-600/80 hover:bg-red-700/80'
-                  : 'bg-gray-700/60 hover:bg-gray-600/70'
-              }`}
+                  ? 'bg-red-500 border-red-400 text-white active:bg-red-600 sm:hover:bg-red-600'
+                  : darkMode
+                  ? 'bg-slate-700 border-slate-600 text-slate-300 active:bg-slate-600 sm:hover:bg-slate-600'
+                  : 'bg-slate-100 border-slate-200 text-slate-600 active:bg-slate-200 sm:hover:bg-slate-200'
+              )}
               aria-label={isMuted ? 'Unmute microphone' : 'Mute microphone'}
             >
-              {isMuted ? (
-                <MicOff className="text-xl" />
-              ) : (
-                <Mic className="text-xl" />
-              )}
-            </IconButton>
-          </Tooltip>
+              {isMuted ?
+                <MicOff className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" /> :
+                <Mic className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
+              }
+            </button>
 
-          <Tooltip title={isSpeakerOn ? 'Mute Speaker' : 'Unmute Speaker'}>
-            <IconButton
+            {/* Speaker Button - Enhanced Mobile */}
+            <button
               onClick={handleSpeakerToggle}
-              className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full glass-effect text-white transition-all transform hover:scale-110 focus:ring-4 focus:ring-blue-500/60 ${
+              className={cn(
+                // Better mobile touch targets and responsive sizing
+                'p-2.5 sm:p-3 md:p-4 rounded-xl sm:rounded-2xl',
+                'transition-all duration-200 shadow-lg border-2',
+                // Mobile-friendly hover states
+                'active:scale-95 sm:hover:scale-105',
+                // Minimum touch target size for mobile
+                'min-w-[44px] min-h-[44px] sm:min-w-[48px] sm:min-h-[48px]',
+                'flex items-center justify-center',
                 !isSpeakerOn
-                  ? 'bg-red-600/80 hover:bg-red-700/80'
-                  : 'bg-gray-700/60 hover:bg-gray-600/70'
-              }`}
-              aria-label={isSpeakerOn ? 'Mute speaker' : 'Unmute speaker'}
-            >
-              {isSpeakerOn ? (
-                <VolumeUp className="text-xl" />
-              ) : (
-                <VolumeOff className="text-xl" />
+                  ? 'bg-amber-500 border-amber-400 text-white active:bg-amber-600 sm:hover:bg-amber-600'
+                  : darkMode
+                  ? 'bg-slate-700 border-slate-600 text-slate-300 active:bg-slate-600 sm:hover:bg-slate-600'
+                  : 'bg-slate-100 border-slate-200 text-slate-600 active:bg-slate-200 sm:hover:bg-slate-200'
               )}
-            </IconButton>
-          </Tooltip>
-        </div>
+              aria-label={isSpeakerOn ? 'Turn off speaker' : 'Turn on speaker'}
+            >
+              {isSpeakerOn ?
+                <Volume className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" /> :
+                <VolumeOff className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
+              }
+            </button>
+          </motion.div>
 
-        {/* End call button */}
-        <div className="flex justify-center animate-[fadeInUp_1.8s_ease-out_forwards]">
-          <Tooltip title="End Call">
-            <Button
-              variant="contained"
-              onClick={handleEndCall}
-              className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-r from-red-700 to-red-900 hover:from-red-800 hover:to-red-950 focus:ring-4 focus:ring-red-500/60 transition-all transform hover:scale-110 active:scale-95 ${
-                darkMode ? "shadow-red-900/60" : "shadow-red-700/60"
-              }`}
-              startIcon={<CallEnd className="text-2xl" />}
-              aria-label="End the call"
-            />
-          </Tooltip>
+          {/* End Call Button - Professional Styling */}
+          <motion.button
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.8 }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleEndCall}
+            disabled={hangupInProgressRef.current}
+            className={cn(
+              buildButtonClass('danger', 'lg'),
+              'w-full space-x-1.5 sm:space-x-2',
+              touchTargetStyles.large,
+              // Responsive text sizing
+              'text-sm sm:text-base md:text-lg',
+              // Enhanced mobile states
+              hangupInProgressRef.current && 'opacity-75 cursor-not-allowed'
+            )}
+            aria-label="End the current call"
+          >
+            <PhoneOff className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 flex-shrink-0" />
+            <span>
+              {hangupInProgressRef.current ? 'Ending Call...' : 'End Call'}
+            </span>
+          </motion.button>
         </div>
+      </motion.div>
+
+      {/* Desktop Side Panel - Additional Info (Hidden on Mobile) */}
+      <motion.div
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.6, delay: 0.3 }}
+        className="hidden lg:block lg:w-80 xl:w-96"
+      >
+        <div className={cn(
+          'rounded-2xl shadow-xl border-2 p-6',
+          darkMode
+            ? 'bg-slate-800 border-slate-700'
+            : 'bg-white border-indigo-100'
+        )}>
+          {/* Call Information */}
+          <div className="mb-6">
+            <h3 className={cn(
+              'text-lg font-semibold mb-4',
+              darkMode ? 'text-white' : 'text-slate-800'
+            )}>
+              Call Information
+            </h3>
+            <div className="space-y-3">
+              <div className="flex justify-between">
+                <span className={cn(
+                  'text-sm',
+                  darkMode ? 'text-slate-400' : 'text-slate-600'
+                )}>
+                  Extension:
+                </span>
+                <span className={cn(
+                  'text-sm font-medium',
+                  darkMode ? 'text-slate-200' : 'text-slate-800'
+                )}>
+                  {contact?.extension || 'Unknown'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className={cn(
+                  'text-sm',
+                  darkMode ? 'text-slate-400' : 'text-slate-600'
+                )}>
+                  Call Type:
+                </span>
+                <span className={cn(
+                  'text-sm font-medium',
+                  darkMode ? 'text-slate-200' : 'text-slate-800'
+                )}>
+                  {isOutgoing ? 'Outgoing' : 'Incoming'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className={cn(
+                  'text-sm',
+                  darkMode ? 'text-slate-400' : 'text-slate-600'
+                )}>
+                  Status:
+                </span>
+                <span className={cn(
+                  'text-sm font-medium',
+                  isConnected ? 'text-emerald-500' : 'text-amber-500'
+                )}>
+                  {isConnected ? 'Connected' : currentCallStatus}
+                </span>
+              </div>
+              {isConnected && (
+                <div className="flex justify-between">
+                  <span className={cn(
+                    'text-sm',
+                    darkMode ? 'text-slate-400' : 'text-slate-600'
+                  )}>
+                    Duration:
+                  </span>
+                  <span className={cn(
+                    'text-sm font-medium font-mono',
+                    darkMode ? 'text-slate-200' : 'text-slate-800'
+                  )}>
+                    {formatTime(callTime)}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Quick Actions (Desktop Only) */}
+          <div className="mb-6">
+            <h3 className={cn(
+              'text-lg font-semibold mb-4',
+              darkMode ? 'text-white' : 'text-slate-800'
+            )}>
+              Quick Actions
+            </h3>
+            <div className="space-y-2">
+              <button
+                className={cn(
+                  'w-full text-left px-4 py-3 rounded-lg transition-all duration-200',
+                  'flex items-center space-x-3',
+                  darkMode
+                    ? 'bg-slate-700 hover:bg-slate-600 text-slate-200'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                )}
+              >
+                <User className="w-4 h-4" />
+                <span className="text-sm">View Contact Details</span>
+              </button>
+              <button
+                className={cn(
+                  'w-full text-left px-4 py-3 rounded-lg transition-all duration-200',
+                  'flex items-center space-x-3',
+                  darkMode
+                    ? 'bg-slate-700 hover:bg-slate-600 text-slate-200'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                )}
+              >
+                <Clock className="w-4 h-4" />
+                <span className="text-sm">Call History</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Call Quality Indicator (Desktop Only) */}
+          <div>
+            <h3 className={cn(
+              'text-lg font-semibold mb-4',
+              darkMode ? 'text-white' : 'text-slate-800'
+            )}>
+              Connection Quality
+            </h3>
+            <div className="flex items-center space-x-2">
+              <div className="flex space-x-1">
+                <div className="w-2 h-4 bg-emerald-500 rounded-sm"></div>
+                <div className="w-2 h-4 bg-emerald-500 rounded-sm"></div>
+                <div className="w-2 h-4 bg-emerald-500 rounded-sm"></div>
+                <div className="w-2 h-4 bg-emerald-500 rounded-sm"></div>
+                <div className={cn(
+                  'w-2 h-4 rounded-sm',
+                  darkMode ? 'bg-slate-600' : 'bg-slate-300'
+                )}></div>
+              </div>
+              <span className={cn(
+                'text-sm font-medium',
+                darkMode ? 'text-slate-200' : 'text-slate-700'
+              )}>
+                Excellent
+              </span>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
       </div>
     </div>
   );
@@ -543,26 +592,12 @@ const CallingPage = ({
 
 CallingPage.propTypes = {
   darkMode: PropTypes.bool,
-  contact: PropTypes.shape({
-    name: PropTypes.string,
-    extension: PropTypes.string.isRequired,
-    avatar: PropTypes.string,
-  }),
+  contact: PropTypes.object,
   callStatus: PropTypes.string,
   isOutgoing: PropTypes.bool,
   channel: PropTypes.string,
   transport: PropTypes.string,
-  onEndCall: PropTypes.func,
-};
-
-CallingPage.defaultProps = {
-  darkMode: false,
-  contact: null,
-  callStatus: 'Connecting...',
-  isOutgoing: true,
-  channel: null,
-  transport: null,
-  onEndCall: null,
+  onEndCall: PropTypes.func
 };
 
 export default CallingPage;

@@ -1,295 +1,436 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import {
-  TextField,
-  Button,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-} from '@mui/material';
-import { HowToReg as RegisterIcon } from '@mui/icons-material';
+  FiEye as Eye,
+  FiEyeOff as EyeOff,
+  FiUser as User,
+  FiLock as Lock,
+  FiMail as Mail,
+  FiPhone as Phone,
+  FiUserPlus as UserPlus,
+  FiMoon as Moon,
+  FiSun as Sun,
+  FiArrowRight as ArrowRight,
+  FiCheckCircle as CheckCircle,
+  FiAlertCircle as AlertCircle,
+  FiArrowLeft as ArrowLeft,
+  FiShield as Shield
+} from 'react-icons/fi';
 import { register } from '../services/register';
-import Logo from '../assets/Login.png';
+import { useTheme } from '../contexts/ThemeContext';
+import { cn } from '../utils/ui';
+import toast from 'react-hot-toast';
 
-const RegisterPage = ({ onSwitchToLogin }) => {
-  const [step, setStep] = useState(0);
+const RegisterPage = ({ onRegister, onSwitchToLogin }) => {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [extension, setExtension] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [notification, setNotification] = useState(null);
-  const [darkMode, setDarkMode] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const { darkMode, toggleDarkMode } = useTheme();
 
-  useEffect(() => {
-    const savedMode = localStorage.getItem('darkMode') === 'true';
-    setDarkMode(savedMode);
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('darkMode', darkMode);
-  }, [darkMode]);
-
-  const toggleDarkMode = () => setDarkMode((prev) => !prev);
-
-  const validateStep = () => {
-    switch (step) {
-      case 0:
-        return username.trim().length >= 3;
-      case 1:
-        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-      case 2:
-        return /^\d{4,6}$/.test(extension);
-      case 3:
-        return password.length >= 6;
-      case 4:
-        return confirmPassword === password;
-      default:
-        return false;
-    }
-  };
-
-  const nextStep = async () => {
-    if (!validateStep()) {
-      setNotification({ message: 'Please fill in valid information.', type: 'error' });
-      setTimeout(() => setNotification(null), 3000);
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    
+    if (!username.trim() || username.length < 3) {
+      toast.error('Username must be at least 3 characters long');
       return;
     }
-    setNotification(null);
-
-    if (step < 4) {
-      setStep(step + 1);
-    } else {
-      try {
-        const res = await register(username, email, password, extension);
-        if (res.success) {
-          setNotification({
-            message: `${res.message}. Extension: ${res.extension}`,
-            type: 'success',
-          });
-
-          // Clear auto-login data
-          localStorage.removeItem('extension');
-          localStorage.removeItem('sipPassword');
-
-          // Delay then switch to login
-          setTimeout(() => {
-            onSwitchToLogin();
-          }, 3000);
-        } else {
-          setNotification({ message: res.message, type: 'error' });
-          setTimeout(() => setNotification(null), 3000);
-        }
-      } catch {
-        setNotification({ message: 'Registration failed. Try again.', type: 'error' });
-        setTimeout(() => setNotification(null), 3000);
-      }
+    
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error('Please enter a valid email address');
+      return;
     }
-  };
+    
+    if (!/^\d{4,6}$/.test(extension)) {
+      toast.error('Extension must be 4-6 digits');
+      return;
+    }
+    
+    if (password.length < 6) {
+      toast.error('Password must be at least 6 characters long');
+      return;
+    }
+    
+    if (password !== confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    
+    if (!agreedToTerms) {
+      toast.error('Please agree to the terms and conditions');
+      return;
+    }
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      nextStep();
+    setLoading(true);
+    try {
+      const result = await register(username, email, password, extension);
+      if (result.success) {
+        toast.success(`Registration successful! Extension: ${result.extension}`);
+        setTimeout(() => {
+          onSwitchToLogin();
+        }, 2000);
+      } else {
+        toast.error(result.message || 'Registration failed');
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      toast.error('Registration failed. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div
-      className={`min-h-screen flex flex-col ${
-        darkMode
-          ? 'bg-gray-900 text-white'
-          : 'bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100 text-gray-900'
-      }`}
-    >
-      <nav
-        className={`flex justify-between items-center px-6 py-3 ${
-          darkMode ? 'bg-gray-800' : 'bg-white shadow-md'
-        }`}
-      >
-        <div className="flex items-center space-x-3">
-          <img src={Logo} alt="Logo" className="w-10 h-10 rounded-full object-contain" />
-          <h1 className="text-xl font-bold select-none">VoIP System</h1>
-        </div>
-        <button
-          onClick={toggleDarkMode}
-          aria-label="Toggle Dark Mode"
-          className="px-3 py-1 rounded-full border border-gray-400 focus:outline-none hover:bg-gray-300 dark:hover:bg-gray-700 dark:border-gray-600"
-        >
-          {darkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
-        </button>
-      </nav>
+    <div className={cn(
+      'min-h-screen flex items-center justify-center relative overflow-hidden',
+      darkMode
+        ? 'bg-gradient-to-br from-secondary-900 via-secondary-800 to-secondary-900'
+        : 'bg-gradient-to-br from-primary-50 via-white to-accent-50'
+    )}>
+      {/* Background Pattern */}
+      <div className="absolute inset-0 opacity-10">
+        <div className="absolute top-20 left-20 w-72 h-72 bg-primary-500 rounded-full mix-blend-multiply filter blur-xl animate-pulse" />
+        <div className="absolute top-40 right-20 w-72 h-72 bg-accent-500 rounded-full mix-blend-multiply filter blur-xl animate-pulse delay-1000" />
+        <div className="absolute bottom-20 left-40 w-72 h-72 bg-success-500 rounded-full mix-blend-multiply filter blur-xl animate-pulse delay-2000" />
+      </div>
 
-      <div className="flex-grow flex items-center justify-center px-4 py-6">
-        <div
-          className={`rounded-2xl shadow-2xl p-6 sm:p-8 w-full max-w-md transition-all duration-500 overflow-hidden ${
-            darkMode ? 'bg-gray-800' : 'bg-white'
-          }`}
-        >
-          <div className="flex flex-col items-center mb-4">
-            <img
-              src={Logo}
-              alt="Logo"
-              className="w-24 h-24 sm:w-28 sm:h-28 rounded-full object-contain mb-2"
-            />
-            <h3 className="text-center text-sm font-bold">
-              THE INSTITUTE OF FINANCE MANAGEMENT
-            </h3>
-            <h2
-              className={`text-xl sm:text-2xl font-extrabold text-center mt-1 ${
-                darkMode ? 'text-white' : 'text-gray-900'
-              }`}
+      {/* Dark Mode Toggle */}
+      <button
+        onClick={toggleDarkMode}
+        className={cn(
+          'absolute top-6 right-6 p-3 rounded-xl transition-all duration-200 z-10',
+          darkMode
+            ? 'bg-secondary-800 hover:bg-secondary-700 text-yellow-400'
+            : 'bg-white hover:bg-secondary-50 text-secondary-600 shadow-lg'
+        )}
+      >
+        {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+      </button>
+
+      {/* Main Register Card */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+        className={cn(
+          'w-full max-w-md mx-4 relative z-10',
+          darkMode ? 'glass-effect-dark' : 'glass-effect'
+        )}
+      >
+        <div className="p-8">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+              className="inline-flex items-center justify-center w-16 h-16 bg-primary-100 rounded-2xl mb-4"
             >
-              VoIP Register
-            </h2>
+              <UserPlus className="w-8 h-8 text-primary-600" />
+            </motion.div>
+            <motion.h1
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className={cn(
+                'text-2xl font-bold mb-2',
+                darkMode ? 'text-white' : 'text-secondary-900'
+              )}
+            >
+              Create Account
+            </motion.h1>
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+              className={cn(
+                'text-sm',
+                darkMode ? 'text-secondary-400' : 'text-secondary-600'
+              )}
+            >
+              Join our VoIP platform today
+            </motion.p>
           </div>
 
-          {notification && (
-            <div
-              className={`fixed top-20 right-4 z-50 p-3 rounded-lg shadow-lg animate-[fadeInUp_0.6s_ease-out_forwards] ${
-                notification.type === 'success' ? 'bg-green-500/80' : 'bg-red-500/80'
-              }`}
+          {/* Register Form */}
+          <form onSubmit={handleRegister} className="space-y-6">
+            {/* Username Field */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.5 }}
             >
-              <span className="text-sm font-medium text-white">{notification.message}</span>
-            </div>
-          )}
-
-          <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
-            {[{
-                label: 'Username',
-                value: username,
-                onChange: setUsername,
-                type: 'text',
-                placeholder: 'Enter username',
-              },
-              {
-                label: 'Email',
-                value: email,
-                onChange: setEmail,
-                type: 'email',
-                placeholder: 'Enter email',
-              },
-              {
-                label: 'Extension',
-                value: extension,
-                onChange: setExtension,
-                type: 'text',
-                placeholder: 'Enter 4-6 digit extension (e.g., 1004)',
-              },
-              {
-                label: 'Password',
-                value: password,
-                onChange: setPassword,
-                type: 'password',
-                placeholder: 'Enter password',
-              },
-              {
-                label: 'Confirm Password',
-                value: confirmPassword,
-                onChange: setConfirmPassword,
-                type: 'password',
-                placeholder: 'Re-enter password',
-              },
-            ].map((field, index) => (
-              <div
-                key={index}
-                className={`overflow-hidden transition-all duration-500 ${
-                  step === index ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
-                }`}
-              >
-                <label
-                  className={`block text-sm font-medium ${
-                    darkMode ? 'text-white' : 'text-gray-900'
-                  }`}
-                >
-                  {field.label}
-                </label>
-                {field.type === 'select' ? (
-                  <FormControl fullWidth>
-                    <InputLabel className={darkMode ? 'text-white' : ''}>
-                      {field.label}
-                    </InputLabel>
-                    <Select
-                      value={field.value}
-                      onChange={(e) => field.onChange(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      autoFocus={step === index}
-                      label={field.label}
-                      sx={{
-                        backgroundColor: darkMode ? '#374151' : '#fff',
-                        color: darkMode ? '#fff' : 'inherit',
-                        '.MuiSvgIcon-root': {
-                          color: darkMode ? '#fff' : 'inherit',
-                        },
-                      }}
-                    >
-                      {field.options.map((opt) => (
-                        <MenuItem
-                          key={opt}
-                          value={opt}
-                          sx={{
-                            backgroundColor: darkMode ? '#374151' : '#fff',
-                            color: darkMode ? '#fff' : 'inherit',
-                          }}
-                        >
-                          {opt.charAt(0).toUpperCase() + opt.slice(1)}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                ) : (
-                  <TextField
-                    type={field.type}
-                    value={field.value}
-                    onChange={(e) => field.onChange(e.target.value)}
-                    placeholder={field.placeholder}
-                    onKeyDown={handleKeyDown}
-                    autoFocus={step === index}
-                    fullWidth
-                    variant="outlined"
-                    InputProps={{
-                      className: `p-3 rounded-lg focus:ring-2 focus:ring-blue-400 ${
-                        darkMode ? 'bg-gray-700 text-white' : ''
-                      }`,
-                    }}
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        backgroundColor: darkMode ? '#374151' : '#fff',
-                        color: darkMode ? '#fff' : 'inherit',
-                      },
-                    }}
-                  />
-                )}
+              <label className={cn(
+                'block text-sm font-medium mb-2',
+                darkMode ? 'text-secondary-300' : 'text-secondary-700'
+              )}>
+                Username
+              </label>
+              <div className="relative">
+                <User className={cn(
+                  'absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5',
+                  darkMode ? 'text-secondary-400' : 'text-secondary-500'
+                )} />
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className={cn(
+                    'w-full pl-10 pr-4 py-3 rounded-lg border transition-all duration-200',
+                    'focus:ring-2 focus:ring-primary-500 focus:border-primary-500',
+                    darkMode
+                      ? 'bg-secondary-800 border-secondary-600 text-white placeholder-secondary-400'
+                      : 'bg-white border-secondary-300 text-secondary-900 placeholder-secondary-500'
+                  )}
+                  placeholder="Enter your username"
+                  required
+                />
               </div>
-            ))}
+            </motion.div>
 
-            <Button
-              type="button"
-              onClick={nextStep}
-              variant="contained"
-              fullWidth
-              className="mt-4 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white p-3 font-semibold"
-              startIcon={<RegisterIcon />}
+            {/* Email Field */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.6 }}
             >
-              {step < 4 ? 'Next' : 'Register'}
-            </Button>
+              <label className={cn(
+                'block text-sm font-medium mb-2',
+                darkMode ? 'text-secondary-300' : 'text-secondary-700'
+              )}>
+                Email
+              </label>
+              <div className="relative">
+                <Mail className={cn(
+                  'absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5',
+                  darkMode ? 'text-secondary-400' : 'text-secondary-500'
+                )} />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={cn(
+                    'w-full pl-10 pr-4 py-3 rounded-lg border transition-all duration-200',
+                    'focus:ring-2 focus:ring-primary-500 focus:border-primary-500',
+                    darkMode
+                      ? 'bg-secondary-800 border-secondary-600 text-white placeholder-secondary-400'
+                      : 'bg-white border-secondary-300 text-secondary-900 placeholder-secondary-500'
+                  )}
+                  placeholder="Enter your email"
+                  required
+                />
+              </div>
+            </motion.div>
+
+            {/* Extension Field */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.7 }}
+            >
+              <label className={cn(
+                'block text-sm font-medium mb-2',
+                darkMode ? 'text-secondary-300' : 'text-secondary-700'
+              )}>
+                Extension (4-6 digits)
+              </label>
+              <div className="relative">
+                <Phone className={cn(
+                  'absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5',
+                  darkMode ? 'text-secondary-400' : 'text-secondary-500'
+                )} />
+                <input
+                  type="text"
+                  value={extension}
+                  onChange={(e) => setExtension(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className={cn(
+                    'w-full pl-10 pr-4 py-3 rounded-lg border transition-all duration-200',
+                    'focus:ring-2 focus:ring-primary-500 focus:border-primary-500',
+                    darkMode
+                      ? 'bg-secondary-800 border-secondary-600 text-white placeholder-secondary-400'
+                      : 'bg-white border-secondary-300 text-secondary-900 placeholder-secondary-500'
+                  )}
+                  placeholder="e.g., 1001"
+                  required
+                />
+              </div>
+            </motion.div>
+
+            {/* Password Field */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.8 }}
+            >
+              <label className={cn(
+                'block text-sm font-medium mb-2',
+                darkMode ? 'text-secondary-300' : 'text-secondary-700'
+              )}>
+                Password
+              </label>
+              <div className="relative">
+                <Lock className={cn(
+                  'absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5',
+                  darkMode ? 'text-secondary-400' : 'text-secondary-500'
+                )} />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={cn(
+                    'w-full pl-10 pr-12 py-3 rounded-lg border transition-all duration-200',
+                    'focus:ring-2 focus:ring-primary-500 focus:border-primary-500',
+                    darkMode
+                      ? 'bg-secondary-800 border-secondary-600 text-white placeholder-secondary-400'
+                      : 'bg-white border-secondary-300 text-secondary-900 placeholder-secondary-500'
+                  )}
+                  placeholder="Enter your password"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className={cn(
+                    'absolute right-3 top-1/2 transform -translate-y-1/2',
+                    darkMode ? 'text-secondary-400 hover:text-secondary-300' : 'text-secondary-500 hover:text-secondary-700'
+                  )}
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </motion.div>
+
+            {/* Confirm Password Field */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.9 }}
+            >
+              <label className={cn(
+                'block text-sm font-medium mb-2',
+                darkMode ? 'text-secondary-300' : 'text-secondary-700'
+              )}>
+                Confirm Password
+              </label>
+              <div className="relative">
+                <Lock className={cn(
+                  'absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5',
+                  darkMode ? 'text-secondary-400' : 'text-secondary-500'
+                )} />
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className={cn(
+                    'w-full pl-10 pr-12 py-3 rounded-lg border transition-all duration-200',
+                    'focus:ring-2 focus:ring-primary-500 focus:border-primary-500',
+                    darkMode
+                      ? 'bg-secondary-800 border-secondary-600 text-white placeholder-secondary-400'
+                      : 'bg-white border-secondary-300 text-secondary-900 placeholder-secondary-500'
+                  )}
+                  placeholder="Confirm your password"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className={cn(
+                    'absolute right-3 top-1/2 transform -translate-y-1/2',
+                    darkMode ? 'text-secondary-400 hover:text-secondary-300' : 'text-secondary-500 hover:text-secondary-700'
+                  )}
+                >
+                  {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </motion.div>
+
+            {/* Terms Agreement */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1.0 }}
+              className="flex items-start space-x-3"
+            >
+              <input
+                type="checkbox"
+                id="terms"
+                checked={agreedToTerms}
+                onChange={(e) => setAgreedToTerms(e.target.checked)}
+                className="mt-1 w-4 h-4 text-primary-600 border-secondary-300 rounded focus:ring-primary-500"
+              />
+              <label htmlFor="terms" className={cn(
+                'text-sm',
+                darkMode ? 'text-secondary-400' : 'text-secondary-600'
+              )}>
+                I agree to the{' '}
+                <a href="#" className="text-primary-600 hover:text-primary-700 underline">
+                  Terms and Conditions
+                </a>{' '}
+                and{' '}
+                <a href="#" className="text-primary-600 hover:text-primary-700 underline">
+                  Privacy Policy
+                </a>
+              </label>
+            </motion.div>
+
+            {/* Register Button */}
+            <motion.button
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1.1 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              type="submit"
+              disabled={loading}
+              className={cn(
+                'w-full py-3 px-4 rounded-lg font-medium transition-all duration-200',
+                'focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+                loading
+                  ? 'bg-secondary-400 cursor-not-allowed'
+                  : 'bg-primary-600 hover:bg-primary-700 text-white shadow-lg hover:shadow-xl'
+              )}
+            >
+              {loading ? (
+                <div className="flex items-center justify-center space-x-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Creating Account...</span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center space-x-2">
+                  <UserPlus className="w-5 h-5" />
+                  <span>Create Account</span>
+                </div>
+              )}
+            </motion.button>
           </form>
 
-          <p
-            className={`mt-6 text-center text-sm ${
-              darkMode ? 'text-gray-300' : 'text-gray-600'
-            }`}
+          {/* Login Link */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.2 }}
+            className="mt-6 text-center"
           >
-            Already have an account?{' '}
-            <button
-              onClick={onSwitchToLogin}
-              className="text-blue-500 hover:text-blue-700 font-medium focus:outline-none focus:underline"
-            >
-              Log In
-            </button>
-          </p>
+            <p className={cn(
+              'text-sm',
+              darkMode ? 'text-secondary-400' : 'text-secondary-600'
+            )}>
+              Already have an account?{' '}
+              <button
+                onClick={onSwitchToLogin}
+                className="text-primary-600 hover:text-primary-700 font-medium underline"
+              >
+                Sign in here
+              </button>
+            </p>
+          </motion.div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

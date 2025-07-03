@@ -168,19 +168,78 @@ const WebRTCPhone = ({ extension, onCallStatusChange }) => {
 
   const setupLocalMedia = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: true, 
-        video: false 
-      });
-      
+      console.log('[WebRTCPhone] Setting up local media...');
+
+      let stream = null;
+
+      // Try modern getUserMedia first
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+            },
+            video: false
+          });
+        } catch (modernError) {
+          console.warn('[WebRTCPhone] Enhanced getUserMedia failed, trying basic:', modernError);
+
+          // Try basic constraints
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              audio: true,
+              video: false
+            });
+          } catch (basicError) {
+            console.warn('[WebRTCPhone] Basic getUserMedia failed:', basicError);
+          }
+        }
+      }
+
+      // Try legacy getUserMedia if modern failed
+      if (!stream) {
+        const getUserMedia = navigator.getUserMedia ||
+                           navigator.webkitGetUserMedia ||
+                           navigator.mozGetUserMedia ||
+                           navigator.msGetUserMedia;
+
+        if (getUserMedia) {
+          console.log('[WebRTCPhone] Trying legacy getUserMedia...');
+          stream = await new Promise((resolve, reject) => {
+            getUserMedia.call(navigator, { audio: true, video: false }, resolve, reject);
+          });
+        }
+      }
+
+      if (!stream) {
+        throw new Error('Unable to access microphone');
+      }
+
       localStreamRef.current = stream;
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
       }
-      
+
+      console.log('[WebRTCPhone] Local media setup successful');
       return stream;
     } catch (error) {
       console.error('[WebRTCPhone] Failed to get local media:', error);
+
+      // Provide helpful error messages
+      if (error.name === 'NotAllowedError') {
+        const isHTTP = window.location.protocol === 'http:' &&
+                      window.location.hostname !== 'localhost' &&
+                      window.location.hostname !== '127.0.0.1';
+
+        if (isHTTP) {
+          throw new Error('Microphone access denied. HTTP sites have limited access. Please allow microphone in browser settings or use HTTPS.');
+        } else {
+          throw new Error('Microphone access denied. Please allow microphone access.');
+        }
+      }
+
       throw error;
     }
   };

@@ -226,7 +226,7 @@ const IncomingCallPage = ({ callData, contacts, user, darkMode = false, onCallAc
 
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4 sm:p-6 animate-[fadeInUp_0.6s_ease-out_forwards]"
+      className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8 animate-[fadeInUp_0.6s_ease-out_forwards]"
       onKeyDown={handleKeyDown}
       tabIndex={0}
       role="dialog"
@@ -250,22 +250,22 @@ const IncomingCallPage = ({ callData, contacts, user, darkMode = false, onCallAc
         </div>
       )}
       <div
-        className="w-full max-w-[90%] sm:max-w-md glass-effect p-6 sm:p-8 rounded-2xl shadow-xl border border-white/20 transform transition-all duration-500 hover:shadow-[0_0_15px_rgba(59,130,246,0.4)] animate-[fadeInUp_0.8s_ease-out_forwards]"
+        className="w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg glass-effect p-4 sm:p-6 md:p-8 rounded-xl sm:rounded-2xl shadow-xl border border-white/20 transform transition-all duration-500 hover:shadow-[0_0_15px_rgba(59,130,246,0.4)] animate-[fadeInUp_0.8s_ease-out_forwards]"
         style={{
           background: darkMode
             ? "rgba(30, 30, 30, 0.25)"
             : "rgba(255, 255, 255, 0.2)",
         }}
       >
-        <div className="flex items-center space-x-4 mb-6 animate-[fadeInUp_1s_ease-out_forwards]">
+        <div className="flex items-center space-x-3 sm:space-x-4 mb-4 sm:mb-6 animate-[fadeInUp_1s_ease-out_forwards]">
           <Avatar
             alt={caller.name}
             src={caller.avatar}
-            className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border-3 border-white/40 shadow-md"
+            className="w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 rounded-full border-3 border-white/40 shadow-md"
             sx={{
               bgcolor: caller.avatar ? 'transparent' : '#6366f1',
               color: 'white',
-              fontSize: '1.2rem',
+              fontSize: { xs: '1rem', sm: '1.2rem', md: '1.4rem' },
               fontWeight: 'bold'
             }}
           >
@@ -273,23 +273,23 @@ const IncomingCallPage = ({ callData, contacts, user, darkMode = false, onCallAc
           </Avatar>
           <div>
             <h2
-              className={`text-xl sm:text-2xl font-bold ${
+              className={`text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold ${
                 darkMode ? "text-white" : "text-white"
-              } animate-pulse`}
+              } animate-pulse leading-tight`}
               aria-live="polite"
               style={{ textShadow: "0 1px 2px rgba(0, 0, 0, 0.5)" }}
             >
               {callAccepted ? "📞 Connecting..." : "📞 Incoming Call"}
             </h2>
             <p
-              className={`text-base sm:text-lg font-semibold ${
+              className={`text-sm sm:text-base md:text-lg font-semibold ${
                 darkMode ? "text-blue-200" : "text-blue-200"
-              }`}
+              } leading-tight`}
             >
               From: {caller.name} (Ext: {caller.extension})
             </p>
             <p
-              className={`text-sm ${
+              className={`text-xs sm:text-sm md:text-base ${
                 darkMode ? "text-gray-400" : "text-gray-300"
               } mt-1`}
             >
@@ -315,16 +315,16 @@ const IncomingCallPage = ({ callData, contacts, user, darkMode = false, onCallAc
           </div>
         </div>
         {!callAccepted && (
-          <div className="flex justify-center space-x-6 animate-[fadeInUp_1.2s_ease-out_forwards]">
+          <div className="flex justify-center space-x-4 sm:space-x-6 md:space-x-8 animate-[fadeInUp_1.2s_ease-out_forwards]">
             <Tooltip title="Accept Call">
               <Button
                 variant="contained"
                 onClick={handleAccept}
                 disabled={isLoading}
-                className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-r from-green-600 to-green-800 hover:from-green-700 hover:to-green-900 focus:ring-4 focus:ring-green-500/60 transition-all transform hover:scale-110 active:scale-95 ${
+                className={`w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 rounded-full bg-emerald-600 hover:bg-emerald-700 focus:ring-4 focus:ring-emerald-500/60 transition-all transform active:scale-95 sm:hover:scale-110 ${
                   isLoading ? "opacity-50 cursor-not-allowed" : ""
-                } ${darkMode ? "shadow-green-900/60" : "shadow-green-700/60"}`}
-                startIcon={<Call className="text-2xl" />}
+                } ${darkMode ? "shadow-emerald-900/60" : "shadow-emerald-700/60"} min-w-[44px] min-h-[44px]`}
+                startIcon={<Call className="text-lg sm:text-xl md:text-2xl" />}
                 aria-label="Accept the incoming call"
               />
             </Tooltip>
@@ -333,10 +333,10 @@ const IncomingCallPage = ({ callData, contacts, user, darkMode = false, onCallAc
                 variant="contained"
                 onClick={handleReject}
                 disabled={isLoading}
-                className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-r from-red-700 to-red-900 hover:from-red-800 hover:to-red-950 focus:ring-4 focus:ring-red-500/60 transition-all transform hover:scale-110 active:scale-95 ${
+                className={`w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 rounded-full bg-red-600 hover:bg-red-700 focus:ring-4 focus:ring-red-500/60 transition-all transform active:scale-95 sm:hover:scale-110 ${
                   isLoading ? "opacity-50 cursor-not-allowed" : ""
-                } ${darkMode ? "shadow-red-900/60" : "shadow-red-700/60"}`}
-                startIcon={<CallEnd className="text-2xl" />}
+                } ${darkMode ? "shadow-red-900/60" : "shadow-red-700/60"} min-w-[44px] min-h-[44px]`}
+                startIcon={<CallEnd className="text-lg sm:text-xl md:text-2xl" />}
                 aria-label="Reject the incoming call"
               />
             </Tooltip>

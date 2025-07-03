@@ -1,18 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import { ThemeProvider } from './contexts/ThemeContext';
 import LoginPage from './auth/LoginPage';
 import RegisterPage from './auth/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
+import AdminDashboard from './pages/AdminDashboard';
 import ContactsPage from './pages/ContactsPage';
 import CallLogsPage from './pages/CallLogsPage';
 import CallingPage from './pages/CallingPage';
-import IncomingCallPage from './pages/IncomingCallPage';
 import WebRTCTestPage from './pages/WebRTCTestPage';
 import Loader from './components/loader';
 import { initializeSIP } from './services/call';
 import VoipPhone from './components/VoipPhone';
-import SipClient from './components/SipClient';
 import IncomingCallListener from './pages/IncomingCallListener';
+import BrowserCompatibilityAlert from './components/BrowserCompatibilityAlert';
 import sipManager from './services/sipManager';
 
 const App = () => {
@@ -32,8 +34,10 @@ const App = () => {
     const token = localStorage.getItem('token');
     const extension = localStorage.getItem('extension');
     const storedSipPassword = localStorage.getItem('sipPassword');
+    const userRole = localStorage.getItem('userRole') || 'user';
+
     if (token && extension && storedSipPassword) {
-      setUser({ username: 'User', extension });
+      setUser({ username: 'User', extension, role: userRole });
       setSipPassword(storedSipPassword);
       initializeConnection(extension);
     } else if (!token && window.location.pathname !== '/login' && window.location.pathname !== '/register') {
@@ -92,12 +96,28 @@ const App = () => {
       localStorage.setItem('token', result.token);
       localStorage.setItem('extension', result.user?.extension);
       localStorage.setItem('sipPassword', `password${result.user?.extension}`);
+      localStorage.setItem('userRole', result.user?.role || 'user');
       const extension = result.user?.extension;
-      console.log('[App.js] Login successful, setting user:', { username: result.user?.username, extension });
-      setUser({ username: result.user?.username || 'User', extension });
+      const role = result.user?.role || 'user';
+      console.log('[App.js] Login successful, setting user:', {
+        username: result.user?.username,
+        extension,
+        role
+      });
+      setUser({
+        username: result.user?.username || 'User',
+        extension,
+        role
+      });
       setSipPassword(`password${extension}`);
       initializeConnection(extension);
-      navigate('/dashboard', { state: { success: result.message } });
+
+      // Navigate to appropriate dashboard based on role
+      if (role === 'admin') {
+        navigate('/admin', { state: { success: result.message } });
+      } else {
+        navigate('/dashboard', { state: { success: result.message } });
+      }
     }
   };
 
@@ -122,6 +142,7 @@ const App = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('extension');
     localStorage.removeItem('sipPassword');
+    localStorage.removeItem('userRole');
     localStorage.removeItem(`sipRegistered_${user?.extension}`);
 
     // Reset state
@@ -136,7 +157,19 @@ const App = () => {
   const token = localStorage.getItem('token');
 
   return (
-    <div className={`min-h-screen w-full ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
+    <ThemeProvider>
+      <div className={`h-screen w-screen overflow-hidden ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
+        <BrowserCompatibilityAlert darkMode={darkMode} />
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: darkMode ? '#374151' : '#ffffff',
+              color: darkMode ? '#ffffff' : '#374151',
+            },
+          }}
+        />
       {notification && (
         <div
           className={`fixed top-20 right-4 sm:right-6 z-50 glass-effect p-3 sm:p-4 rounded-lg shadow-lg animate-[fadeInUp_0.6s_ease-out_forwards] ${
@@ -187,6 +220,13 @@ const App = () => {
           /> : <Navigate to="/login" replace />}
         />
         <Route
+          path="/admin"
+          element={token && user?.role === 'admin' ? <AdminDashboard
+            user={user}
+            onLogout={handleLogout}
+          /> : <Navigate to="/login" replace />}
+        />
+        <Route
           path="/contacts"
           element={token ? <ContactsPage
             darkMode={darkMode}
@@ -224,7 +264,8 @@ const App = () => {
         <Route path="/" element={<Navigate to="/login" replace />} />
       </Routes>
       {isLoading && <Loader />}
-    </div>
+      </div>
+    </ThemeProvider>
   );
 };
 
