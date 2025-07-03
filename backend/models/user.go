@@ -7,52 +7,59 @@ import (
 )
 
 type User struct {
-	ID        uint      `json:"id" gorm:"primaryKey"`
-	Username  string    `json:"username" gorm:"unique;not null"`
-	Email     string    `json:"email" gorm:"unique;not null"`
-	Password  string    `json:"-" gorm:"not null"` // Don't include in JSON responses
-	Extension string    `json:"extension" gorm:"unique;not null"`
-	Status    string    `json:"status" gorm:"default:offline"` // online, offline, busy, away
-	Role      string    `json:"role" gorm:"default:user"`      // user, admin
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        uint       `json:"id" gorm:"primaryKey"`
+	Username  string     `json:"username" gorm:"unique;not null"`
+	Email     string     `json:"email" gorm:"unique;not null"`
+	Password  string     `json:"-" gorm:"not null"` // Don't include in JSON responses
+	Extension string     `json:"extension" gorm:"unique;not null"`
+	Status    string     `json:"status" gorm:"default:offline"` // online, offline, busy, away
+	Role      string     `json:"role" gorm:"default:user"`      // user, admin
+	IsOnline  bool       `json:"is_online" gorm:"default:false"`
+	LastLogin *time.Time `json:"last_login"`
+	LastSeen  *time.Time `json:"last_seen"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
 }
 
 type CallLog struct {
-	ID          uint      `json:"id" gorm:"primaryKey"`
-	CallerID    uint      `json:"caller_id"`
-	CalleeID    uint      `json:"callee_id"`
-	Caller      User      `json:"caller" gorm:"foreignKey:CallerID"`
-	Callee      User      `json:"callee" gorm:"foreignKey:CalleeID"`
-	StartTime   time.Time `json:"start_time"`
-	EndTime     *time.Time `json:"end_time"`
-	Duration    int       `json:"duration"` // in seconds
-	Status      string    `json:"status"`   // initiated, ringing, answered, ended, failed
-	Channel     string    `json:"channel"`
-	Direction   string    `json:"direction"` // inbound, outbound
-	CreatedAt   time.Time `json:"created_at"`
+	ID        uint       `json:"id" gorm:"primaryKey"`
+	CallerID  uint       `json:"caller_id"`
+	CalleeID  uint       `json:"callee_id"`
+	Caller    User       `json:"caller" gorm:"foreignKey:CallerID"`
+	Callee    User       `json:"callee" gorm:"foreignKey:CalleeID"`
+	StartTime time.Time  `json:"start_time"`
+	EndTime   *time.Time `json:"end_time"`
+	Duration  int        `json:"duration"` // in seconds
+	Status    string     `json:"status"`   // initiated, ringing, answered, ended, failed
+	Channel   string     `json:"channel"`
+	Direction string     `json:"direction"` // inbound, outbound
+	CreatedAt time.Time  `json:"created_at"`
 }
 
 type ActiveCall struct {
-	ID         uint      `json:"id" gorm:"primaryKey"`
-	CallerID   uint      `json:"caller_id"`
-	CalleeID   uint      `json:"callee_id"`
-	Caller     User      `json:"caller" gorm:"foreignKey:CallerID"`
-	Callee     User      `json:"callee" gorm:"foreignKey:CalleeID"`
-	Channel    string    `json:"channel"`
-	Status     string    `json:"status"` // ringing, connected, on_hold
-	StartTime  time.Time `json:"start_time"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID        uint      `json:"id" gorm:"primaryKey"`
+	CallerID  uint      `json:"caller_id"`
+	CalleeID  uint      `json:"callee_id"`
+	Caller    User      `json:"caller" gorm:"foreignKey:CallerID"`
+	Callee    User      `json:"callee" gorm:"foreignKey:CalleeID"`
+	Channel   string    `json:"channel"`
+	Status    string    `json:"status"` // ringing, connected, on_hold
+	StartTime time.Time `json:"start_time"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // UserResponse represents the user data sent to clients (without sensitive info)
 type UserResponse struct {
-	ID        uint   `json:"id"`
-	Username  string `json:"username"`
-	Email     string `json:"email"`
-	Extension string `json:"extension"`
-	Status    string `json:"status"`
-	Role      string `json:"role"`
+	ID        uint       `json:"id"`
+	Username  string     `json:"username"`
+	Email     string     `json:"email"`
+	Extension string     `json:"extension"`
+	Status    string     `json:"status"`
+	Role      string     `json:"role"`
+	IsOnline  bool       `json:"is_online"`
+	LastLogin *time.Time `json:"last_login"`
+	LastSeen  *time.Time `json:"last_seen"`
+	CreatedAt time.Time  `json:"created_at"`
 }
 
 // LoginRequest represents login request payload
@@ -93,6 +100,10 @@ func (u *User) ToResponse() UserResponse {
 		Extension: u.Extension,
 		Status:    u.Status,
 		Role:      u.Role,
+		IsOnline:  u.IsOnline,
+		LastLogin: u.LastLogin,
+		LastSeen:  u.LastSeen,
+		CreatedAt: u.CreatedAt,
 	}
 }
 

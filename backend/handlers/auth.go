@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 	"voip-backend/auth"
 	"voip-backend/database"
 	"voip-backend/models"
@@ -44,8 +45,14 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// Update user status to online
-	database.GetDB().Model(&user).Update("status", "online")
+	// Update user status to online and set login time
+	now := time.Now()
+	database.GetDB().Model(&user).Updates(map[string]interface{}{
+		"status":     "online",
+		"is_online":  true,
+		"last_login": now,
+		"last_seen":  now,
+	})
 
 	// Generate JWT token
 	token, err := auth.GenerateToken(user.ID, user.Username, user.Extension, user.Role)
@@ -143,7 +150,12 @@ func Logout(c *gin.Context) {
 	}
 
 	// Update user status to offline
-	database.GetDB().Model(&models.User{}).Where("id = ?", userID).Update("status", "offline")
+	now := time.Now()
+	database.GetDB().Model(&models.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
+		"status":    "offline",
+		"is_online": false,
+		"last_seen": now,
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

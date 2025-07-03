@@ -19,6 +19,7 @@ import CallingPage from "./CallingPage";
 import IncomingCallPage from "./IncomingCallPage";
 import SettingsModal from "../components/SettingsModal";
 import NotificationsPage from "./NotificationsPage";
+import statusService from "../services/statusService";
 
 import { call, hangupCall } from "../services/call";
 import webrtcCallService from "../services/webrtcCallService";
@@ -128,6 +129,20 @@ const DashboardPage = ({ user, onLogout, darkMode, setIncomingCall }) => {
 
   // Use theme context dark mode if available, fallback to prop
   const isDarkMode = themeDarkMode !== undefined ? themeDarkMode : darkMode;
+
+  // Initialize status service for online/offline tracking
+  useEffect(() => {
+    if (user) {
+      statusService.initialize();
+    }
+
+    // Cleanup status service on unmount
+    return () => {
+      if (user) {
+        statusService.cleanup();
+      }
+    };
+  }, [user]);
 
   // Update unread notification count
   useEffect(() => {

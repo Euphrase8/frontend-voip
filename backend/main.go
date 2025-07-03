@@ -85,6 +85,7 @@ func main() {
 		protected.GET("/profile", handlers.GetProfile)
 		protected.POST("/logout", handlers.Logout)
 		protected.PUT("/status", handlers.UpdateUserStatus)
+		protected.POST("/heartbeat", handlers.HeartbeatUser)
 		protected.GET("/users/online", handlers.GetOnlineUsers)
 		protected.GET("/users/:extension", handlers.GetUserByExtension)
 		protected.GET("/extensions/connected", handlers.GetConnectedExtensions)
