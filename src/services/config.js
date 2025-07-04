@@ -41,6 +41,16 @@ class DynamicConfig {
     return process.env.REACT_APP_SIP_WS_URL || configService.getAsteriskWebSocketUrl();
   }
 
+  // Get Asterisk host
+  get ASTERISK_HOST() {
+    return process.env.REACT_APP_ASTERISK_HOST || configService.getAsteriskHost();
+  }
+
+  // Get Asterisk WebSocket URL (alias for SIP_WS_URL)
+  get ASTERISK_WS_URL() {
+    return this.SIP_WS_URL;
+  }
+
   // Get client IP dynamically
   get CLIENT_IP() {
     if (process.env.REACT_APP_CLIENT_IP) {

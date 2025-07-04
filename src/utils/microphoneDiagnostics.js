@@ -507,27 +507,174 @@ export async function quickMicrophoneCheck() {
   return await diagnostics.runDiagnostics();
 }
 
-// Test microphone access with user-friendly error messages
+// Enhanced microphone access test with multiple fallback methods
 export async function testMicrophoneAccess() {
+  console.log('🎤 Starting enhanced microphone access test...');
+
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const audioTracks = stream.getAudioTracks();
+    // Step 1: Check basic browser support
+    if (!navigator) {
+      throw new Error('Navigator not available');
+    }
 
-    // Clean up
-    stream.getTracks().forEach(track => track.stop());
+    // Step 2: Check if we have any form of getUserMedia
+    const hasModernGetUserMedia = navigator.mediaDevices?.getUserMedia;
+    const hasLegacyGetUserMedia = navigator.getUserMedia ||
+                                 navigator.webkitGetUserMedia ||
+                                 navigator.mozGetUserMedia ||
+                                 navigator.msGetUserMedia;
 
-    return {
-      success: true,
-      message: 'Microphone access successful',
-      tracks: audioTracks.length
-    };
-  } catch (error) {
+    if (!hasModernGetUserMedia && !hasLegacyGetUserMedia) {
+      throw new Error('getUserMedia not supported in this browser');
+    }
+
+    console.log('✅ getUserMedia support detected');
+
+    // Step 3: Try to enumerate devices first
+    let hasAudioInput = false;
+    try {
+      if (navigator.mediaDevices?.enumerateDevices) {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        hasAudioInput = devices.some(device => device.kind === 'audioinput');
+        console.log(`📱 Found ${devices.filter(d => d.kind === 'audioinput').length} audio input devices`);
+      }
+    } catch (enumError) {
+      console.warn('⚠️ Device enumeration failed:', enumError);
+      // Continue anyway, as some browsers restrict enumeration before permission
+    }
+
+    // Step 4: Try multiple getUserMedia approaches
+    let stream = null;
+    let lastError = null;
+
+    // Method 1: Modern getUserMedia with basic constraints
+    if (hasModernGetUserMedia) {
+      try {
+        console.log('🔄 Trying modern getUserMedia...');
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        });
+        console.log('✅ Modern getUserMedia successful');
+      } catch (error) {
+        console.warn('⚠️ Modern getUserMedia failed:', error);
+        lastError = error;
+
+        // Try with minimal constraints
+        try {
+          console.log('🔄 Trying modern getUserMedia with minimal constraints...');
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          console.log('✅ Modern getUserMedia with minimal constraints successful');
+        } catch (minimalError) {
+          console.warn('⚠️ Modern getUserMedia with minimal constraints failed:', minimalError);
+          lastError = minimalError;
+        }
+      }
+    }
+
+    // Method 2: Legacy getUserMedia fallback
+    if (!stream && hasLegacyGetUserMedia) {
+      try {
+        console.log('🔄 Trying legacy getUserMedia...');
+        const getUserMedia = navigator.getUserMedia ||
+                           navigator.webkitGetUserMedia ||
+                           navigator.mozGetUserMedia ||
+                           navigator.msGetUserMedia;
+
+        stream = await new Promise((resolve, reject) => {
+          getUserMedia.call(navigator, { audio: true }, resolve, reject);
+        });
+        console.log('✅ Legacy getUserMedia successful');
+      } catch (legacyError) {
+        console.warn('⚠️ Legacy getUserMedia failed:', legacyError);
+        lastError = legacyError;
+      }
+    }
+
+    // Step 5: Analyze the stream
+    if (stream) {
+      const audioTracks = stream.getAudioTracks();
+      console.log(`🎵 Audio tracks found: ${audioTracks.length}`);
+
+      if (audioTracks.length > 0) {
+        const track = audioTracks[0];
+        console.log('🎤 Microphone details:', {
+          label: track.label || 'Unknown microphone',
+          enabled: track.enabled,
+          readyState: track.readyState,
+          settings: track.getSettings?.() || 'Settings not available'
+        });
+      }
+
+      // Clean up
+      stream.getTracks().forEach(track => track.stop());
+
+      return {
+        success: true,
+        message: `Microphone access successful - ${audioTracks.length} audio track(s) found`,
+        tracks: audioTracks.length,
+        details: {
+          method: hasModernGetUserMedia ? 'modern' : 'legacy',
+          trackInfo: audioTracks.map(track => ({
+            label: track.label || 'Unknown microphone',
+            enabled: track.enabled,
+            readyState: track.readyState
+          }))
+        }
+      };
+    }
+
+    // Step 6: If we get here, all methods failed
     const diagnostics = new MicrophoneDiagnostics();
+    const errorMessage = lastError ? diagnostics.getErrorMessage(lastError) : 'Unknown microphone access error';
+
     return {
       success: false,
-      error: error.name,
-      message: diagnostics.getErrorMessage(error),
-      fixes: diagnostics.getMediaStreamFixes(error.name)
+      error: lastError?.name || 'UnknownError',
+      message: errorMessage,
+      fixes: diagnostics.getMediaStreamFixes(lastError?.name || 'UnknownError'),
+      details: {
+        hasModernGetUserMedia,
+        hasLegacyGetUserMedia,
+        hasAudioInput,
+        lastError: lastError?.message
+      }
     };
+
+  } catch (error) {
+    console.error('❌ Microphone access test failed:', error);
+    const diagnostics = new MicrophoneDiagnostics();
+
+    return {
+      success: false,
+      error: error.name || 'UnknownError',
+      message: diagnostics.getErrorMessage(error),
+      fixes: diagnostics.getMediaStreamFixes(error.name || 'UnknownError'),
+      details: {
+        errorStack: error.stack
+      }
+    };
+  }
+}
+
+// Quick microphone permission check
+export async function quickMicrophonePermissionCheck() {
+  try {
+    // Try to get permission without actually accessing the microphone
+    if (navigator.permissions) {
+      const permission = await navigator.permissions.query({ name: 'microphone' });
+      return {
+        state: permission.state,
+        granted: permission.state === 'granted',
+        denied: permission.state === 'denied',
+        prompt: permission.state === 'prompt'
+      };
+    }
+    return { state: 'unknown', message: 'Permissions API not available' };
+  } catch (error) {
+    return { state: 'error', error: error.message };
   }
 }

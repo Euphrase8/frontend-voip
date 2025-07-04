@@ -125,7 +125,7 @@ sequenceDiagram
     B->>U: Forward ICE Candidates
 
     Note over U,T: Call Established
-    U<-->T: Direct P2P Audio Stream
+    Note over U,T: Direct P2P Audio Stream (WebRTC)
     B->>DB: Update Call Duration
 
     Note over U,T: Call Termination
@@ -215,7 +215,7 @@ sequenceDiagram
     WS1->>C1: Add ICE Candidate
 
     Note over C1,C2: Direct P2P Connection
-    C1<-->C2: Direct Audio Stream (P2P)
+    Note over C1,C2: Direct Audio Stream (WebRTC P2P)
 
     Note over C1,C2: Call Status Updates
     B->>WS1: Call Connected Status

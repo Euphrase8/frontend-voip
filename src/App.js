@@ -19,9 +19,11 @@ import VoipPhone from './components/VoipPhone';
 import IncomingCallListener from './pages/IncomingCallListener';
 import BrowserCompatibilityAlert from './components/BrowserCompatibilityAlert';
 import MicrophoneFix from './components/MicrophoneFix';
+import MicrophoneTroubleshooter from './components/MicrophoneTroubleshooter';
 import sipManager from './services/sipManager';
 import ipConfigService from './services/ipConfigService';
 import { testMicrophoneAccess } from './utils/microphoneDiagnostics';
+import MicrophoneTestPage from './pages/MicrophoneTestPage';
 
 const App = () => {
   const navigate = useNavigate();
@@ -32,6 +34,7 @@ const App = () => {
   const [notification, setNotification] = useState(null);
   const [isRegistered, setIsRegistered] = useState(false);
   const [showMicrophoneFix, setShowMicrophoneFix] = useState(false);
+  const [showMicrophoneTroubleshooter, setShowMicrophoneTroubleshooter] = useState(false);
   const [microphoneStatus, setMicrophoneStatus] = useState(null);
   const [contacts] = useState([
     { id: 1, name: 'John Doe', extension: '1001', avatar: null },
@@ -104,7 +107,12 @@ const App = () => {
 
   const handleMicrophoneFixed = () => {
     setShowMicrophoneFix(false);
+    setShowMicrophoneTroubleshooter(false);
     checkMicrophoneAccess(); // Re-check after fix
+  };
+
+  const handleShowTroubleshooter = () => {
+    setShowMicrophoneTroubleshooter(true);
   };
 
   const initializeConnection = async (extension) => {
@@ -319,6 +327,10 @@ const App = () => {
           path="/webrtc-test"
           element={token ? <WebRTCTestPage /> : <Navigate to="/login" replace />}
         />
+        <Route
+          path="/microphone-test"
+          element={<MicrophoneTestPage darkMode={darkMode} />}
+        />
         <Route path="/" element={
           ipConfigService.isConfigured()
             ? <Navigate to="/login" replace />
@@ -337,13 +349,31 @@ const App = () => {
         onFixed={handleMicrophoneFixed}
       />
 
+      {/* Enhanced Microphone Troubleshooter */}
+      <MicrophoneTroubleshooter
+        isOpen={showMicrophoneTroubleshooter}
+        onClose={() => setShowMicrophoneTroubleshooter(false)}
+        onFixed={handleMicrophoneFixed}
+      />
+
       {/* Microphone Status Indicator */}
       {microphoneStatus && !microphoneStatus.success && (
-        <div className="fixed bottom-4 left-4 z-40">
+        <div className="fixed bottom-4 left-4 z-40 flex space-x-2">
+          <button
+            onClick={() => setShowMicrophoneTroubleshooter(true)}
+            className="flex items-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-red-700 transition-colors"
+            title="Open Microphone Troubleshooter"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            </svg>
+            <span>Fix Microphone</span>
+          </button>
+
           <button
             onClick={() => setShowMicrophoneFix(true)}
-            className="flex items-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-red-700 transition-colors"
-            title="Fix microphone issues"
+            className="flex items-center space-x-2 bg-yellow-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-yellow-700 transition-colors"
+            title="Quick microphone fix"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />

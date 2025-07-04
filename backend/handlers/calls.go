@@ -571,10 +571,10 @@ func testHTTPConnection() map[string]interface{} {
 func testWebSocketConnection() map[string]interface{} {
 	// Test WebSocket endpoint availability
 	asteriskHost := config.AppConfig.AsteriskHost
-	wsURL := fmt.Sprintf("ws://%s:8088/asterisk/ws", asteriskHost)
+	wsURL := fmt.Sprintf("ws://%s:8088/ws", asteriskHost)
 
 	// For now, just test if the HTTP upgrade endpoint is available
-	httpURL := fmt.Sprintf("http://%s:8088/asterisk/ws", asteriskHost)
+	httpURL := fmt.Sprintf("http://%s:8088/ws", asteriskHost)
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get(httpURL)
 	if err != nil {
@@ -658,10 +658,10 @@ func testHTTPConnectionWithConfig(asteriskHost, httpPort string) map[string]inte
 
 func testWebSocketConnectionWithConfig(asteriskHost, httpPort string) map[string]interface{} {
 	// Test WebSocket endpoint availability with custom config
-	wsURL := fmt.Sprintf("ws://%s:%s/asterisk/ws", asteriskHost, httpPort)
+	wsURL := fmt.Sprintf("ws://%s:%s/ws", asteriskHost, httpPort)
 
 	// For now, just test if the HTTP upgrade endpoint is available
-	httpURL := fmt.Sprintf("http://%s:%s/asterisk/ws", asteriskHost, httpPort)
+	httpURL := fmt.Sprintf("http://%s:%s/ws", asteriskHost, httpPort)
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get(httpURL)
 	if err != nil {
