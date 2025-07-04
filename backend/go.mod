@@ -1,3 +1,8 @@
+// Enterprise VoIP Backend
+// Author: JOACHIM J. EUPHRASE <joachim.euphrase@gmail.com>
+// Organization: DevHub, Dar es Salaam, Tanzania
+// License: Apache-2.0
+
 module voip-backend
 
 go 1.23.0

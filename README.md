@@ -961,7 +961,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Support
 
 For support and questions:
-- **Email**: support@devhub.com
+- **Email**: joachim.euphrase@gmail.com
+- **Organization**: DevHub
+- **Location**: Dar es Salaam, Tanzania
 - **Documentation**: [docs.devhub.com](https://docs.devhub.com)
 - **Bug Reports**: [GitHub Issues](https://github.com/Euphrase8/voip-application/issues)
 
@@ -969,4 +971,5 @@ For support and questions:
 
 **Enterprise VoIP Web Application**
 
+*Developed by JOACHIM J. EUPHRASE - DevHub*
 *Professional voice communication solution for modern businesses*

@@ -1,7 +1,19 @@
 {
-  "name": "frontend-voip",
-  "version": "0.1.0",
-  "private": true,
+  "name": "enterprise-voip-application",
+  "version": "1.0.0",
+  "description": "Enterprise VoIP Web Application - Professional voice communication solution",
+  "author": {
+    "name": "JOACHIM J. EUPHRASE",
+    "email": "joachim.euphrase@gmail.com",
+    "organization": "DevHub",
+    "location": "Dar es Salaam, Tanzania"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Euphrase8/voip-application.git"
+  },
+  "license": "Apache-2.0",
+  "private": false,
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
