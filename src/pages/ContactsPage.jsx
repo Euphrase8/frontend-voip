@@ -16,66 +16,119 @@ import { call } from '../services/call';
 import { useTheme } from '../contexts/ThemeContext';
 import { cn, getInitials, getAvatarColor } from '../utils/ui';
 import toast from 'react-hot-toast';
+import {
+  ResponsiveContainer,
+  ResponsiveGrid,
+  ResponsiveCard,
+  ResponsiveText,
+  ResponsiveFlex,
+  ResponsiveButton
+} from '../components/ResponsiveLayout';
 
 const Contact = ({ contact, onCall, darkMode }) => {
   const { darkMode: themeDarkMode } = useTheme();
   const isDark = darkMode || themeDarkMode;
+  const isOnline = contact.status === 'online';
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={{ scale: 1.02 }}
+      whileHover={{ y: -2, scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
       className={cn(
-        "p-4 rounded-xl border transition-all duration-200 cursor-pointer",
+        "relative rounded-xl border shadow-sm p-4 transition-all duration-300",
+        "hover:shadow-lg cursor-pointer group",
         isDark
-          ? "bg-secondary-800 border-secondary-700 hover:bg-secondary-700"
-          : "bg-white border-secondary-200 hover:bg-secondary-50 shadow-sm hover:shadow-md"
+          ? "bg-secondary-800 border-secondary-700 hover:border-secondary-600"
+          : "bg-white border-secondary-200 hover:border-secondary-300"
       )}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <div className={cn(
-            "w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold",
-            getAvatarColor(contact.username || contact.name)
-          )}>
-            {getInitials(contact.username || contact.name)}
-          </div>
-          <div>
-            <h3 className={cn(
-              "font-semibold",
+      {/* Online Status Indicator */}
+      <div className={cn(
+        "absolute top-3 right-3 w-3 h-3 rounded-full border-2",
+        isOnline
+          ? "bg-green-500 border-white dark:border-secondary-800"
+          : "bg-secondary-400 border-white dark:border-secondary-800"
+      )} />
+
+      <div className="flex items-center space-x-3 mb-3">
+        <div className={cn(
+          "w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-sm",
+          getAvatarColor(contact.username || contact.name)
+        )}>
+          {getInitials(contact.username || contact.name)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <ResponsiveText
+            variant="bodyMedium"
+            weight="semibold"
+            className={cn(
+              "truncate",
               isDark ? "text-white" : "text-secondary-900"
-            )}>
-              {contact.username || contact.name}
-            </h3>
-            <p className={cn(
-              "text-sm",
-              isDark ? "text-secondary-400" : "text-secondary-600"
-            )}>
-              Extension: {contact.extension}
-            </p>
-            {contact.email && (
-              <p className={cn(
-                "text-xs",
-                isDark ? "text-secondary-500" : "text-secondary-500"
-              )}>
-                {contact.email}
-              </p>
             )}
-          </div>
+          >
+            {contact.username || contact.name}
+          </ResponsiveText>
+          <ResponsiveText
+            variant="caption"
+            className={cn(
+              "flex items-center space-x-1",
+              isDark ? "text-secondary-400" : "text-secondary-600"
+            )}
+          >
+            <Phone className="w-3 h-3" />
+            <span>Ext: {contact.extension}</span>
+          </ResponsiveText>
+        </div>
+      </div>
+
+      {contact.email && (
+        <ResponsiveText
+          variant="caption"
+          className={cn(
+            "truncate mb-3 flex items-center space-x-1",
+            isDark ? "text-secondary-500" : "text-secondary-500"
+          )}
+        >
+          <User className="w-3 h-3" />
+          <span>{contact.email}</span>
+        </ResponsiveText>
+      )}
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-1">
+          <div className={cn(
+            "w-2 h-2 rounded-full",
+            isOnline ? "bg-green-500" : "bg-secondary-400"
+          )} />
+          <ResponsiveText
+            variant="caption"
+            className={cn(
+              "text-xs font-medium",
+              isOnline
+                ? "text-green-600 dark:text-green-400"
+                : "text-secondary-500"
+            )}
+          >
+            {isOnline ? 'Online' : 'Offline'}
+          </ResponsiveText>
         </div>
 
-        <div className="flex items-center space-x-2">
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
+        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+          <ResponsiveButton
             onClick={() => onCall(contact.extension)}
-            className="p-3 bg-primary-600 hover:bg-primary-700 text-white rounded-full transition-colors duration-200 shadow-lg hover:shadow-xl"
+            variant="primary"
+            size="sm"
+            className={cn(
+              "shadow-sm hover:shadow-md transition-all duration-200",
+              "group-hover:scale-105"
+            )}
             aria-label={`Call ${contact.username || contact.name}`}
           >
             <PhoneCall className="w-4 h-4" />
-          </motion.button>
-        </div>
+          </ResponsiveButton>
+        </motion.div>
       </div>
     </motion.div>
   );
@@ -86,35 +139,44 @@ const ContactsPage = ({ darkMode = false, onCall, userID }) => {
   const [contacts, setContacts] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const { darkMode: themeDarkMode } = useTheme();
   const isDark = darkMode || themeDarkMode;
 
   useEffect(() => {
-    const fetchContacts = async () => {
-      try {
-        setLoading(true);
-        const currentUserExtension = getExtension();
-        const users = await getUsers();
-
-        const filtered = users
-          .filter((user) => `${user.extension}` !== `${currentUserExtension}`)
-          .map((user) => ({
-            ...user,
-            channel: `PJSIP/${user.extension}`,
-            avatar: user.avatar || null,
-          }));
-
-        setContacts(filtered);
-      } catch (error) {
-        console.error('Error fetching users:', error.message);
-        toast.error('Failed to load contacts');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchContacts();
   }, []);
+
+  const fetchContacts = async () => {
+    try {
+      setLoading(true);
+      const currentUserExtension = getExtension();
+      const users = await getUsers();
+
+      const filtered = users
+        .filter((user) => `${user.extension}` !== `${currentUserExtension}`)
+        .map((user) => ({
+          ...user,
+          channel: `PJSIP/${user.extension}`,
+          avatar: user.avatar || null,
+          status: user.online ? 'online' : 'offline', // Add status based on online field
+        }));
+
+      setContacts(filtered);
+    } catch (error) {
+      console.error('Error fetching users:', error.message);
+      toast.error('Failed to load contacts');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchContacts();
+    setRefreshing(false);
+    toast.success('Contacts refreshed');
+  };
 
   const handleCall = async (extension) => {
     try {
@@ -140,52 +202,32 @@ const ContactsPage = ({ darkMode = false, onCall, userID }) => {
   );
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex-shrink-0 p-4 sm:p-6 border-b border-secondary-200 dark:border-secondary-700">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <Users className={cn(
-              'w-6 h-6',
-              isDark ? 'text-primary-400' : 'text-primary-600'
-            )} />
-            <div>
-              <h1 className={cn(
-                'text-xl sm:text-2xl font-bold',
-                isDark ? 'text-white' : 'text-secondary-900'
-              )}>
-                Contacts
-              </h1>
-              <p className={cn(
-                'text-xs sm:text-sm',
-                isDark ? 'text-secondary-400' : 'text-secondary-600'
-              )}>
-                {filteredContacts.length} contact{filteredContacts.length !== 1 ? 's' : ''} available
-              </p>
-            </div>
+    <div className="h-full flex flex-col">
+      {/* Professional Search Bar */}
+      <div className="flex-shrink-0 p-4 lg:p-6 border-b border-secondary-200 dark:border-secondary-700">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-2">
+            <ResponsiveText variant="caption" color="muted">
+              {filteredContacts.length} contact{filteredContacts.length !== 1 ? 's' : ''} available
+            </ResponsiveText>
           </div>
-          <button
-            onClick={() => window.location.reload()}
-            disabled={loading}
+          <ResponsiveButton
+            onClick={handleRefresh}
+            disabled={loading || refreshing}
+            variant="secondary"
+            size="sm"
             className={cn(
-              'p-2 rounded-lg transition-colors',
-              loading && 'animate-spin',
-              isDark
-                ? 'bg-secondary-700 hover:bg-secondary-600 text-white'
-                : 'bg-secondary-100 hover:bg-secondary-200 text-secondary-700'
+              (loading || refreshing) && 'animate-spin'
             )}
             title="Refresh contacts"
           >
-            <PhoneCall className="w-4 h-4 sm:w-5 sm:h-5" />
-          </button>
+            <PhoneCall className="w-4 h-4" />
+          </ResponsiveButton>
         </div>
-      </div>
 
-      {/* Search Bar */}
-      <div className="flex-shrink-0 p-4 sm:p-6 border-b border-secondary-200 dark:border-secondary-700">
         <div className="relative">
           <Search className={cn(
-            "absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5",
+            "absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4",
             isDark ? "text-secondary-400" : "text-secondary-500"
           )} />
           <input
@@ -194,10 +236,11 @@ const ContactsPage = ({ darkMode = false, onCall, userID }) => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className={cn(
-              "w-full pl-10 sm:pl-12 pr-4 py-2 sm:py-3 rounded-lg border transition-all duration-200",
+              "w-full pl-10 pr-4 py-2.5 rounded-lg border transition-all duration-200",
               "focus:ring-2 focus:ring-primary-500 focus:border-primary-500",
+              "text-sm",
               isDark
-                ? "bg-secondary-800 border-secondary-600 text-white placeholder-secondary-400"
+                ? "bg-secondary-900 border-secondary-600 text-white placeholder-secondary-400"
                 : "bg-white border-secondary-300 text-secondary-900 placeholder-secondary-500"
             )}
           />
@@ -205,64 +248,48 @@ const ContactsPage = ({ darkMode = false, onCall, userID }) => {
       </div>
 
       {/* Contacts List - Scrollable */}
-      <div className="flex-1 overflow-hidden">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="h-full overflow-y-auto"
-        >
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-4 lg:p-6">
           {loading ? (
-            <div className="flex flex-col items-center justify-center h-full text-center p-8">
+            <ResponsiveFlex direction="col" align="center" justify="center" className="h-64 text-center">
               <div className="w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full animate-spin mb-4" />
-              <h3 className={cn(
-                'text-lg font-medium mb-2',
+              <ResponsiveText variant="bodyMedium" className={cn(
+                'mb-2',
                 isDark ? 'text-secondary-400' : 'text-secondary-600'
               )}>
                 Loading contacts...
-              </h3>
-              <p className={cn(
-                'text-sm',
-                isDark ? 'text-secondary-500' : 'text-secondary-500'
-              )}>
+              </ResponsiveText>
+              <ResponsiveText variant="caption" className={isDark ? 'text-secondary-500' : 'text-secondary-500'}>
                 Please wait while we fetch your contacts.
-              </p>
-            </div>
+              </ResponsiveText>
+            </ResponsiveFlex>
           ) : filteredContacts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center p-8">
+            <ResponsiveFlex direction="col" align="center" justify="center" className="h-64 text-center">
               <Users className={cn(
                 "w-16 h-16 mb-4",
                 isDark ? "text-secondary-600" : "text-secondary-400"
               )} />
-              <h3 className={cn(
-                "text-lg font-medium mb-2",
+              <ResponsiveText variant="bodyMedium" className={cn(
+                "mb-2",
                 isDark ? "text-secondary-400" : "text-secondary-600"
               )}>
                 {searchTerm ? 'No contacts found' : 'No contacts available'}
-              </h3>
-              <p className={cn(
-                "text-sm",
-                isDark ? "text-secondary-500" : "text-secondary-500"
-              )}>
+              </ResponsiveText>
+              <ResponsiveText variant="caption" className={isDark ? "text-secondary-500" : "text-secondary-500"}>
                 {searchTerm
                   ? 'Try adjusting your search terms or check the spelling.'
                   : 'No other users are currently registered in the system.'
                 }
-              </p>
-            </div>
+              </ResponsiveText>
+            </ResponsiveFlex>
           ) : (
-            <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
-              {filteredContacts.map((contact) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {filteredContacts.map((contact, index) => (
                 <motion.div
                   key={contact.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: contact.id * 0.05 }}
-                  className={cn(
-                    'p-4 rounded-xl border transition-all duration-200 hover:shadow-md',
-                    isDark
-                      ? 'bg-secondary-800 border-secondary-700 hover:bg-secondary-750'
-                      : 'bg-white border-secondary-200 hover:bg-secondary-50'
-                  )}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
                 >
                   <Contact
                     contact={contact}
@@ -273,7 +300,7 @@ const ContactsPage = ({ darkMode = false, onCall, userID }) => {
               ))}
             </div>
           )}
-        </motion.div>
+        </div>
       </div>
     </div>
   );

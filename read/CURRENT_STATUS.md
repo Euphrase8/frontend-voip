@@ -13,7 +13,7 @@ Your VoIP application is now fully configured and working!
 - ✅ **Database**: SQLite connected
 - ✅ **WebSocket Hub**: Active and accepting connections
 
-### Asterisk Server (172.20.10.2)
+### Asterisk Server (172.20.10.5)
 - ✅ **AMI Connection**: Port 5038 - Authentication working
 - ✅ **HTTP Service**: Port 8088 - Server responding
 - ✅ **WebSocket Service**: `/asterisk/ws` - Ready for WebRTC
@@ -69,7 +69,7 @@ Frontend (localhost:3000)
     ↓ HTTP API
 Backend (172.20.10.4:8080)
     ↓ AMI Connection
-Asterisk Server (172.20.10.2)
+Asterisk Server (172.20.10.5)
     ├── AMI (Port 5038)
     ├── HTTP (Port 8088)
     ├── WebSocket (/asterisk/ws)

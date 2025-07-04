@@ -1,8 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   FiPhoneCall as PhoneCall,
-  FiDelete as Delete,
   FiTrash2 as Trash2,
   FiUser as User,
   FiUsers as Users
@@ -12,6 +11,10 @@ import CallingPage from './CallingPage';
 import { useTheme } from '../contexts/ThemeContext';
 import { cn } from '../utils/ui';
 import toast from 'react-hot-toast';
+import {
+  ResponsiveText,
+  ResponsiveButton
+} from '../components/ResponsiveLayout';
 
 const HomePage = ({ darkMode = false, onCall }) => {
   const [extension, setExtension] = useState('');
@@ -20,7 +23,7 @@ const HomePage = ({ darkMode = false, onCall }) => {
   const [callData, setCallData] = useState(null);
   const [recentCalls, setRecentCalls] = useState([]);
   const [error, setError] = useState(null);
-  const [notification, setNotification] = useState(null);
+
   const { darkMode: themeDarkMode } = useTheme();
   const isDark = darkMode || themeDarkMode;
 
@@ -62,65 +65,18 @@ const HomePage = ({ darkMode = false, onCall }) => {
     initiateCall(extension);
   }, [extension, initiateCall]);
 
-  useEffect(() => {
-    const handleKeyPress = (e) => {
-      if (e.key === 'Backspace') {
-        setExtension((prev) => prev.slice(0, -1));
-        return;
-      }
-      if (/\d/.test(e.key) && extension.length < 4) {
-        const newExtension = extension + e.key;
-        setExtension(newExtension);
-        setError('');
-        if (newExtension.length === 4) {
-          initiateCall(newExtension);
-        }
-      } else if (e.key === 'Enter') {
-        handleCall();
-      }
-    };
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [extension, handleCall, initiateCall]);
-
-  const handleKeypadClick = (value) => {
-    if (value === 'delete') {
-      setExtension(prev => prev.slice(0, -1));
-      return;
+  // Handle Enter key press for calling
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && extension && !loading) {
+      handleCall();
     }
-    if (extension.length < 6) {
-      const newExtension = extension + value;
-      setExtension(newExtension);
-    }
-  };
-
-  const handleClear = () => {
-    setExtension('');
-    setError('');
   };
 
   const handleEndCall = () => {
     setExtension('');
     setShowCallingPage(false);
     setCallData(null);
-    setNotification({ message: 'Call ended', type: 'success' });
-    setTimeout(() => setNotification(null), 3000);
   };
-
-  const keypadButtons = [
-    { value: '1', label: '1', sub: '' },
-    { value: '2', label: '2', sub: 'ABC' },
-    { value: '3', label: '3', sub: 'DEF' },
-    { value: '4', label: '4', sub: 'GHI' },
-    { value: '5', label: '5', sub: 'JKL' },
-    { value: '6', label: '6', sub: 'MNO' },
-    { value: '7', label: '7', sub: 'PQRS' },
-    { value: '8', label: '8', sub: 'TUV' },
-    { value: '9', label: '9', sub: 'WXYZ' },
-    { value: '*', label: '*', sub: '' },
-    { value: '0', label: '0', sub: '+' },
-    { value: '#', label: '#', sub: '' },
-  ];
 
   if (showCallingPage) {
     return (
@@ -140,334 +96,274 @@ const HomePage = ({ darkMode = false, onCall }) => {
   }
 
   return (
-    <div className="w-full min-h-[100dvh] flex flex-col bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <div className="flex-shrink-0 px-2 sm:px-4 py-2 sm:py-3 border-b border-gray-200 dark:border-gray-700">
-        <div className="text-center">
-          <div className="flex items-center justify-center space-x-2">
-            <PhoneCall className={cn(
-              'w-4 sm:w-5 h-4 sm:h-5',
-              isDark ? 'text-blue-400' : 'text-blue-600'
-            )} />
-            <h1 className={cn(
-              "text-base sm:text-lg font-bold",
-              isDark ? "text-white" : "text-gray-900"
-            )}>
-              VoIP Dialer
-            </h1>
-          </div>
-          <p className={cn(
-            "text-xs mt-1",
-            isDark ? "text-gray-400" : "text-gray-600"
-          )}>
-            Professional Voice Communication
-          </p>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 overflow-y-auto px-2 sm:px-4 py-2 sm:py-3">
-        <div className="w-full max-w-[90vw] sm:max-w-md mx-auto space-y-3">
-          {/* Welcome Section */}
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className="text-center"
-          >
-            <h2 className={cn(
-              "text-base font-semibold",
-              isDark ? "text-white" : "text-gray-900"
-            )}>
-              Make a Call
-            </h2>
-            <p className={cn(
-              "text-xs mt-1",
-              isDark ? "text-gray-400" : "text-gray-600"
-            )}>
-              Enter a 3-6 digit extension
-            </p>
-          </motion.div>
-
-          {/* Extension Input */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.1, duration: 0.3 }}
-            className={cn(
-              "p-2 sm:p-3 rounded-lg border shadow-sm",
-              isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
-            )}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center space-x-1.5">
+    <div className="h-full flex flex-col">
+      {/* Main Content - Enhanced Mobile Layout */}
+      <div className="flex-1 overflow-y-auto mobile-scroll">
+        <div className="p-2 xs:p-3 sm:p-4 lg:p-6 pb-safe">
+          <div className="max-w-7xl mx-auto">
+          <div className="h-full grid grid-cols-1 lg:grid-cols-3 gap-2 xs:gap-3 lg:gap-4 auto-rows-fr lg:auto-rows-auto">
+            {/* Main Dialer Section - Left Column */}
+            <div className="lg:col-span-2 h-full flex flex-col min-h-0">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.1, duration: 0.3 }}
+                className="h-full"
+              >
                 <div className={cn(
-                  'w-1.5 h-1.5 rounded-full',
-                  isDark ? 'bg-blue-500' : 'bg-blue-600'
-                )} />
-                <span className={cn(
-                  'text-xs',
-                  isDark ? 'text-gray-300' : 'text-gray-700'
+                  "h-full bg-white dark:bg-gray-800 rounded-lg xs:rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-3 xs:p-4 md:p-6 flex flex-col",
+                  "hover:shadow-md transition-shadow duration-200"
                 )}>
-                  Ready to dial
-                </span>
-              </div>
-              <span className={cn(
-                "text-xs font-semibold",
-                isDark ? "text-gray-300" : "text-gray-700"
-              )}>
-                Extension
-              </span>
-            </div>
-            <div className={cn(
-              "text-base font-mono font-bold min-h-[2rem] flex items-center justify-center px-2 py-1.5 rounded border-2 transition-all duration-200",
-              extension
-                ? (isDark
-                    ? "text-white border-blue-500 bg-gray-700 shadow-inner"
-                    : "text-gray-900 border-blue-500 bg-blue-50 shadow-inner")
-                : (isDark
-                    ? "text-gray-500 border-gray-600 bg-gray-700"
-                    : "text-gray-400 border-gray-300 bg-gray-50")
-            )}>
-              {extension || "----"}
-            </div>
-            {error && (
-              <p className="text-red-600 text-xs mt-2 text-center">{error}</p>
-            )}
-            <div className="flex gap-2 mt-2">
-              <button
-                onClick={handleCall}
-                disabled={!extension || loading}
-                className={cn(
-                  "flex-1 flex items-center justify-center space-x-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-md font-medium transition-all duration-200 shadow-sm border text-xs",
-                  "disabled:opacity-50 disabled:cursor-not-allowed",
-                  "active:scale-95 touch-manipulation min-h-[2.5rem]",
-                  !extension || loading
-                    ? (isDark ? "bg-gray-700 text-gray-500 border-gray-600" : "bg-gray-300 text-gray-500 border-gray-200")
-                    : "bg-green-500 hover:bg-green-600 text-white border-green-400 hover:border-green-500"
-                )}
-              >
-                {loading ? (
-                  <>
-                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Calling...</span>
-                  </>
-                ) : (
-                  <>
-                    <PhoneCall className="w-3 h-3" />
-                    <span>Call</span>
-                  </>
-                )}
-              </button>
-              <button
-                onClick={handleClear}
-                disabled={!extension}
-                className={cn(
-                  "flex-1 flex items-center justify-center space-x-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-md font-medium transition-all duration-200 shadow-sm border text-xs",
-                  "disabled:opacity-50 disabled:cursor-not-allowed",
-                  "active:scale-95 touch-manipulation min-h-[2.5rem]",
-                  !extension
-                    ? (isDark ? "bg-gray-700 text-gray-500 border-gray-600" : "bg-gray-300 text-gray-500 border-gray-200")
-                    : "bg-red-500 hover:bg-red-600 text-white border-red-400 hover:border-red-500"
-                )}
-              >
-                <Trash2 className="w-3 h-3" />
-                <span>Clear</span>
-              </button>
-            </div>
-          </motion.div>
-
-          {/* Features Section */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.3 }}
-            className="grid grid-cols-3 gap-2"
-          >
-            <div className={cn(
-              "p-2 rounded-lg border text-center",
-              isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
-            )}>
-              <PhoneCall className={cn(
-                "w-4 h-4 mx-auto mb-1",
-                isDark ? "text-blue-400" : "text-blue-600"
-              )} />
-              <h3 className={cn(
-                "font-semibold text-xs",
-                isDark ? "text-white" : "text-gray-900"
-              )}>
-                HD Voice
-              </h3>
-              <p className={cn(
-                "text-xs mt-0.5",
-                isDark ? "text-gray-400" : "text-gray-600"
-              )}>
-                Crystal clear
-              </p>
-            </div>
-            <div className={cn(
-              "p-2 rounded-lg border text-center",
-              isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
-            )}>
-              <User className={cn(
-                "w-4 h-4 mx-auto mb-1",
-                isDark ? "text-green-400" : "text-green-600"
-              )} />
-              <h3 className={cn(
-                "font-semibold text-xs",
-                isDark ? "text-white" : "text-gray-900"
-              )}>
-                Instant
-              </h3>
-              <p className={cn(
-                "text-xs mt-0.5",
-                isDark ? "text-gray-400" : "text-gray-600"
-              )}>
-                Fast setup
-              </p>
-            </div>
-            <div className={cn(
-              "p-2 rounded-lg border text-center",
-              isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
-            )}>
-              <Users className={cn(
-                "w-4 h-4 mx-auto mb-1",
-                isDark ? "text-yellow-400" : "text-yellow-600"
-              )} />
-              <h3 className={cn(
-                "font-semibold text-xs",
-                isDark ? "text-white" : "text-gray-900"
-              )}>
-                Multi-Device
-              </h3>
-              <p className={cn(
-                "text-xs mt-0.5",
-                isDark ? "text-gray-400" : "text-gray-600"
-              )}>
-                Everywhere
-              </p>
-            </div>
-          </motion.div>
-
-          {/* Recent Calls */}
-          {recentCalls.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3, duration: 0.3 }}
-              className={cn(
-                "p-2 rounded-lg border",
-                isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
-              )}
-            >
-              <h3 className={cn(
-                "font-semibold mb-1.5 flex items-center space-x-1.5 text-xs",
-                isDark ? "text-white" : "text-gray-900"
-              )}>
-                <PhoneCall className="w-3 h-3" />
-                <span>Recent Calls</span>
-              </h3>
-              <div className="space-y-1">
-                {recentCalls.slice(0, 3).map((call, index) => (
-                  <div
-                    key={index}
-                    className={cn(
-                      "flex items-center justify-between p-1.5 rounded text-xs",
-                      isDark ? "bg-gray-700" : "bg-gray-50"
-                    )}
-                  >
-                    <span className={cn(
-                      "font-mono",
-                      isDark ? "text-white" : "text-gray-900"
-                    )}>
-                      {call.extension}
-                    </span>
-                    <span className={cn(
-                      "text-xs",
-                      isDark ? "text-gray-400" : "text-gray-600"
-                    )}>
-                      {call.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
+                  {/* Header */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-2">
+                      <div className={cn(
+                        'w-2 h-2 rounded-full animate-pulse',
+                        isDark ? 'bg-green-400' : 'bg-green-500'
+                      )} />
+                      <ResponsiveText variant="label" color="muted">
+                        Ready to dial
+                      </ResponsiveText>
+                    </div>
+                    <ResponsiveText variant="label" weight="medium" className={isDark ? "text-gray-300" : "text-gray-700"}>
+                      Extension
+                    </ResponsiveText>
                   </div>
-                ))}
-              </div>
-            </motion.div>
-          )}
 
-          {/* Keypad */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4, duration: 0.3 }}
-            className={cn(
-              "p-2 rounded-lg border shadow-sm",
-              isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
-            )}
-          >
-            <div className="flex items-center justify-center mb-1.5">
-              <div className={cn(
-                'w-6 h-0.5 rounded-full mr-1.5',
-                isDark ? 'bg-blue-600' : 'bg-blue-500'
-              )}></div>
-              <h3 className={cn(
-                "text-xs font-bold text-center",
-                isDark ? "text-white" : "text-gray-800"
-              )}>
-                Keypad
-              </h3>
-              <div className={cn(
-                'w-6 h-0.5 rounded-full ml-1.5',
-                isDark ? 'bg-blue-600' : 'bg-blue-500'
-              )}></div>
+                  {/* Title */}
+                  <div className="text-center mb-2">
+                    <ResponsiveText variant="title" weight="semibold" className={isDark ? "text-white" : "text-gray-900"}>
+                      Make a Call
+                    </ResponsiveText>
+                    <ResponsiveText variant="bodyMedium" color="muted" className="mt-1">
+                      Enter a 3-6 digit extension to connect
+                    </ResponsiveText>
+                  </div>
+
+                  {/* Input Section - Flex Grow */}
+                  <div className="flex-1 flex flex-col justify-center">
+                    <div className="relative mb-6">
+                      <input
+                        type="text"
+                        value={extension}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/[^0-9*#]/g, '').slice(0, 6);
+                          setExtension(value);
+                          setError('');
+                        }}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Enter extension"
+                        className={cn(
+                          "w-full text-lg xs:text-xl md:text-2xl lg:text-3xl font-mono font-bold text-center px-3 xs:px-4 py-2.5 xs:py-3 md:py-4 rounded-lg border-2 transition-all duration-200 mobile-input",
+                          "focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500",
+                          "placeholder:text-xs xs:placeholder:text-sm md:placeholder:text-base placeholder:font-normal",
+                          extension
+                            ? (isDark
+                                ? "text-white border-primary-500 bg-primary-900/20 shadow-inner"
+                                : "text-gray-900 border-primary-500 bg-primary-50 shadow-inner")
+                            : (isDark
+                                ? "text-gray-300 border-gray-600 bg-gray-700/50 placeholder:text-gray-500"
+                                : "text-gray-700 border-gray-300 bg-gray-50 placeholder:text-gray-400")
+                        )}
+                        autoComplete="off"
+                        inputMode="numeric"
+                      />
+                      {extension && (
+                        <button
+                          onClick={() => {
+                            setExtension('');
+                            setError('');
+                          }}
+                          className={cn(
+                            "absolute right-3 top-1/2 transform -translate-y-1/2 p-2 rounded-full transition-colors",
+                            isDark
+                              ? "text-gray-400 hover:text-white hover:bg-gray-600"
+                              : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
+                          )}
+                          aria-label="Clear extension"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    {error && (
+                      <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                        <ResponsiveText variant="bodyMedium" className="text-red-600 dark:text-red-400 text-center">{error}</ResponsiveText>
+                      </div>
+                    )}
+
+                    <ResponsiveButton
+                      onClick={handleCall}
+                      disabled={!extension || loading}
+                      size="lg"
+                      variant={!extension || loading ? "secondary" : "success"}
+                      fullWidth
+                      className="h-12 md:h-14"
+                    >
+                      {loading ? (
+                        <div className="flex items-center justify-center space-x-3">
+                          <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                          <span className="font-medium">Calling...</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center space-x-3">
+                          <PhoneCall className="w-5 h-2" />
+                          <span className="font-medium">Make Call</span>
+                        </div>
+                      )}
+                    </ResponsiveButton>
+                  </div>
+                </div>
+              </motion.div>
             </div>
-            <div className="grid grid-cols-3 gap-1 w-full max-w-[85vw] sm:max-w-[18rem] mx-auto">
-              {keypadButtons.map((btn) => (
-                <button
-                  key={btn.value}
-                  onClick={() => handleKeypadClick(btn.value)}
-                  className={cn(
-                    "p-2 rounded-md font-bold transition-all duration-200 shadow-sm border",
-                    "focus:outline-none focus:ring-2 focus:ring-blue-500",
-                    "aspect-square flex flex-col items-center justify-center text-center",
-                    "active:scale-95 touch-manipulation min-h-[2.25rem] sm:min-h-[2.75rem]",
-                    isDark
-                      ? "bg-gray-700 hover:bg-gray-600 text-white border-gray-600 hover:border-gray-500"
-                      : "bg-gray-50 hover:bg-gray-100 text-gray-800 border-gray-200 hover:border-gray-300"
-                  )}
-                  aria-label={`Dial ${btn.value}`}
-                >
-                  <span className="text-sm font-bold leading-none">{btn.label}</span>
-                  {btn.sub && (
-                    <span className={cn(
-                      "text-[0.6rem] font-medium leading-none mt-0.5",
-                      isDark ? "text-gray-400" : "text-gray-500"
-                    )}>
-                      {btn.sub}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-            <div className="w-full max-w-[85vw] sm:max-w-[18rem] mx-auto mt-2">
-              <button
-                onClick={() => handleKeypadClick('delete')}
-                disabled={!extension}
-                className={cn(
-                  "w-full p-2 rounded-md font-medium transition-all duration-200 shadow-sm border",
-                  "focus:outline-none focus:ring-2 focus:ring-blue-500",
-                  "flex items-center justify-center space-x-1.5 text-xs",
-                  "disabled:opacity-50 disabled:cursor-not-allowed",
-                  "active:scale-95 touch-manipulation min-h-[2.25rem] sm:min-h-[2.75rem]",
-                  !extension
-                    ? "bg-gray-200 text-gray-400 border-gray-100"
-                    : "bg-red-500 hover:bg-red-600 text-white border-red-400 hover:border-red-500"
-                )}
+
+            {/* Right Column - Info Panel */}
+            <div className="lg:col-span-1 h-full flex flex-col space-y-3 lg:space-y-4 min-h-0">
+              {/* Features Section */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2, duration: 0.3 }}
+                className="flex-shrink-0"
               >
-                <Delete className="w-3 h-3" />
-                <span>Delete</span>
-              </button>
+                <div className={cn(
+                  "bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4"
+                )}>
+                  <ResponsiveText variant="bodyLarge" weight="semibold" className={cn("text-center mb-3", isDark ? "text-white" : "text-gray-900")}>
+                    Features
+                  </ResponsiveText>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="text-center">
+                      <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg inline-flex mb-2">
+                        <PhoneCall className={cn("w-4 h-4", isDark ? "text-blue-400" : "text-blue-600")} />
+                      </div>
+                      <ResponsiveText variant="caption" weight="medium" className={isDark ? "text-white" : "text-gray-900"}>
+                        HD Voice
+                      </ResponsiveText>
+                    </div>
+                    <div className="text-center">
+                      <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg inline-flex mb-2">
+                        <User className={cn("w-4 h-4", isDark ? "text-green-400" : "text-green-600")} />
+                      </div>
+                      <ResponsiveText variant="caption" weight="medium" className={isDark ? "text-white" : "text-gray-900"}>
+                        Instant
+                      </ResponsiveText>
+                    </div>
+                    <div className="text-center">
+                      <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg inline-flex mb-2">
+                        <Users className={cn("w-4 h-4", isDark ? "text-yellow-400" : "text-yellow-600")} />
+                      </div>
+                      <ResponsiveText variant="caption" weight="medium" className={isDark ? "text-white" : "text-gray-900"}>
+                        Multi-Device
+                      </ResponsiveText>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Recent Calls */}
+              {recentCalls.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3, duration: 0.3 }}
+                  className="flex-shrink-0"
+                >
+                  <div className={cn(
+                    "bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4"
+                  )}>
+                    <div className="flex items-center space-x-2 mb-3">
+                      <PhoneCall className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+                      <ResponsiveText variant="bodyLarge" weight="semibold" className={isDark ? "text-white" : "text-gray-900"}>
+                        Recent Calls
+                      </ResponsiveText>
+                    </div>
+                    <div className="space-y-2">
+                      {recentCalls.slice(0, 2).map((call, index) => (
+                        <div
+                          key={index}
+                          className={cn(
+                            "flex items-center justify-between p-2 rounded border",
+                            isDark ? "bg-gray-700/50 border-gray-600" : "bg-gray-50 border-gray-200"
+                          )}
+                        >
+                          <ResponsiveText variant="caption" weight="medium" className={cn("font-mono", isDark ? "text-white" : "text-gray-900")}>
+                            {call.extension}
+                          </ResponsiveText>
+                          <ResponsiveText variant="caption" color="muted">
+                            {call.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </ResponsiveText>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Quick Tips Section */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 0.3 }}
+                className="flex-1 min-h-0"
+              >
+                <div className={cn(
+                  "h-full bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 flex flex-col"
+                )}>
+                  <ResponsiveText variant="bodyLarge" weight="semibold" className={cn("text-center mb-3", isDark ? "text-white" : "text-gray-800")}>
+                    Quick Tips
+                  </ResponsiveText>
+
+                  <div className="flex-1 space-y-3 overflow-y-auto">
+                    <div className={cn("flex items-start space-x-2 p-2 rounded", isDark ? "bg-gray-700/50" : "bg-gray-50")}>
+                      <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold mt-0.5 flex-shrink-0", isDark ? "bg-primary-600 text-white" : "bg-primary-500 text-white")}>
+                        1
+                      </div>
+                      <div className="min-w-0">
+                        <ResponsiveText variant="caption" weight="medium" className={isDark ? "text-white" : "text-gray-900"}>
+                          Enter Extension
+                        </ResponsiveText>
+                        <ResponsiveText variant="caption" color="muted" className="text-xs">
+                          Type 3-6 digits in the input field
+                        </ResponsiveText>
+                      </div>
+                    </div>
+
+                    <div className={cn("flex items-start space-x-2 p-2 rounded", isDark ? "bg-gray-700/50" : "bg-gray-50")}>
+                      <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold mt-0.5 flex-shrink-0", isDark ? "bg-primary-600 text-white" : "bg-primary-500 text-white")}>
+                        2
+                      </div>
+                      <div className="min-w-0">
+                        <ResponsiveText variant="caption" weight="medium" className={isDark ? "text-white" : "text-gray-900"}>
+                          Make Call
+                        </ResponsiveText>
+                        <ResponsiveText variant="caption" color="muted" className="text-xs">
+                          Click button or press Enter
+                        </ResponsiveText>
+                      </div>
+                    </div>
+
+                    <div className={cn("flex items-start space-x-2 p-2 rounded", isDark ? "bg-gray-700/50" : "bg-gray-50")}>
+                      <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold mt-0.5 flex-shrink-0", isDark ? "bg-primary-600 text-white" : "bg-primary-500 text-white")}>
+                        3
+                      </div>
+                      <div className="min-w-0">
+                        <ResponsiveText variant="caption" weight="medium" className={isDark ? "text-white" : "text-gray-900"}>
+                          Keyboard Support
+                        </ResponsiveText>
+                        <ResponsiveText variant="caption" color="muted" className="text-xs">
+                          Use keyboard for numbers, * and #
+                        </ResponsiveText>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
             </div>
-          </motion.div>
+
+          </div>
+          </div>
         </div>
       </div>
     </div>

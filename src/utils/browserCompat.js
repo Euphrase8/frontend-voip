@@ -6,8 +6,18 @@ export const checkBrowserCompatibility = () => {
   const warnings = [];
   const recommendations = [];
 
-  // Check WebRTC support
-  if (!window.RTCPeerConnection) {
+  // Check if we're in a browser environment
+  if (typeof window === 'undefined') {
+    issues.push('Not running in a browser environment');
+    return { supported: false, issues, warnings, recommendations };
+  }
+
+  // Check WebRTC support with fallbacks
+  const hasWebRTC = !!(window.RTCPeerConnection ||
+                      window.webkitRTCPeerConnection ||
+                      window.mozRTCPeerConnection);
+
+  if (!hasWebRTC) {
     issues.push('WebRTC is not supported in this browser');
     recommendations.push('Please use a modern browser like Chrome, Firefox, Safari, or Edge');
   }
@@ -19,14 +29,14 @@ export const checkBrowserCompatibility = () => {
   }
 
   // Check getUserMedia support
-  const hasModernGetUserMedia = navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
-  const hasLegacyGetUserMedia = navigator.getUserMedia || 
-                               navigator.webkitGetUserMedia || 
-                               navigator.mozGetUserMedia || 
-                               navigator.msGetUserMedia;
+  const hasModernGetUserMedia = navigator && navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
+  const hasLegacyGetUserMedia = navigator && (navigator.getUserMedia ||
+                               navigator.webkitGetUserMedia ||
+                               navigator.mozGetUserMedia ||
+                               navigator.msGetUserMedia);
 
   if (!hasModernGetUserMedia && !hasLegacyGetUserMedia) {
-    issues.push('Microphone access is not supported in this browser');
+    warnings.push('Microphone access may be limited in this browser');
     recommendations.push('Please use a modern browser that supports microphone access');
   }
 
@@ -77,9 +87,22 @@ export const getMediaStreamWithFallback = async (constraints = { audio: true, vi
   console.log('[browserCompat] Attempting to get media stream...');
   
   const compat = checkBrowserCompatibility();
-  
-  if (!compat.supported) {
-    throw new Error(`Browser not supported: ${compat.issues.join(', ')}`);
+
+  // Log compatibility info but don't block execution
+  if (compat.issues.length > 0) {
+    console.warn('[browserCompat] Browser compatibility issues:', compat.issues);
+  }
+  if (compat.warnings.length > 0) {
+    console.warn('[browserCompat] Browser compatibility warnings:', compat.warnings);
+  }
+
+  // Only throw error for critical issues that would prevent basic functionality
+  const criticalIssues = compat.issues.filter(issue =>
+    issue.includes('Not running in a browser environment')
+  );
+
+  if (criticalIssues.length > 0) {
+    throw new Error(`Critical browser issues: ${criticalIssues.join(', ')}`);
   }
 
   let stream = null;
@@ -169,28 +192,103 @@ export const getMediaStreamWithFallback = async (constraints = { audio: true, vi
 
 export const showBrowserCompatibilityInfo = () => {
   const compat = checkBrowserCompatibility();
-  
+
   console.group('🔍 Browser Compatibility Check');
   console.log('Supported:', compat.supported);
   console.log('Secure Context:', compat.isSecureContext);
   console.log('Modern getUserMedia:', compat.hasModernGetUserMedia);
   console.log('Legacy getUserMedia:', compat.hasLegacyGetUserMedia);
-  
+
   if (compat.issues.length > 0) {
     console.error('Issues:', compat.issues);
   }
-  
+
   if (compat.warnings.length > 0) {
     console.warn('Warnings:', compat.warnings);
   }
-  
+
   if (compat.recommendations.length > 0) {
     console.info('Recommendations:', compat.recommendations);
   }
-  
+
   console.groupEnd();
-  
+
   return compat;
+};
+
+// Quick microphone permission request
+export const requestMicrophonePermission = async () => {
+  try {
+    console.log('[browserCompat] Requesting microphone permission...');
+    const stream = await getMediaStreamWithFallback({ audio: true, video: false });
+
+    if (stream) {
+      console.log('[browserCompat] ✅ Microphone permission granted');
+      // Stop the stream immediately since we only wanted permission
+      stream.getTracks().forEach(track => track.stop());
+      return { success: true, message: 'Microphone permission granted' };
+    }
+  } catch (error) {
+    console.error('[browserCompat] ❌ Microphone permission failed:', error);
+    return {
+      success: false,
+      error: error.name,
+      message: getErrorMessage(error)
+    };
+  }
+};
+
+// Get user-friendly error message for microphone errors
+const getErrorMessage = (error) => {
+  switch (error.name) {
+    case 'NotAllowedError':
+      return 'Microphone permission denied. Please allow microphone access and try again.';
+    case 'NotFoundError':
+      return 'No microphone found. Please connect a microphone and try again.';
+    case 'NotReadableError':
+      return 'Microphone is being used by another application. Please close other apps and try again.';
+    case 'OverconstrainedError':
+      return 'Microphone constraints cannot be satisfied. Try using a different microphone.';
+    case 'SecurityError':
+      return 'Security error. Please ensure you\'re using HTTPS or localhost.';
+    case 'TypeError':
+      return 'Browser compatibility issue. Please update your browser or try a different one.';
+    default:
+      return `Microphone error: ${error.message || 'Unknown error'}`;
+  }
+};
+
+// Auto-fix common microphone issues
+export const autoFixMicrophoneIssues = async () => {
+  const fixes = [];
+  const compat = checkBrowserCompatibility();
+
+  // Check if we can request permission
+  if (compat.hasModernGetUserMedia || compat.hasLegacyGetUserMedia) {
+    try {
+      const permissionResult = await requestMicrophonePermission();
+      if (permissionResult.success) {
+        fixes.push('✅ Microphone permission granted');
+        return { success: true, fixes };
+      } else {
+        fixes.push(`❌ Permission failed: ${permissionResult.message}`);
+      }
+    } catch (error) {
+      fixes.push(`❌ Auto-fix failed: ${error.message}`);
+    }
+  }
+
+  // Add browser-specific recommendations
+  if (!compat.isSecureContext) {
+    const userAgent = navigator.userAgent.toLowerCase();
+    if (userAgent.includes('chrome')) {
+      fixes.push('💡 Chrome: Try enabling "Insecure origins treated as secure" in chrome://flags/');
+    } else if (userAgent.includes('firefox')) {
+      fixes.push('💡 Firefox: Try setting media.devices.insecure.enabled to true in about:config');
+    }
+  }
+
+  return { success: false, fixes };
 };
 
 // Auto-run compatibility check on import

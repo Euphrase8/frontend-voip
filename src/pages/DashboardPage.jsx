@@ -27,6 +27,12 @@ import ConnectionStatus from "../components/ConnectionStatus";
 import { useTheme } from "../contexts/ThemeContext";
 import notificationService from "../utils/notificationService";
 import { cn } from "../utils/ui";
+import {
+  ResponsiveContainer,
+  ResponsiveText,
+  ResponsiveFlex,
+  ResponsiveButton
+} from '../components/ResponsiveLayout';
 
 const initialContacts = [
   {
@@ -387,96 +393,101 @@ const DashboardPage = ({ user, onLogout, darkMode, setIncomingCall }) => {
             : "bg-white border-secondary-200"
         )}
       >
-        <div className="flex items-center justify-between px-4 lg:px-6 py-3 h-16">
-          {/* Left Section */}
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-primary-500 rounded-lg flex items-center justify-center">
-              <Phone className="w-4 h-4 text-white" />
-            </div>
-            <div className="hidden sm:block">
-              <h1 className={cn(
-                "text-lg font-semibold",
-                isDarkMode ? "text-white" : "text-secondary-900"
-              )}>
-                VoIP Dashboard
-              </h1>
-              <p className={cn(
-                "text-xs",
-                isDarkMode ? "text-secondary-400" : "text-secondary-600"
-              )}>
-                {user?.username} (Ext: {user?.extension})
-              </p>
-            </div>
-          </div>
+        <ResponsiveContainer padding="compact">
+          <ResponsiveFlex justify="between" align="center" className="h-14">
+            {/* Left Section */}
+            <ResponsiveFlex align="center" spacing="inline">
+              <div className="w-8 h-8 bg-primary-500 rounded-lg flex items-center justify-center">
+                <Phone className="w-5 h-5 text-white" />
+              </div>
+              <div className="hidden sm:block">
+                <ResponsiveText variant="bodyLarge" weight="semibold" className={isDarkMode ? "text-white" : "text-secondary-900"}>
+                  VoIP Dashboard
+                </ResponsiveText>
+                <ResponsiveText variant="caption" className={isDarkMode ? "text-secondary-400" : "text-secondary-600"}>
+                  {user?.username} (Ext: {user?.extension})
+                </ResponsiveText>
+              </div>
+            </ResponsiveFlex>
 
-          {/* Center Section - Call Status */}
-          {callStatus && (
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className={cn(
-                "hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium",
-                callStatus.includes("Connected")
-                  ? "bg-success-100 text-success-700"
-                  : "bg-warning-100 text-warning-700"
-              )}
-            >
-              <div className="w-1.5 h-1.5 bg-current rounded-full animate-pulse" />
-              <span>{callStatus}</span>
-            </motion.div>
-          )}
+            {/* Center Section - Call Status */}
+            {callStatus && (
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className={cn(
+                  "hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-full font-medium",
+                  callStatus.includes("Connected")
+                    ? "bg-success-100 text-success-700"
+                    : "bg-warning-100 text-warning-700"
+                )}
+              >
+                <div className="w-2 h-2 bg-current rounded-full animate-pulse" />
+                <ResponsiveText variant="caption">{callStatus}</ResponsiveText>
+              </motion.div>
+            )}
 
-          {/* Right Section */}
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setCurrentPage("notifications")}
-              className={cn(
-                "p-2 rounded-lg transition-colors relative",
-                currentPage === "notifications"
-                  ? "bg-primary-100 text-primary-600"
-                  : isDarkMode
-                    ? "hover:bg-secondary-800 text-secondary-400 hover:text-white"
-                    : "hover:bg-secondary-100 text-secondary-600 hover:text-secondary-900"
-              )}
-              title="Notifications & Logs"
-            >
-              <Bell className="w-4 h-4" />
-              {/* Notification badge */}
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-danger-500 text-white text-xs rounded-full flex items-center justify-center px-1">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setShowSettings(true)}
-              className={cn(
-                "p-2 rounded-lg transition-colors",
-                isDarkMode
+            {/* Right Section */}
+            <ResponsiveFlex align="center" spacing="inline">
+              <ResponsiveButton
+                onClick={() => setCurrentPage("notifications")}
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "relative",
+                  currentPage === "notifications"
+                    ? "bg-primary-100 text-primary-600"
+                    : isDarkMode
+                      ? "hover:bg-secondary-800 text-secondary-400 hover:text-white"
+                      : "hover:bg-secondary-100 text-secondary-600 hover:text-secondary-900"
+                )}
+                title="Notifications & Logs"
+              >
+                <Bell className="w-4 h-4" />
+                {/* Notification badge */}
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-danger-500 text-white text-xs rounded-full flex items-center justify-center px-1">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </ResponsiveButton>
+
+              <ResponsiveButton
+                onClick={() => setShowSettings(true)}
+                variant="ghost"
+                size="sm"
+                className={isDarkMode
                   ? "hover:bg-secondary-800 text-secondary-400 hover:text-white"
                   : "hover:bg-secondary-100 text-secondary-600 hover:text-secondary-900"
-              )}
-              title="Settings"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-            {/* Temporary debugging button */}
-            <button
-              onClick={testStatusService}
-              className="p-2 rounded-lg transition-colors text-warning-600 hover:bg-warning-50"
-              title="Test Status Service (Debug)"
-            >
-              🔧
-            </button>
-            <button
-              onClick={handleLogout}
-              className="p-2 rounded-lg transition-colors text-danger-600 hover:bg-danger-50"
-              title="Logout"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+                }
+                title="Settings"
+              >
+                <Settings className="w-4 h-4" />
+              </ResponsiveButton>
+
+              {/* Temporary debugging button */}
+              <ResponsiveButton
+                onClick={testStatusService}
+                variant="ghost"
+                size="sm"
+                className="text-warning-600 hover:bg-warning-50"
+                title="Test Status Service (Debug)"
+              >
+                🔧
+              </ResponsiveButton>
+
+              <ResponsiveButton
+                onClick={handleLogout}
+                variant="ghost"
+                size="sm"
+                className="text-danger-600 hover:bg-danger-50"
+                title="Logout"
+              >
+                <LogOut className="w-4 h-4" />
+              </ResponsiveButton>
+            </ResponsiveFlex>
+          </ResponsiveFlex>
+        </ResponsiveContainer>
       </motion.header>
 
       {/* Notification Display */}
@@ -503,47 +514,52 @@ const DashboardPage = ({ user, onLogout, darkMode, setIncomingCall }) => {
           initial={{ x: -20, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           className={cn(
-            "hidden lg:flex flex-col w-64 border-r flex-shrink-0",
+            "hidden lg:flex flex-col border-r flex-shrink-0",
+            "w-56",
             isDarkMode
               ? "bg-secondary-900 border-secondary-700"
               : "bg-white border-secondary-200"
           )}
         >
-          <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-            {[
-              { id: "keypad", label: "Keypad", icon: Grid },
-              { id: "settings", label: "Settings", icon: Settings },
-              { id: "contacts", label: "Contacts", icon: Users },
-              { id: "calllogs", label: "Call Logs", icon: Clock },
-              { id: "notifications", label: "Notifications", icon: Bell },
-            ].map((item) => {
-              const Icon = item.icon;
-              const isActive = currentPage === item.id;
+          <nav className="flex-1 overflow-y-auto">
+            <ResponsiveContainer padding="compact">
+              <div className="space-y-1">
+                {[
+                  { id: "keypad", label: "Keypad", icon: Grid },
+                  { id: "settings", label: "Settings", icon: Settings },
+                  { id: "contacts", label: "Contacts", icon: Users },
+                  { id: "calllogs", label: "Call Logs", icon: Clock },
+                  { id: "notifications", label: "Notifications", icon: Bell },
+                ].map((item) => {
+                  const Icon = item.icon;
+                  const isActive = currentPage === item.id;
 
-              return (
-                <motion.button
-                  key={item.id}
-                  onClick={() => setCurrentPage(item.id)}
-                  whileHover={{ x: 2 }}
-                  whileTap={{ scale: 0.98 }}
-                  className={cn(
-                    "w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200 text-left text-sm",
-                    isActive
-                      ? cn(
-                          "bg-primary-500 text-white shadow-md",
-                          isDarkMode && "bg-primary-600"
-                        )
-                      : cn(
-                          "text-secondary-600 hover:text-primary-600 hover:bg-primary-50",
-                          isDarkMode && "text-secondary-400 hover:text-primary-400 hover:bg-secondary-800"
-                        )
-                  )}
-                >
-                  <Icon className="w-4 h-4 flex-shrink-0" />
-                  <span className="font-medium">{item.label}</span>
-                </motion.button>
-              );
-            })}
+                  return (
+                    <motion.button
+                      key={item.id}
+                      onClick={() => setCurrentPage(item.id)}
+                      whileHover={{ x: 2 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={cn(
+                        "w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200 text-left",
+                        isActive
+                          ? cn(
+                              "bg-primary-500 text-white shadow-md",
+                              isDarkMode && "bg-primary-600"
+                            )
+                          : cn(
+                              "text-secondary-600 hover:text-primary-600 hover:bg-primary-50",
+                              isDarkMode && "text-secondary-400 hover:text-primary-400 hover:bg-secondary-800"
+                            )
+                      )}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      <ResponsiveText variant="bodyMedium" className="font-medium">{item.label}</ResponsiveText>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </ResponsiveContainer>
           </nav>
         </motion.aside>
 
@@ -588,89 +604,266 @@ const DashboardPage = ({ user, onLogout, darkMode, setIncomingCall }) => {
 
         {/* Main Content */}
         <main className="flex-1 overflow-hidden flex flex-col">
-          {/* Content Area */}
-          <div className="flex-1 overflow-y-auto p-4 lg:p-6 pb-20 lg:pb-6">
-            <motion.div
-              key={currentPage}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2 }}
-              className="h-full min-h-0"
-            >
-              {currentPage === "keypad" && (
-                <div className={cn(
-                  "h-full rounded-xl border overflow-hidden",
-                  isDarkMode
-                    ? "bg-secondary-800 border-secondary-700"
-                    : "bg-white border-secondary-200"
-                )}>
-                  <div className="p-4 lg:p-6 h-full overflow-hidden">
-                    <HomePage onCall={(extension) => startCall({ extension, name: `Extension ${extension}` })} darkMode={isDarkMode} />
+          {/* Content Area with Professional Layout */}
+          <div className="flex-1 overflow-hidden pb-20 lg:pb-6">
+            <ResponsiveContainer padding="section" className="h-full">
+              <motion.div
+                key={currentPage}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
+                className="h-full flex flex-col"
+              >
+                {currentPage === "keypad" && (
+                  <div className="h-full flex flex-col">
+                    {/* Static Header Card */}
+                    <div className={cn(
+                      "flex-shrink-0 rounded-t-xl border-b",
+                      isDarkMode
+                        ? "bg-secondary-800 border-secondary-700"
+                        : "bg-white border-secondary-200"
+                    )}>
+                      <div className="p-4 lg:p-6">
+                        <div className="flex items-center space-x-3">
+                          <div className="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg">
+                            <Grid className={cn(
+                              'w-5 h-5',
+                              isDarkMode ? 'text-primary-400' : 'text-primary-600'
+                            )} />
+                          </div>
+                          <div>
+                            <h1 className={cn(
+                              'text-xl font-bold',
+                              isDarkMode ? 'text-white' : 'text-secondary-900'
+                            )}>
+                              VoIP Dialer
+                            </h1>
+                            <p className={cn(
+                              'text-sm',
+                              isDarkMode ? 'text-secondary-400' : 'text-secondary-600'
+                            )}>
+                              Make calls using the keypad or keyboard input
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Scrollable Content */}
+                    <div className={cn(
+                      "flex-1 overflow-y-auto rounded-b-xl",
+                      isDarkMode
+                        ? "bg-secondary-800 border-secondary-700"
+                        : "bg-white border-secondary-200"
+                    )}>
+                      <HomePage onCall={(extension) => startCall({ extension, name: `Extension ${extension}` })} darkMode={isDarkMode} />
+                    </div>
                   </div>
-                </div>
-              )}
-              {currentPage === "settings" && (
-                <div className={cn(
-                  "h-full rounded-xl border",
-                  isDarkMode
-                    ? "bg-secondary-800 border-secondary-700"
-                    : "bg-white border-secondary-200"
-                )}>
-                  <SettingsPage
+                )}
+                {currentPage === "settings" && (
+                  <div className="h-full flex flex-col">
+                    {/* Static Header Card */}
+                    <div className={cn(
+                      "flex-shrink-0 rounded-t-xl border-b",
+                      isDarkMode
+                        ? "bg-secondary-800 border-secondary-700"
+                        : "bg-white border-secondary-200"
+                    )}>
+                      <div className="p-4 lg:p-6">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg">
+                              <Settings className={cn(
+                                'w-5 h-5',
+                                isDarkMode ? 'text-primary-400' : 'text-primary-600'
+                              )} />
+                            </div>
+                            <div>
+                              <h1 className={cn(
+                                'text-xl font-bold',
+                                isDarkMode ? 'text-white' : 'text-secondary-900'
+                              )}>
+                                Settings
+                              </h1>
+                              <p className={cn(
+                                'text-sm',
+                                isDarkMode ? 'text-secondary-400' : 'text-secondary-600'
+                              )}>
+                                Configure your VoIP preferences and account settings
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Scrollable Content */}
+                    <div className={cn(
+                      "flex-1 overflow-y-auto rounded-b-xl",
+                      isDarkMode
+                        ? "bg-secondary-800"
+                        : "bg-white"
+                    )}>
+                      <SettingsPage
+                        darkMode={isDarkMode}
+                        onToggleDarkMode={toggleDarkMode}
+                        user={user}
+                      />
+                    </div>
+                  </div>
+                )}
+                {currentPage === "contacts" && (
+                  <div className="h-full flex flex-col">
+                    {/* Static Header Card */}
+                    <div className={cn(
+                      "flex-shrink-0 rounded-t-xl border-b",
+                      isDarkMode
+                        ? "bg-secondary-800 border-secondary-700"
+                        : "bg-white border-secondary-200"
+                    )}>
+                      <div className="p-4 lg:p-6">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg">
+                              <Users className={cn(
+                                'w-5 h-5',
+                                isDarkMode ? 'text-primary-400' : 'text-primary-600'
+                              )} />
+                            </div>
+                            <div>
+                              <h1 className={cn(
+                                'text-xl font-bold',
+                                isDarkMode ? 'text-white' : 'text-secondary-900'
+                              )}>
+                                Contacts Directory
+                              </h1>
+                              <p className={cn(
+                                'text-sm',
+                                isDarkMode ? 'text-secondary-400' : 'text-secondary-600'
+                              )}>
+                                Browse and call your contacts
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Scrollable Content */}
+                    <div className={cn(
+                      "flex-1 overflow-hidden rounded-b-xl",
+                      isDarkMode
+                        ? "bg-secondary-800"
+                        : "bg-white"
+                    )}>
+                      <ContactsPage
+                        onCall={(extension) => startCall({ extension, name: `Extension ${extension}` })}
+                        darkMode={isDarkMode}
+                        userID={user?.username}
+                      />
+                    </div>
+                  </div>
+                )}
+                {currentPage === "calllogs" && (
+                  <div className="h-full flex flex-col">
+                    {/* Static Header Card */}
+                    <div className={cn(
+                      "flex-shrink-0 rounded-t-xl border-b",
+                      isDarkMode
+                        ? "bg-secondary-800 border-secondary-700"
+                        : "bg-white border-secondary-200"
+                    )}>
+                      <div className="p-4 lg:p-6">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg">
+                              <Clock className={cn(
+                                'w-5 h-5',
+                                isDarkMode ? 'text-primary-400' : 'text-primary-600'
+                              )} />
+                            </div>
+                            <div>
+                              <h1 className={cn(
+                                'text-xl font-bold',
+                                isDarkMode ? 'text-white' : 'text-secondary-900'
+                              )}>
+                                Call Logs
+                              </h1>
+                              <p className={cn(
+                                'text-sm',
+                                isDarkMode ? 'text-secondary-400' : 'text-secondary-600'
+                              )}>
+                                View your call history and details
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Scrollable Content */}
+                    <div className={cn(
+                      "flex-1 overflow-hidden rounded-b-xl",
+                      isDarkMode
+                        ? "bg-secondary-800"
+                        : "bg-white"
+                    )}>
+                      <CallLogsPage darkMode={isDarkMode} user={user} onCall={(extension) => startCall({ extension, name: `Extension ${extension}` })} />
+                    </div>
+                  </div>
+                )}
+                {currentPage === "notifications" && (
+                  <div className="h-full flex flex-col">
+                    {/* Static Header Card */}
+                    <div className={cn(
+                      "flex-shrink-0 rounded-t-xl border-b",
+                      isDarkMode
+                        ? "bg-secondary-800 border-secondary-700"
+                        : "bg-white border-secondary-200"
+                    )}>
+                      <div className="p-4 lg:p-6">
+                        <div className="flex items-center space-x-3">
+                          <div className="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg">
+                            <Bell className={cn(
+                              'w-5 h-5',
+                              isDarkMode ? 'text-primary-400' : 'text-primary-600'
+                            )} />
+                          </div>
+                          <div>
+                            <h1 className={cn(
+                              'text-xl font-bold',
+                              isDarkMode ? 'text-white' : 'text-secondary-900'
+                            )}>
+                              {user?.role === 'admin' ? 'Notifications & Logs' : 'Notifications'}
+                            </h1>
+                            <p className={cn(
+                              'text-sm',
+                              isDarkMode ? 'text-secondary-400' : 'text-secondary-600'
+                            )}>
+                              Stay updated with system alerts and messages
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Scrollable Content */}
+                    <div className={cn(
+                      "flex-1 overflow-hidden rounded-b-xl",
+                      isDarkMode
+                        ? "bg-secondary-800"
+                        : "bg-white"
+                    )}>
+                      <NotificationsPage darkMode={isDarkMode} user={user} />
+                    </div>
+                  </div>
+                )}
+                {currentPage === "calling" && activeCallContact && (
+                  <CallingPage
+                    contact={activeCallContact}
+                    callStatus={callStatus}
+                    onEndCall={endCall}
+                    channel={`PJSIP/${activeCallContact.extension}`}
                     darkMode={isDarkMode}
-                    onToggleDarkMode={toggleDarkMode}
-                    user={user}
                   />
-                </div>
-              )}
-              {currentPage === "contacts" && (
-                <div className={cn(
-                  "h-full rounded-xl border",
-                  isDarkMode
-                    ? "bg-secondary-800 border-secondary-700"
-                    : "bg-white border-secondary-200"
-                )}>
-                  <div className="p-4 lg:p-6 h-full">
-                    <ContactsPage
-                      onCall={(extension) => startCall({ extension, name: `Extension ${extension}` })}
-                      darkMode={isDarkMode}
-                      userID={user?.username}
-                    />
-                  </div>
-                </div>
-              )}
-              {currentPage === "calllogs" && (
-                <div className={cn(
-                  "h-full rounded-xl border",
-                  isDarkMode
-                    ? "bg-secondary-800 border-secondary-700"
-                    : "bg-white border-secondary-200"
-                )}>
-                  <div className="p-4 lg:p-6 h-full">
-                    <CallLogsPage darkMode={isDarkMode} user={user} onCall={(extension) => startCall({ extension, name: `Extension ${extension}` })} />
-                  </div>
-                </div>
-              )}
-              {currentPage === "notifications" && (
-                <div className={cn(
-                  "h-full rounded-xl border",
-                  isDarkMode
-                    ? "bg-secondary-800 border-secondary-700"
-                    : "bg-white border-secondary-200"
-                )}>
-                  <NotificationsPage darkMode={isDarkMode} user={user} />
-                </div>
-              )}
-              {currentPage === "calling" && activeCallContact && (
-                <CallingPage
-                  contact={activeCallContact}
-                  callStatus={callStatus}
-                  onEndCall={endCall}
-                  channel={`PJSIP/${activeCallContact.extension}`}
-                  darkMode={isDarkMode}
-                />
-              )}
-            </motion.div>
+                )}
+              </motion.div>
+            </ResponsiveContainer>
           </div>
         </main>
       </div>

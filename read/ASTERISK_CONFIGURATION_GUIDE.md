@@ -1,11 +1,11 @@
 # Asterisk Configuration Guide for VoIP Application
 
-This guide provides step-by-step instructions for configuring Asterisk on Kali Linux (172.20.10.2) to work with your VoIP application running on 172.20.10.4.
+This guide provides step-by-step instructions for configuring Asterisk on Kali Linux (172.20.10.5) to work with your VoIP application running on 172.20.10.4.
 
 ## 📋 Prerequisites
 
-- Kali Linux server at 172.20.10.2
-- SSH access with credentials: `kali@172.20.10.2` (password: `kali`)
+- Kali Linux server at 172.20.10.5
+- SSH access with credentials: `kali@172.20.10.5` (password: `kali`)
 - VoIP application running on 172.20.10.4:3000
 - Backend server running on 172.20.10.4:8080
 
@@ -14,7 +14,7 @@ This guide provides step-by-step instructions for configuring Asterisk on Kali L
 ### Step 1: Connect to Kali Server
 
 ```bash
-ssh kali@172.20.10.2
+ssh kali@172.20.10.5
 # Password: kali
 ```
 
@@ -64,16 +64,16 @@ type=transport
 protocol=ws
 bind=0.0.0.0:8088
 local_net=172.20.10.0/24
-external_media_address=172.20.10.2
-external_signaling_address=172.20.10.2
+external_media_address=172.20.10.5
+external_signaling_address=172.20.10.5
 
 [transport-udp]
 type=transport
 protocol=udp
 bind=0.0.0.0:5060
 local_net=172.20.10.0/24
-external_media_address=172.20.10.2
-external_signaling_address=172.20.10.2
+external_media_address=172.20.10.5
+external_signaling_address=172.20.10.5
 
 ;==========================
 ; ENDPOINT TEMPLATES
@@ -352,7 +352,7 @@ After completing the Asterisk setup, configure your VoIP application with these 
 ### IP Configuration Settings:
 - **Backend Host:** `172.20.10.4`
 - **Backend Port:** `8080`
-- **Asterisk Host:** `172.20.10.2`
+- **Asterisk Host:** `172.20.10.5`
 - **Asterisk SIP Port:** `8088`
 - **Asterisk AMI Port:** `5038`
 

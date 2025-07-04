@@ -16,24 +16,24 @@ const Sidebar = ({ currentPage, onNavigate, darkMode, user }) => {
 
   return (
     <div
-      className={`hidden md:flex fixed top-0 bottom-0 left-0 w-64 flex-col glass-effect p-4 overflow-y-auto z-40 ${
-        darkMode ? "bg-gray-900" : "bg-blue-100"
-      } shadow-xl animate-[fadeInUp_0.8s_ease-out_forwards]`}
+      className={`hidden md:flex fixed top-0 bottom-0 left-0 w-56 flex-col p-3 overflow-y-auto z-40 ${
+        darkMode ? "bg-gray-900" : "bg-white"
+      } border-r ${darkMode ? "border-gray-700" : "border-gray-200"} shadow-sm`}
     >
-      <h2 className={`text-lg font-bold mb-4 ${darkMode ? "text-white" : "text-blue-900"}`}>
+      <h2 className={`text-base font-semibold mb-3 ${darkMode ? "text-white" : "text-gray-900"}`}>
         Dashboard
       </h2>
-      <div className="space-y-2">
+      <div className="space-y-1">
         {navItems.map((item) => (
           <button
             key={item.id}
             onClick={() => onNavigate(item.id)}
-            className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-all transform hover:scale-105 min-h-[44px] ${
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
               currentPage === item.id
                 ? "bg-blue-600 text-white"
                 : darkMode
-                ? "text-white hover:bg-gray-700"
-                : "text-black hover:bg-blue-200"
+                ? "text-gray-300 hover:bg-gray-800 hover:text-white"
+                : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
             }`}
             aria-label={`Navigate to ${item.label}`}
           >

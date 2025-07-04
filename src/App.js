@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { ThemeProvider } from './contexts/ThemeContext';
+// Import enhanced toast utilities to ensure all methods are available globally
+import './utils/toastUtils';
 import LoginPage from './auth/LoginPage';
 import RegisterPage from './auth/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
@@ -16,8 +18,10 @@ import { initializeSIP } from './services/call';
 import VoipPhone from './components/VoipPhone';
 import IncomingCallListener from './pages/IncomingCallListener';
 import BrowserCompatibilityAlert from './components/BrowserCompatibilityAlert';
+import MicrophoneFix from './components/MicrophoneFix';
 import sipManager from './services/sipManager';
 import ipConfigService from './services/ipConfigService';
+import { testMicrophoneAccess } from './utils/microphoneDiagnostics';
 
 const App = () => {
   const navigate = useNavigate();
@@ -27,6 +31,8 @@ const App = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [notification, setNotification] = useState(null);
   const [isRegistered, setIsRegistered] = useState(false);
+  const [showMicrophoneFix, setShowMicrophoneFix] = useState(false);
+  const [microphoneStatus, setMicrophoneStatus] = useState(null);
   const [contacts] = useState([
     { id: 1, name: 'John Doe', extension: '1001', avatar: null },
     { id: 2, name: 'Jane Smith', extension: '1002', avatar: null },
@@ -72,6 +78,35 @@ const App = () => {
     return () => window.removeEventListener('registrationStatus', handleRegistrationStatus);
   }, [user?.extension]);
 
+  // Check microphone access
+  const checkMicrophoneAccess = async () => {
+    try {
+      const result = await testMicrophoneAccess();
+      setMicrophoneStatus(result);
+
+      if (!result.success) {
+        console.warn('[App.js] Microphone access failed:', result.message);
+        // Don't automatically show the fix dialog, let user trigger it
+      } else {
+        console.log('[App.js] Microphone access successful');
+      }
+
+      return result.success;
+    } catch (error) {
+      console.error('[App.js] Microphone check failed:', error);
+      setMicrophoneStatus({
+        success: false,
+        message: 'Microphone check failed: ' + error.message
+      });
+      return false;
+    }
+  };
+
+  const handleMicrophoneFixed = () => {
+    setShowMicrophoneFix(false);
+    checkMicrophoneAccess(); // Re-check after fix
+  };
+
   const initializeConnection = async (extension) => {
     try {
       // Use WebRTC mode by default (no traditional SIP registration)
@@ -86,7 +121,7 @@ const App = () => {
             },
             callStatus: 'Incoming',
             isOutgoing: false,
-            channel: `${call.from}@172.20.10.2`,
+            channel: `${call.from}@172.20.10.5`,
             session: call.session,
           },
         });
@@ -122,6 +157,11 @@ const App = () => {
       });
       setSipPassword(`password${extension}`);
       initializeConnection(extension);
+
+      // Check microphone access after login
+      setTimeout(() => {
+        checkMicrophoneAccess();
+      }, 1000);
 
       // Navigate to appropriate dashboard based on role
       if (role === 'admin') {
@@ -286,6 +326,32 @@ const App = () => {
         } />
       </Routes>
       {isLoading && <Loader />}
+
+      {/* Browser Compatibility Alert */}
+      <BrowserCompatibilityAlert darkMode={darkMode} />
+
+      {/* Microphone Fix Dialog */}
+      <MicrophoneFix
+        isOpen={showMicrophoneFix}
+        onClose={() => setShowMicrophoneFix(false)}
+        onFixed={handleMicrophoneFixed}
+      />
+
+      {/* Microphone Status Indicator */}
+      {microphoneStatus && !microphoneStatus.success && (
+        <div className="fixed bottom-4 left-4 z-40">
+          <button
+            onClick={() => setShowMicrophoneFix(true)}
+            className="flex items-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-red-700 transition-colors"
+            title="Fix microphone issues"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+            <span>Fix Microphone</span>
+          </button>
+        </div>
+      )}
       </div>
     </ThemeProvider>
   );

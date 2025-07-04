@@ -16,13 +16,22 @@ const BrowserCompatibilityAlert = ({ darkMode = false }) => {
   const [isDismissed, setIsDismissed] = useState(false);
 
   useEffect(() => {
-    const compat = checkBrowserCompatibility();
-    setCompatibility(compat);
-    
-    // Show alert if there are issues or warnings and not dismissed
-    const dismissed = localStorage.getItem('browserCompatDismissed');
-    if (!dismissed && (compat.issues.length > 0 || compat.warnings.length > 0)) {
-      setIsVisible(true);
+    try {
+      const compat = checkBrowserCompatibility();
+      setCompatibility(compat);
+
+      // Only show alert for critical issues or if user is on HTTP
+      const dismissed = localStorage.getItem('browserCompatDismissed');
+      const criticalIssues = compat.issues.filter(issue =>
+        issue.includes('Not running in a browser environment') ||
+        issue.includes('WebSocket is not supported')
+      );
+
+      if (!dismissed && (criticalIssues.length > 0 || (!compat.isSecureContext && compat.warnings.length > 0))) {
+        setIsVisible(true);
+      }
+    } catch (error) {
+      console.warn('[BrowserCompatibilityAlert] Error checking compatibility:', error);
     }
   }, []);
 

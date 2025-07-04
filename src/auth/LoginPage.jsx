@@ -10,16 +10,12 @@ import {
   FiShield as Shield,
   FiMoon as Moon,
   FiSun as Sun,
-  FiArrowRight as ArrowRight,
-  FiCheckCircle as CheckCircle,
-  FiAlertCircle as AlertCircle
+  FiArrowRight as ArrowRight
 } from "react-icons/fi";
 import { login } from "../services/login";
-import { connectWebSocket } from "../services/websocketservice";
 import { useTheme } from "../contexts/ThemeContext";
 import { cn } from "../utils/ui";
 import toast from "react-hot-toast";
-import Logo from "../assets/Login.png";
 
 const LoginPage = ({ onLogin, onSwitchToRegister }) => {
   const [username, setUsername] = useState("");
@@ -117,7 +113,7 @@ const LoginPage = ({ onLogin, onSwitchToRegister }) => {
 
   return (
     <div className={cn(
-      'min-h-screen flex items-center justify-center relative overflow-hidden',
+      'min-h-screen flex items-center justify-center relative overflow-hidden px-safe pt-safe pb-safe',
       darkMode
         ? 'bg-gradient-to-br from-secondary-900 via-secondary-800 to-secondary-900'
         : 'bg-gradient-to-br from-primary-50 via-white to-accent-50'

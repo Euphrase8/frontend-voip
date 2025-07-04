@@ -417,22 +417,23 @@ const CallLogsPage = ({ darkMode = false, user, onCall }) => {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-3">
-          <Phone className="w-6 h-6 text-primary-600" />
-          <h1 className={cn(
-            "text-2xl font-bold",
-            darkMode ? "text-white" : "text-secondary-900"
-          )}>
-            Call Logs
-          </h1>
+      {/* Stats and Actions Bar */}
+      <div className="flex items-center justify-between p-4 lg:p-6 border-b border-secondary-200 dark:border-secondary-700">
+        <div className="flex items-center space-x-4">
           <span className={cn(
-            "px-2 py-1 rounded-full text-xs font-medium",
+            "px-3 py-1.5 rounded-full text-sm font-medium",
             darkMode ? "bg-secondary-700 text-secondary-300" : "bg-secondary-100 text-secondary-600"
           )}>
-            {filteredLogs.length} logs
+            {filteredLogs.length} log{filteredLogs.length !== 1 ? 's' : ''}
           </span>
+          {selectedLogs.size > 0 && isAdmin && (
+            <span className={cn(
+              "px-3 py-1.5 rounded-full text-sm font-medium",
+              "bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400"
+            )}>
+              {selectedLogs.size} selected
+            </span>
+          )}
         </div>
 
         <div className="flex items-center space-x-2">
@@ -470,8 +471,8 @@ const CallLogsPage = ({ darkMode = false, user, onCall }) => {
       </div>
 
       {/* Search and Filters */}
-      <div className="mb-6 space-y-4">
-        <div className="flex items-center space-x-4">
+      <div className="p-4 lg:p-6 border-b border-secondary-200 dark:border-secondary-700 space-y-4">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-secondary-400" />
             <input
@@ -480,9 +481,10 @@ const CallLogsPage = ({ darkMode = false, user, onCall }) => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className={cn(
-                "w-full pl-10 pr-4 py-2 rounded-lg border",
+                "w-full pl-10 pr-4 py-2.5 rounded-lg border transition-all duration-200",
+                "focus:ring-2 focus:ring-primary-500 focus:border-primary-500",
                 darkMode
-                  ? "bg-secondary-800 border-secondary-700 text-white placeholder-secondary-400"
+                  ? "bg-secondary-900 border-secondary-600 text-white placeholder-secondary-400"
                   : "bg-white border-secondary-300 text-secondary-900 placeholder-secondary-500"
               )}
             />
@@ -491,11 +493,12 @@ const CallLogsPage = ({ darkMode = false, user, onCall }) => {
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={cn(
-              "flex items-center space-x-2 px-3 py-2 rounded-lg border transition-colors",
+              "flex items-center justify-center space-x-2 px-4 py-2.5 rounded-lg border transition-colors",
+              "whitespace-nowrap",
               showFilters
                 ? "bg-primary-600 text-white border-primary-600"
                 : darkMode
-                  ? "bg-secondary-800 border-secondary-700 text-secondary-300 hover:bg-secondary-700"
+                  ? "bg-secondary-800 border-secondary-600 text-secondary-300 hover:bg-secondary-700"
                   : "bg-white border-secondary-300 text-secondary-700 hover:bg-secondary-50"
             )}
           >
@@ -606,61 +609,63 @@ const CallLogsPage = ({ darkMode = false, user, onCall }) => {
         </div>
       )}
 
-      {/* Call Logs List */}
-      <div className="flex-1 overflow-hidden">
-        <div
-          ref={scrollContainerRef}
-          className="h-full overflow-y-auto space-y-3"
-        >
-          {loading ? (
-            <div className="flex items-center justify-center h-32">
-              <div className="flex items-center space-x-2">
-                <Refresh className="w-5 h-5 animate-spin text-primary-600" />
-                <span className={cn(
-                  "text-sm",
+      {/* Call Logs List - Scrollable Content */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-4 lg:p-6">
+          <div
+            ref={scrollContainerRef}
+            className="space-y-3"
+          >
+            {loading ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="flex items-center space-x-2">
+                  <Refresh className="w-5 h-5 animate-spin text-primary-600" />
+                  <span className={cn(
+                    "text-sm",
+                    darkMode ? "text-secondary-400" : "text-secondary-600"
+                  )}>
+                    Loading call logs...
+                  </span>
+                </div>
+              </div>
+            ) : filteredLogs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-32 space-y-2">
+                <Phone className="w-12 h-12 text-secondary-400" />
+                <p className={cn(
+                  "text-center",
                   darkMode ? "text-secondary-400" : "text-secondary-600"
                 )}>
-                  Loading call logs...
-                </span>
+                  {callLogs.length === 0 ? "No call logs available" : "No logs match your filters"}
+                </p>
+                {callLogs.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setSearchTerm('');
+                      setStatusFilter('all');
+                      setDirectionFilter('all');
+                    }}
+                    className="text-primary-600 hover:text-primary-700 text-sm"
+                  >
+                    Clear filters
+                  </button>
+                )}
               </div>
-            </div>
-          ) : filteredLogs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-32 space-y-2">
-              <Phone className="w-12 h-12 text-secondary-400" />
-              <p className={cn(
-                "text-center",
-                darkMode ? "text-secondary-400" : "text-secondary-600"
-              )}>
-                {callLogs.length === 0 ? "No call logs available" : "No logs match your filters"}
-              </p>
-              {callLogs.length > 0 && (
-                <button
-                  onClick={() => {
-                    setSearchTerm('');
-                    setStatusFilter('all');
-                    setDirectionFilter('all');
-                  }}
-                  className="text-primary-600 hover:text-primary-700 text-sm"
-                >
-                  Clear filters
-                </button>
-              )}
-            </div>
-          ) : (
-            filteredLogs.map((log, index) => (
-              <CallLogItem
-                key={log.id}
-                log={log}
-                index={index}
-                darkMode={darkMode}
-                onCall={onCall}
-                onDelete={isAdmin ? handleDeleteLog : null}
-                isAdmin={isAdmin}
-                isSelected={selectedLogs.has(log.id)}
-                onSelect={handleSelectLog}
-              />
-            ))
-          )}
+            ) : (
+              filteredLogs.map((log, index) => (
+                <CallLogItem
+                  key={log.id}
+                  log={log}
+                  index={index}
+                  darkMode={darkMode}
+                  onCall={onCall}
+                  onDelete={isAdmin ? handleDeleteLog : null}
+                  isAdmin={isAdmin}
+                  isSelected={selectedLogs.has(log.id)}
+                  onSelect={handleSelectLog}
+                />
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>

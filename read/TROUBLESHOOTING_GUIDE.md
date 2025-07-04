@@ -18,7 +18,7 @@ curl -H "Authorization: Bearer YOUR_JWT_TOKEN" http://172.20.10.4:8080/protected
 ```
 
 ### 2. Check Asterisk Server Status
-On your Kali Linux server (172.20.10.2):
+On your Kali Linux server (172.20.10.5):
 
 ```bash
 # Check if Asterisk is running
@@ -60,11 +60,11 @@ sudo cat /etc/asterisk/manager.conf | grep -A 10 "admin"
 
 ```bash
 # From your PC (172.20.10.4), test connectivity to Asterisk
-telnet 172.20.10.2 5038  # AMI port
-telnet 172.20.10.2 8088  # WebSocket port
+telnet 172.20.10.5 5038  # AMI port
+telnet 172.20.10.5 8088  # WebSocket port
 
 # Check if WebSocket endpoint is responding
-curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: test" http://172.20.10.2:8088/ws
+curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: test" http://172.20.10.5:8088/ws
 ```
 
 ### 5. Frontend SIP Registration Test
@@ -165,7 +165,7 @@ write = all
 Then reload: `sudo asterisk -rx "module reload manager"`
 
 ### Issue 4: Firewall Blocking Connections
-**Symptoms**: Connection timeouts from 172.20.10.4 to 172.20.10.2
+**Symptoms**: Connection timeouts from 172.20.10.4 to 172.20.10.5
 
 **Solution**: On Kali Linux server:
 ```bash
@@ -184,7 +184,7 @@ sudo ufw disable
 If you need to quickly restart everything:
 
 ```bash
-# On Asterisk server (172.20.10.2)
+# On Asterisk server (172.20.10.5)
 sudo systemctl restart asterisk
 sudo asterisk -rx "module reload res_pjsip.so"
 sudo asterisk -rx "module reload manager"

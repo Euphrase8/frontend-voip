@@ -93,7 +93,7 @@ const VoipPhone = ({
 
   useEffect(() => {
     setupWebSocket();
-  }, [setupWebSocket]);
+  }, [setupWebSocket, incomingStream]);
 
   const makeCall = useCallback(async () => {
     if (!uaRef.current || !uaRef.current.isRegistered()) {
@@ -177,7 +177,7 @@ const VoipPhone = ({
       <audio ref={audioRef} autoPlay />
       {!incomingStream && (
         <>
-          <div className="flex space-x-3 mb-4">
+          <div className="flex flex-col xs:flex-row space-y-2 xs:space-y-0 xs:space-x-3 mb-3 xs:mb-4">
             <TextField
               label="Target Extension"
               value={targetExtension}
@@ -187,22 +187,30 @@ const VoipPhone = ({
               className="glass-effect"
               InputProps={{
                 className: darkMode ? 'text-white' : 'text-black',
+                style: { fontSize: '16px' } // Prevents zoom on iOS
               }}
               disabled={!!callRef.current}
+              size="small"
             />
             <Tooltip title={callRef.current ? 'End Call' : 'Make Call'}>
               <Button
                 variant="contained"
                 onClick={callRef.current ? endCall : makeCall}
-                className={`min-w-[100px] ${
+                className={`min-w-[80px] xs:min-w-[100px] touch-target tap-highlight ${
                   callRef.current
                     ? 'bg-gradient-to-r from-red-700 to-red-900 hover:from-red-800 hover:to-red-950'
                     : 'bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800'
                 } text-white`}
                 startIcon={callRef.current ? <CallEnd /> : <Call />}
                 aria-label={callRef.current ? 'End the call' : 'Make a call'}
+                size="medium"
+                sx={{
+                  minHeight: '44px',
+                  fontSize: { xs: '0.875rem', sm: '1rem' }
+                }}
               >
-                {callRef.current ? 'End' : 'Call'}
+                <span className="hidden xs:inline">{callRef.current ? 'End' : 'Call'}</span>
+                <span className="xs:hidden">{callRef.current ? 'End' : 'Call'}</span>
               </Button>
             </Tooltip>
           </div>

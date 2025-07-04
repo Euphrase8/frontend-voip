@@ -6,7 +6,7 @@ class IPConfigService {
     this.CONFIG_KEY = 'voipIPConfig';
     this.CONFIGURED_KEY = 'voipConfigured';
     this.defaultConfig = {
-      backendHost: '172.20.10.4',
+      backendHost: '172.20.10.2',
       backendPort: '8080',
       asteriskHost: '172.20.10.2',
       asteriskPort: '8088',

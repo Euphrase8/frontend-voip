@@ -118,28 +118,104 @@ export const spinnerStyles = {
   }
 };
 
-// Responsive utilities
+// Professional responsive design system optimized for all devices
 export const responsiveStyles = {
-  // Mobile-first responsive padding
+  // Professional padding system
   padding: {
-    page: 'px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8 lg:px-8 lg:py-10',
-    section: 'px-4 py-6 sm:px-6 sm:py-8 md:px-8 md:py-10',
-    card: 'p-4 sm:p-6 md:p-8',
+    page: 'px-4 py-6 sm:px-6 sm:py-8 md:px-8 md:py-10 lg:px-12 lg:py-12 xl:px-16 xl:py-16',
+    section: 'px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 lg:px-10 lg:py-10 xl:px-12 xl:py-12',
+    card: 'p-4 sm:p-5 md:p-6 lg:p-7 xl:p-8',
+    compact: 'p-3 sm:p-4 md:p-5 lg:p-6 xl:p-7',
+    tight: 'p-2 sm:p-3 md:p-4 lg:p-5 xl:p-6',
   },
-  
-  // Mobile-first responsive text
+
+  // Professional typography scale
   text: {
-    heading: 'text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold leading-tight',
-    subheading: 'text-base sm:text-lg md:text-xl font-semibold leading-tight',
-    body: 'text-sm sm:text-base leading-relaxed',
-    caption: 'text-xs sm:text-sm text-secondary-600',
+    heading: 'text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold leading-tight tracking-tight',
+    subheading: 'text-xl sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl font-semibold leading-tight tracking-tight',
+    title: 'text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-semibold leading-snug',
+    body: 'text-base sm:text-lg md:text-xl lg:text-xl xl:text-xl leading-relaxed',
+    bodyMedium: 'text-sm sm:text-base md:text-lg lg:text-lg xl:text-lg leading-relaxed',
+    bodySmall: 'text-sm sm:text-sm md:text-base lg:text-base xl:text-base leading-relaxed',
+    caption: 'text-xs sm:text-sm md:text-sm lg:text-sm xl:text-sm text-secondary-600 leading-normal',
+    label: 'text-sm sm:text-sm md:text-base lg:text-base xl:text-base font-medium leading-normal',
   },
-  
-  // Mobile-first responsive spacing
+
+  // Professional spacing system
   spacing: {
-    section: 'space-y-4 sm:space-y-6 md:space-y-8',
-    items: 'space-y-2 sm:space-y-3 md:space-y-4',
-    inline: 'space-x-2 sm:space-x-3 md:space-x-4',
+    section: 'space-y-6 sm:space-y-8 md:space-y-10 lg:space-y-12 xl:space-y-16',
+    items: 'space-y-3 sm:space-y-4 md:space-y-5 lg:space-y-6 xl:space-y-8',
+    inline: 'space-x-3 sm:space-x-4 md:space-x-5 lg:space-x-6 xl:space-x-8',
+    grid: 'gap-4 sm:gap-5 md:gap-6 lg:gap-8 xl:gap-10',
+    tight: 'space-y-2 sm:space-y-3 md:space-y-4 lg:space-y-5 xl:space-y-6',
+  },
+
+  // Professional container system
+  container: {
+    mobile: 'w-full max-w-sm mx-auto px-4',
+    tablet: 'w-full max-w-3xl mx-auto px-6',
+    desktop: 'w-full max-w-5xl mx-auto px-8',
+    wide: 'w-full max-w-7xl mx-auto px-10',
+    full: 'w-full max-w-screen-2xl mx-auto px-12',
+    content: 'w-full max-w-4xl mx-auto px-6',
+  },
+
+  // Professional grid layouts
+  grid: {
+    responsive: 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5',
+    cards: 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4',
+    contacts: 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5',
+    keypad: 'grid grid-cols-3 gap-4 sm:gap-5 md:gap-6 lg:gap-8 xl:gap-10',
+    dashboard: 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4',
+    features: 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
+  },
+
+  // Professional flex layouts
+  flex: {
+    center: 'flex items-center justify-center',
+    between: 'flex items-center justify-between',
+    start: 'flex items-center justify-start',
+    end: 'flex items-center justify-end',
+    col: 'flex flex-col',
+    colCenter: 'flex flex-col items-center justify-center',
+    wrap: 'flex flex-wrap items-center',
+    nowrap: 'flex flex-nowrap items-center',
+  },
+
+  // Professional height system
+  height: {
+    screen: 'h-screen min-h-screen',
+    content: 'min-h-[calc(100vh-4rem)] sm:min-h-[calc(100vh-5rem)] lg:min-h-[calc(100vh-6rem)]',
+    card: 'min-h-[180px] sm:min-h-[200px] md:min-h-[220px] lg:min-h-[240px] xl:min-h-[260px]',
+    button: 'h-10 sm:h-11 md:h-12 lg:h-13 xl:h-14',
+    input: 'h-10 sm:h-11 md:h-12 lg:h-13 xl:h-14',
+    avatar: 'h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 lg:h-14 lg:w-14 xl:h-16 xl:w-16',
+  },
+
+  // Professional width system
+  width: {
+    sidebar: 'w-64 lg:w-72 xl:w-80 2xl:w-96',
+    modal: 'w-full max-w-md sm:max-w-lg md:max-w-xl lg:max-w-2xl xl:max-w-3xl',
+    card: 'w-full max-w-sm sm:max-w-md md:max-w-lg lg:max-w-xl',
+    content: 'w-full max-w-2xl sm:max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl',
+  },
+
+  // Professional component sizes
+  components: {
+    icon: {
+      xs: 'w-3 h-3 sm:w-4 sm:h-4',
+      sm: 'w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6',
+      md: 'w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 lg:w-8 lg:h-8',
+      lg: 'w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 lg:w-9 lg:h-9 xl:w-10 xl:h-10',
+      xl: 'w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 xl:w-16 xl:h-16',
+    },
+    button: {
+      xs: 'px-2 py-1 text-xs',
+      sm: 'px-3 py-2 text-sm',
+      md: 'px-4 py-2.5 text-base',
+      lg: 'px-6 py-3 text-lg',
+      xl: 'px-8 py-4 text-xl',
+    }
   }
 };
 

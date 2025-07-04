@@ -102,8 +102,18 @@ export const call = async (extension) => {
     throw new Error(`Invalid extension "${extensionStr}". Must be 3-6 digits.`);
   }
 
+  // Debug: Check WebRTC service state
+  console.log('[call.js] DEBUG: WebRTC service state:', {
+    available: !!webrtcCallService,
+    extension: webrtcCallService?.extension,
+    currentCall: webrtcCallService?.currentCall,
+    connected: webrtcCallService?.connected
+  });
+
   try {
     console.log('[call.js] Step 1: Notifying backend about call initiation');
+    console.log('[call.js] DEBUG: API URL:', API_URL);
+    console.log('[call.js] DEBUG: Auth headers:', getAuthHeaders());
 
     // First, notify backend about call initiation using WebRTC method
     const { data } = await axios.post(
@@ -120,6 +130,15 @@ export const call = async (extension) => {
 
       // Set up the outgoing call in WebRTC service
       if (webrtcCallService) {
+        // Ensure media is set up before call
+        try {
+          await webrtcCallService.setupLocalMedia();
+          console.log('[call.js] Media setup complete for outgoing call');
+        } catch (error) {
+          console.error('[call.js] Media setup failed:', error);
+          throw new Error(`Media setup failed: ${error.message}`);
+        }
+
         webrtcCallService.currentCall = {
           id: data.call_id,
           target: extensionStr,
@@ -131,6 +150,7 @@ export const call = async (extension) => {
         console.log('[call.js] Current call set:', webrtcCallService.currentCall);
       } else {
         console.error('[call.js] WebRTC service not available!');
+        throw new Error('WebRTC service not available');
       }
 
       return {

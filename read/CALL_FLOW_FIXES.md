@@ -43,7 +43,7 @@
 ## Current Network Configuration
 
 - **Your PC (Backend + Frontend)**: 172.20.10.4
-- **Asterisk Server (Kali Linux)**: 172.20.10.2
+- **Asterisk Server (Kali Linux)**: 172.20.10.5
 
 ## Testing Instructions
 
@@ -70,7 +70,7 @@
 # Check browser console for:
 [initializeSIP] Initializing SIP for extension: 1005
 [SipManager] Initializing SIP for extension 1005
-[SipManager] Connecting to SIP server: ws://172.20.10.2:8088/ws
+[SipManager] Connecting to SIP server: ws://172.20.10.5:8088/ws
 [SipManager] SIP registration successful
 [initializeSIP] SIP initialization completed successfully
 
@@ -132,7 +132,7 @@ sudo asterisk -rx "pjsip show transports"
 sudo asterisk -rx "manager show connected"
 
 # Test manual AMI connection:
-telnet 172.20.10.2 5038
+telnet 172.20.10.5 5038
 # Then: Action: Login, Username: admin, Secret: amp111
 ```
 

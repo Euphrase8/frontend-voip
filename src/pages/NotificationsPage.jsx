@@ -104,51 +104,66 @@ const NotificationsPage = ({ darkMode, user }) => {
   ];
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between p-6 border-b border-secondary-200 dark:border-secondary-700">
-        <div className="flex items-center space-x-3">
-          <Bell className={cn(
-            'w-6 h-6',
-            darkMode ? 'text-primary-400' : 'text-primary-600'
-          )} />
-          <h1 className={cn(
-            'text-2xl font-bold',
-            darkMode ? 'text-white' : 'text-secondary-900'
-          )}>
-            {user?.role === 'admin' ? 'Notifications & Logs' : 'Notifications'}
-          </h1>
-        </div>
-        <div className="flex space-x-2">
-          {activeTab === 'notifications' ? (
-            <>
+    <div className="h-full flex flex-col">
+      {/* Action Bar */}
+      <div className="flex-shrink-0 p-4 lg:p-6 border-b border-secondary-200 dark:border-secondary-700">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <span className={cn(
+              'text-sm',
+              darkMode ? 'text-secondary-400' : 'text-secondary-600'
+            )}>
+              {user?.role === 'admin' ? 'System notifications and logs' : 'Your notifications'}
+            </span>
+          </div>
+          <div className="flex space-x-2">
+            {activeTab === 'notifications' ? (
+              <>
+                <button
+                  onClick={markAllAsRead}
+                  className={cn(
+                    "flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                    notifications.length === 0
+                      ? "opacity-50 cursor-not-allowed"
+                      : darkMode
+                        ? "text-secondary-400 hover:text-secondary-300 hover:bg-secondary-800 border border-secondary-700"
+                        : "text-secondary-600 hover:text-secondary-700 hover:bg-secondary-100 border border-secondary-300"
+                  )}
+                  disabled={notifications.length === 0}
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span className="hidden sm:inline">Mark All Read</span>
+                </button>
+                <button
+                  onClick={clearNotifications}
+                  className={cn(
+                    "flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                    notifications.length === 0
+                      ? "opacity-50 cursor-not-allowed"
+                      : "text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20 border border-red-300 dark:border-red-700"
+                  )}
+                  disabled={notifications.length === 0}
+                >
+                  <Trash className="w-4 h-4" />
+                  <span className="hidden sm:inline">Clear All</span>
+                </button>
+              </>
+            ) : user?.role === 'admin' && activeTab === 'logs' ? (
               <button
-                onClick={markAllAsRead}
-                className="btn-secondary flex items-center space-x-2"
-                disabled={notifications.length === 0}
-              >
-                <CheckCircle className="w-4 h-4" />
-                <span>Mark All Read</span>
-              </button>
-              <button
-                onClick={clearNotifications}
-                className="btn-danger flex items-center space-x-2"
-                disabled={notifications.length === 0}
+                onClick={clearLogs}
+                className={cn(
+                  "flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                  systemLogs.length === 0
+                    ? "opacity-50 cursor-not-allowed"
+                    : "text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20 border border-red-300 dark:border-red-700"
+                )}
+                disabled={systemLogs.length === 0}
               >
                 <Trash className="w-4 h-4" />
-                <span>Clear All</span>
+                <span className="hidden sm:inline">Clear Logs</span>
               </button>
-            </>
-          ) : user?.role === 'admin' && activeTab === 'logs' ? (
-            <button
-              onClick={clearLogs}
-              className="btn-danger flex items-center space-x-2"
-              disabled={systemLogs.length === 0}
-            >
-              <Trash className="w-4 h-4" />
-              <span>Clear Logs</span>
-            </button>
-          ) : null}
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -195,9 +210,9 @@ const NotificationsPage = ({ darkMode, user }) => {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-y-auto">
         {activeTab === 'notifications' && (
-          <div className="h-full overflow-y-auto p-6">
+          <div className="p-4 lg:p-6">
             {notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center">
                 <Bell className={cn(
@@ -274,7 +289,7 @@ const NotificationsPage = ({ darkMode, user }) => {
         )}
 
         {activeTab === 'logs' && user?.role === 'admin' && (
-          <div className="h-full overflow-y-auto p-6">
+          <div className="p-4 lg:p-6">
             {systemLogs.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center">
                 <Activity className={cn(

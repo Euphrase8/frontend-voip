@@ -94,7 +94,7 @@ class ConfigService {
       ...(configuredBackendUrl ? [configuredBackendUrl] : []),
 
       // Known backend server IP (for network access)
-      'http://172.20.10.4:8080',
+      'http://172.20.10.2:8080',
 
       // Same host as frontend (common in development)
       `${protocol}//${currentHost}:8080`,
@@ -130,7 +130,7 @@ class ConfigService {
       backendHost = (currentHost === 'localhost' || currentHost === '127.0.0.1')
         ? '172.20.10.4'
         : currentHost;
-      asteriskHost = '172.20.10.2';
+      asteriskHost = '172.20.10.5';
     }
 
     return {
@@ -174,7 +174,7 @@ class ConfigService {
     if (ipConfigService.isConfigured()) {
       return ipConfigService.getBackendUrl();
     }
-    return this.get('api_url', 'http://172.20.10.4:8080');
+    return this.get('api_url', 'http://172.20.10.2:8080');
   }
 
   // Get WebSocket URL
@@ -182,7 +182,7 @@ class ConfigService {
     if (ipConfigService.isConfigured()) {
       return ipConfigService.getBackendWebSocketUrl();
     }
-    return this.get('ws_url', 'ws://172.20.10.4:8080/ws');
+    return this.get('ws_url', 'ws://172.20.10.2:8080/ws');
   }
 
   // Get Asterisk WebSocket URL

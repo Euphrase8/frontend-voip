@@ -29,10 +29,11 @@ export const handleIncomingCall = async (
     peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
         sendWebSocketMessage({
-          type: "ice-candidate",
+          type: "webrtc_ice_candidate",
           to: callData.from,
           from: user.extension,
           candidate: event.candidate,
+          channel: callData.channel
         }).catch((error) => {
           console.error("Failed to send ICE candidate:", error);
         });

@@ -4,7 +4,7 @@
 # Asterisk Setup Script for VoIP Application
 # 
 # This script configures Asterisk on Kali Linux for your VoIP application
-# Run this script on your Asterisk server at 172.20.10.2
+# Run this script on your Asterisk server at 172.20.10.5
 #
 # Usage: sudo ./setup-asterisk.sh
 #
@@ -146,7 +146,7 @@ fi
 print_success "Asterisk configuration completed!"
 echo
 echo -e "${GREEN}=== Connection Information ===${NC}"
-echo -e "Asterisk Server IP: ${BLUE}172.20.10.2${NC}"
+echo -e "Asterisk Server IP: ${BLUE}172.20.10.5${NC}"
 echo -e "AMI Port: ${BLUE}5038${NC}"
 echo -e "HTTP Port: ${BLUE}8088${NC}"
 echo -e "SIP Port: ${BLUE}5060${NC}"

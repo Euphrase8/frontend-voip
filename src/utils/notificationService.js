@@ -2,6 +2,7 @@
 // Handles system notifications, logs, and user feedback
 
 import toast from 'react-hot-toast';
+import { showToast, callToast, healthToast } from './toastUtils';
 
 class NotificationService {
   constructor() {
@@ -127,7 +128,7 @@ class NotificationService {
     return log;
   }
 
-  // Show toast notification
+  // Show toast notification using enhanced toast methods
   showToast(type, title, message) {
     const toastOptions = {
       duration: 4000,
@@ -136,19 +137,19 @@ class NotificationService {
 
     switch (type) {
       case 'success':
-        toast.success(title, toastOptions);
+        showToast.success(title, toastOptions);
         break;
       case 'error':
-        toast.error(title, toastOptions);
+        showToast.error(title, toastOptions);
         break;
       case 'warning':
-        toast(title, { ...toastOptions, icon: '⚠️' });
+        showToast.warning(title, toastOptions);
         break;
       case 'info':
-        toast(title, { ...toastOptions, icon: 'ℹ️' });
+        showToast.info(title, toastOptions);
         break;
       case 'call':
-        toast(title, { ...toastOptions, icon: '📞' });
+        showToast.call(title, toastOptions);
         break;
       default:
         toast(title, toastOptions);

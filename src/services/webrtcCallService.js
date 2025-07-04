@@ -1,5 +1,7 @@
 import CONFIG from './config';
 import { checkBrowserCompatibility, getMediaStreamWithFallback } from '../utils/browserCompat';
+import audioManager from './audioManager';
+import webrtcMonitor from '../utils/webrtcMonitor';
 
 class WebRTCCallService {
   constructor() {
@@ -7,12 +9,18 @@ class WebRTCCallService {
     this.currentCall = null;
     this.peerConnection = null;
     this.localStream = null;
+    this.remoteAudio = null;
     this.onIncomingCall = null;
     this.onCallStatusChange = null;
+    this.onCallEnded = null;
     this.connected = false;
     this.connectionEstablished = false;
+    this.extension = null;
+    this.connectionTimeout = null;
+    this.iceCandidateBuffer = [];
+    this.isOfferAnswerExchangeComplete = false;
 
-    // WebRTC configuration with multiple STUN servers for better connectivity
+    // WebRTC configuration optimized for voice calls
     this.rtcConfiguration = {
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
@@ -21,8 +29,39 @@ class WebRTCCallService {
         { urls: 'stun:stun3.l.google.com:19302' },
         { urls: 'stun:stun4.l.google.com:19302' }
       ],
-      iceCandidatePoolSize: 10
+      iceCandidatePoolSize: 10,
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require'
     };
+
+    // Audio constraints optimized for voice calls
+    this.audioConstraints = {
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        sampleRate: 48000,
+        channelCount: 1
+      },
+      video: false
+    };
+
+    // Initialize audio element
+    this.setupAudioElement();
+  }
+
+  // Setup audio element for remote stream using audio manager
+  setupAudioElement() {
+    this.remoteAudio = audioManager.setupRemoteAudio();
+
+    // Handle audio play issues
+    this.remoteAudio.addEventListener('canplay', () => {
+      console.log('[WebRTCCallService] Remote audio ready to play');
+    });
+
+    this.remoteAudio.addEventListener('error', (error) => {
+      console.error('[WebRTCCallService] Remote audio error:', error);
+    });
   }
 
   // Check browser compatibility with HTTP support
@@ -30,8 +69,31 @@ class WebRTCCallService {
     return checkBrowserCompatibility();
   }
 
+  // Audio control methods - delegate to audio manager
+  toggleMute() {
+    return audioManager.toggleMute();
+  }
+
+  setMute(muted) {
+    audioManager.setMute(muted);
+    return !muted;
+  }
+
+  setVolume(volume) {
+    return audioManager.setVolume(volume);
+  }
+
+  getVolume() {
+    return audioManager.getVolume();
+  }
+
+  isMicrophoneMuted() {
+    return audioManager.isMuted();
+  }
+
   // Initialize WebRTC service with extension
   initialize(extension, onIncomingCall, onCallStatusChange, onCallEnded) {
+    console.log('[WebRTCCallService] Initializing with extension:', extension);
     this.extension = extension;
     this.onIncomingCall = onIncomingCall;
     this.onCallStatusChange = onCallStatusChange;
@@ -39,10 +101,18 @@ class WebRTCCallService {
 
     // Check browser support
     const support = this.checkBrowserSupport();
+    console.log('[WebRTCCallService] Browser support check:', support);
+
     if (!support.supported) {
-      console.error('[WebRTCCallService] Browser compatibility issues:', support.issues);
-      this.onCallStatusChange && this.onCallStatusChange(`Browser not supported: ${support.issues.join(', ')}`);
-      return;
+      console.warn('[WebRTCCallService] Browser compatibility issues:', support.issues);
+      // Don't block initialization, just warn the user
+      if (support.issues.some(issue => issue.includes('Not running in a browser environment'))) {
+        this.onCallStatusChange && this.onCallStatusChange(`Critical browser issue: ${support.issues.join(', ')}`);
+        return;
+      } else {
+        // For other issues, just log warnings but continue
+        console.warn('[WebRTCCallService] Continuing despite compatibility warnings');
+      }
     }
 
     // Show warnings but continue
@@ -51,18 +121,38 @@ class WebRTCCallService {
       // Don't block initialization for warnings
     }
 
+    console.log('[WebRTCCallService] Setting up WebSocket connection...');
     this.setupWebSocket();
   }
 
   // Setup WebSocket connection for WebRTC signaling
   setupWebSocket() {
-    if (!this.extension) return;
-    
+    if (!this.extension) {
+      console.error('[WebRTCCallService] No extension provided for WebSocket setup');
+      return;
+    }
+
+    // Check if WebSocket is available
+    if (!window.WebSocket) {
+      console.error('[WebRTCCallService] WebSocket is not supported in this browser');
+      this.onCallStatusChange && this.onCallStatusChange('WebSocket not supported');
+      return;
+    }
+
     const wsUrl = `${CONFIG.WS_URL}?extension=${encodeURIComponent(this.extension)}`;
-    this.ws = new WebSocket(wsUrl);
+    console.log('[WebRTCCallService] Connecting to WebSocket:', wsUrl);
+
+    try {
+      this.ws = new WebSocket(wsUrl);
+    } catch (error) {
+      console.error('[WebRTCCallService] Failed to create WebSocket:', error);
+      this.onCallStatusChange && this.onCallStatusChange('WebSocket connection failed');
+      return;
+    }
 
     this.ws.onopen = () => {
-      console.log('[WebRTCCallService] WebSocket connected');
+      console.log('[WebRTCCallService] WebSocket connected successfully');
+      this.connected = true;
       this.onCallStatusChange && this.onCallStatusChange('Ready');
     };
 
@@ -95,13 +185,16 @@ class WebRTCCallService {
       }
     };
 
-    this.ws.onclose = () => {
-      console.log('[WebRTCCallService] WebSocket disconnected');
+    this.ws.onclose = (event) => {
+      console.log('[WebRTCCallService] WebSocket disconnected:', event.code, event.reason);
+      this.connected = false;
       this.onCallStatusChange && this.onCallStatusChange('Disconnected');
     };
 
     this.ws.onerror = (error) => {
       console.error('[WebRTCCallService] WebSocket error:', error);
+      this.connected = false;
+      this.onCallStatusChange && this.onCallStatusChange('Connection error');
     };
   }
 
@@ -260,34 +353,91 @@ class WebRTCCallService {
     this.onCallStatusChange && this.onCallStatusChange('Call rejected');
   }
 
-  // Setup local media (audio) with HTTP support
+  // Setup local media (audio) with enhanced error handling
   async setupLocalMedia() {
     try {
       console.log('[WebRTCCallService] Setting up local media...');
 
-      // Use the enhanced compatibility utility
-      this.localStream = await getMediaStreamWithFallback({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        },
-        video: false
+      // Check if media is already available
+      if (this.localStream && this.localStream.active) {
+        console.log('[WebRTCCallService] Local media already available');
+        return this.localStream;
+      }
+
+      // Clean up any existing stream
+      this.cleanupLocalMedia();
+
+      // Use audio manager to setup local media with proper constraints
+      this.localStream = await audioManager.setupLocalMedia();
+
+      // Verify stream is active
+      if (!this.localStream || !this.localStream.active) {
+        throw new Error('Failed to get active media stream');
+      }
+
+      const audioTracks = this.localStream.getAudioTracks();
+      if (audioTracks.length === 0) {
+        throw new Error('No audio tracks available');
+      }
+
+      console.log('[WebRTCCallService] Local media setup successful:', {
+        streamId: this.localStream.id,
+        audioTracks: audioTracks.length,
+        trackSettings: audioTracks[0].getSettings()
       });
 
-      console.log('[WebRTCCallService] Local media setup successful');
-      return this.localStream;
+      // Handle track ended events
+      audioTracks.forEach(track => {
+        track.addEventListener('ended', () => {
+          console.warn('[WebRTCCallService] Audio track ended');
+          this.onCallStatusChange && this.onCallStatusChange('Microphone disconnected');
+        });
+      });
 
+      return this.localStream;
     } catch (error) {
       console.error('[WebRTCCallService] Failed to get local media:', error);
-      throw error; // Re-throw the enhanced error message from browserCompat
+
+      // Provide user-friendly error messages
+      let errorMessage = 'Microphone access failed';
+      if (error.name === 'NotAllowedError') {
+        errorMessage = 'Microphone permission denied. Please allow microphone access and try again.';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = 'No microphone found. Please connect a microphone and try again.';
+      } else if (error.name === 'NotReadableError') {
+        errorMessage = 'Microphone is being used by another application.';
+      }
+
+      this.onCallStatusChange && this.onCallStatusChange(errorMessage);
+      throw new Error(errorMessage);
+    }
+  }
+
+  // Clean up local media
+  cleanupLocalMedia() {
+    if (this.localStream) {
+      this.localStream.getTracks().forEach(track => {
+        track.stop();
+        console.log('[WebRTCCallService] Stopped track:', track.kind);
+      });
+      this.localStream = null;
     }
   }
 
   // Create peer connection
   async createPeerConnection() {
     console.log('[WebRTCCallService] Creating peer connection with config:', this.rtcConfiguration);
-    this.peerConnection = new RTCPeerConnection(this.rtcConfiguration);
+
+    // Use RTCPeerConnection with fallbacks for older browsers
+    const RTCPeerConnectionClass = window.RTCPeerConnection ||
+                                  window.webkitRTCPeerConnection ||
+                                  window.mozRTCPeerConnection;
+
+    if (!RTCPeerConnectionClass) {
+      throw new Error('RTCPeerConnection is not supported in this browser');
+    }
+
+    this.peerConnection = new RTCPeerConnectionClass(this.rtcConfiguration);
 
     // Setup local media first
     if (!this.localStream) {
@@ -306,20 +456,42 @@ class WebRTCCallService {
       console.error('[WebRTCCallService] No local stream available!');
     }
 
-    // Handle remote stream
+    // Handle remote stream with enhanced audio setup
     this.peerConnection.ontrack = (event) => {
-      console.log('[WebRTCCallService] Received remote stream');
-      const remoteStream = event.streams[0];
+      console.log('[WebRTCCallService] Received remote stream:', event.streams[0]);
 
-      // Play remote audio
-      const audio = new Audio();
-      audio.srcObject = remoteStream;
-      audio.play().catch(console.error);
+      if (event.streams && event.streams[0]) {
+        const remoteStream = event.streams[0];
 
-      // Mark connection as established
-      this.connectionEstablished = true;
-      this.connected = true;
-      this.onCallStatusChange && this.onCallStatusChange('Connected');
+        // Use the pre-configured audio element
+        this.remoteAudio.srcObject = remoteStream;
+
+        // Ensure audio plays automatically
+        this.remoteAudio.play().then(() => {
+          console.log('[WebRTCCallService] Remote audio playing successfully');
+          this.onCallStatusChange && this.onCallStatusChange('Audio Connected');
+
+          // Mark connection as established
+          this.connectionEstablished = true;
+          this.connected = true;
+        }).catch(error => {
+          console.warn('[WebRTCCallService] Remote audio autoplay failed:', error);
+          // Try to enable audio with user interaction
+          this.onCallStatusChange && this.onCallStatusChange('Audio ready - click to enable');
+
+          // Add click handler to enable audio
+          const enableAudio = () => {
+            this.remoteAudio.play().then(() => {
+              console.log('[WebRTCCallService] Audio enabled by user interaction');
+              this.onCallStatusChange && this.onCallStatusChange('Audio Connected');
+              this.connectionEstablished = true;
+              this.connected = true;
+              document.removeEventListener('click', enableAudio);
+            });
+          };
+          document.addEventListener('click', enableAudio, { once: true });
+        });
+      }
     };
 
     // Handle connection state changes
@@ -376,6 +548,16 @@ class WebRTCCallService {
             clearTimeout(this.connectionTimeout);
             this.connectionTimeout = null;
           }
+
+          // Start performance monitoring
+          webrtcMonitor.startMonitoring(this.peerConnection, (stats) => {
+            const quality = webrtcMonitor.getConnectionQuality();
+            console.log('[WebRTCCallService] Connection quality:', quality, stats);
+
+            if (quality === 'poor') {
+              this.onCallStatusChange && this.onCallStatusChange('Poor connection quality');
+            }
+          });
           break;
         case 'checking':
           console.log('[WebRTCCallService] 🔄 ICE connection checking...');
@@ -480,6 +662,12 @@ class WebRTCCallService {
       await this.peerConnection.setLocalDescription(answer);
       console.log('[WebRTCCallService] ✅ Local description set with answer');
 
+      // Mark offer/answer exchange as complete
+      this.isOfferAnswerExchangeComplete = true;
+
+      // Process any buffered ICE candidates
+      await this.processBufferedCandidates();
+
       console.log('[WebRTCCallService] Sending answer to:', message.from);
 
       this.sendMessage({
@@ -517,6 +705,12 @@ class WebRTCCallService {
       console.log('[WebRTCCallService] Setting remote description with answer:', answer);
       await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
 
+      // Mark offer/answer exchange as complete
+      this.isOfferAnswerExchangeComplete = true;
+
+      // Process any buffered ICE candidates
+      await this.processBufferedCandidates();
+
       console.log('[WebRTCCallService] Call connected successfully!');
       this.onCallStatusChange && this.onCallStatusChange('Connected');
     } catch (error) {
@@ -525,24 +719,58 @@ class WebRTCCallService {
     }
   }
 
-  // Handle ICE candidate
+  // Handle ICE candidate with buffering
   async handleIceCandidate(message) {
     console.log('[WebRTCCallService] Received ICE candidate:', message);
 
     try {
-      if (this.peerConnection && message.candidate) {
-        // Ensure the candidate is in the correct format
-        let candidate = message.candidate;
-        if (typeof candidate === 'string') {
-          candidate = JSON.parse(candidate);
-        }
-
-        console.log('[WebRTCCallService] Adding ICE candidate:', candidate);
-        await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      if (!message.candidate) {
+        console.log('[WebRTCCallService] Received end-of-candidates signal');
+        return;
       }
+
+      // Ensure the candidate is in the correct format
+      let candidate = message.candidate;
+      if (typeof candidate === 'string') {
+        candidate = JSON.parse(candidate);
+      }
+
+      // Buffer candidates if peer connection is not ready
+      if (!this.peerConnection || !this.isOfferAnswerExchangeComplete) {
+        console.log('[WebRTCCallService] Buffering ICE candidate until peer connection is ready');
+        this.iceCandidateBuffer.push(candidate);
+        return;
+      }
+
+      console.log('[WebRTCCallService] Adding ICE candidate:', candidate);
+      await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
     } catch (error) {
       console.error('[WebRTCCallService] Error handling ICE candidate:', error);
       console.error('[WebRTCCallService] Candidate that caused error:', message.candidate);
+
+      // If adding candidate fails, buffer it for retry
+      if (message.candidate && !this.iceCandidateBuffer.includes(message.candidate)) {
+        this.iceCandidateBuffer.push(message.candidate);
+      }
+    }
+  }
+
+  // Process buffered ICE candidates
+  async processBufferedCandidates() {
+    if (this.iceCandidateBuffer.length === 0) return;
+
+    console.log('[WebRTCCallService] Processing', this.iceCandidateBuffer.length, 'buffered ICE candidates');
+
+    const candidates = [...this.iceCandidateBuffer];
+    this.iceCandidateBuffer = [];
+
+    for (const candidate of candidates) {
+      try {
+        await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+        console.log('[WebRTCCallService] Successfully added buffered candidate');
+      } catch (error) {
+        console.error('[WebRTCCallService] Failed to add buffered candidate:', error);
+      }
     }
   }
 
@@ -558,29 +786,107 @@ class WebRTCCallService {
     this.endCall();
   }
 
-  // End current call
+  // End current call with comprehensive cleanup
   endCall() {
+    console.log('[WebRTCCallService] Ending call...');
+
+    if (this.currentCall) {
+      // Send WebRTC call ended message
+      this.sendMessage({
+        type: 'webrtc_call_ended',
+        call_id: this.currentCall.id,
+        to: this.currentCall.caller || this.currentCall.target,
+        from: this.extension,
+        channel: this.currentCall.id
+      });
+
+      // Also send hangup message for backend cleanup
+      this.sendMessage({
+        type: 'hangup',
+        call_id: this.currentCall.id,
+        to: this.currentCall.caller || this.currentCall.target,
+        from: this.extension,
+        channel: this.currentCall.id
+      });
+
+      // Call backend hangup API for proper cleanup
+      this.callBackendHangup();
+    }
+
+    // Comprehensive cleanup
+    this.cleanup();
+
+    this.onCallStatusChange && this.onCallStatusChange('Call ended');
+    this.onCallEnded && this.onCallEnded();
+  }
+
+  // Call backend hangup API
+  async callBackendHangup() {
+    if (!this.currentCall) return;
+
+    try {
+      const response = await fetch(`${CONFIG.API_URL}/protected/call/hangup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          channel: this.currentCall.id
+        })
+      });
+
+      if (response.ok) {
+        console.log('[WebRTCCallService] Backend hangup successful');
+      } else {
+        console.warn('[WebRTCCallService] Backend hangup failed:', response.status);
+      }
+    } catch (error) {
+      console.warn('[WebRTCCallService] Backend hangup error:', error);
+    }
+  }
+
+
+
+  // Comprehensive cleanup method
+  cleanup() {
+    console.log('[WebRTCCallService] Performing cleanup...');
+
+    // Clear timeouts
+    if (this.connectionTimeout) {
+      clearTimeout(this.connectionTimeout);
+      this.connectionTimeout = null;
+    }
+
+    // Stop performance monitoring
+    webrtcMonitor.stopMonitoring();
+
+    // Close peer connection
     if (this.peerConnection) {
       this.peerConnection.close();
       this.peerConnection = null;
     }
-    
-    if (this.localStream) {
-      this.localStream.getTracks().forEach(track => track.stop());
-      this.localStream = null;
+
+    // Clean up media streams
+    this.cleanupLocalMedia();
+
+    // Stop remote audio
+    if (this.remoteAudio) {
+      this.remoteAudio.pause();
+      this.remoteAudio.srcObject = null;
     }
 
-    if (this.currentCall) {
-      this.sendMessage({
-        type: 'webrtc_call_ended',
-        target_extension: this.currentCall.caller || this.currentCall.target
-      });
-    }
+    // Clean up WebSocket connection
+    this.cleanupWebSocket();
 
+    // Reset state
     this.currentCall = null;
-    this.connected = false;
     this.connectionEstablished = false;
-    this.onCallStatusChange && this.onCallStatusChange('Call ended');
+    this.connected = false;
+    this.isOfferAnswerExchangeComplete = false;
+    this.iceCandidateBuffer = [];
+
+    console.log('[WebRTCCallService] Cleanup complete');
   }
 
   // Check if connection is established
@@ -606,9 +912,8 @@ class WebRTCCallService {
     }
   }
 
-  // Cleanup
-  cleanup() {
-    this.endCall();
+  // Cleanup WebSocket connection (called from external cleanup)
+  cleanupWebSocket() {
     if (this.ws) {
       this.ws.close();
       this.ws = null;

@@ -10,7 +10,6 @@ import {
   Loader2,
   Network,
   ArrowRight,
-  RefreshCw,
   AlertTriangle
 } from 'lucide-react';
 import ipConfigService from '../services/ipConfigService';
@@ -27,7 +26,7 @@ const IPConfigurationPage = ({ darkMode, toggleDarkMode }) => {
   const [config, setConfig] = useState({
     backendHost: '172.20.10.4',
     backendPort: '8080',
-    asteriskHost: '172.20.10.2',
+    asteriskHost: '172.20.10.5',
     asteriskPort: '8088',
     asteriskAMIPort: '5038'
   });
@@ -223,59 +222,59 @@ const IPConfigurationPage = ({ darkMode, toggleDarkMode }) => {
   };
 
   return (
-    <div className={`min-h-screen p-4 ${
+    <div className={`min-h-screen p-2 xs:p-3 sm:p-4 px-safe pt-safe pb-safe ${
       darkMode ? 'bg-gray-900' : 'bg-gradient-to-br from-blue-50 to-indigo-100'
     }`}>
-      <div className="flex flex-col lg:flex-row gap-6 max-w-7xl mx-auto">
-        {/* Main Configuration Card */}
+      <div className="flex flex-col lg:flex-row gap-3 xs:gap-4 sm:gap-6 max-w-7xl mx-auto">
+        {/* Main Configuration Card - Mobile Responsive */}
         <div className={`flex-1 ${
           darkMode ? 'bg-gray-800' : 'bg-white'
-        } rounded-2xl shadow-2xl p-8`}>
+        } rounded-lg xs:rounded-xl sm:rounded-2xl shadow-lg xs:shadow-xl sm:shadow-2xl p-4 xs:p-6 sm:p-8`}>
         
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <div className={`p-4 rounded-full ${
+        {/* Header - Mobile Responsive */}
+        <div className="text-center mb-4 xs:mb-6 sm:mb-8">
+          <div className="flex justify-center mb-3 xs:mb-4">
+            <div className={`p-2 xs:p-3 sm:p-4 rounded-full ${
               darkMode ? 'bg-blue-900/50' : 'bg-blue-100'
             }`}>
-              <Settings className={`w-8 h-8 ${
+              <Settings className={`w-6 h-6 xs:w-7 xs:h-7 sm:w-8 sm:h-8 ${
                 darkMode ? 'text-blue-400' : 'text-blue-600'
               }`} />
             </div>
           </div>
-          <h1 className={`text-3xl font-bold mb-2 ${
+          <h1 className={`text-xl xs:text-2xl sm:text-3xl font-bold mb-1 xs:mb-2 responsive-heading ${
             darkMode ? 'text-white' : 'text-gray-900'
           }`}>
             VoIP Configuration
           </h1>
-          <p className={`text-lg ${
+          <p className={`text-sm xs:text-base sm:text-lg responsive-text ${
             darkMode ? 'text-gray-300' : 'text-gray-600'
           }`}>
             Configure your backend and Asterisk server connections
           </p>
         </div>
 
-        {/* Configuration Form */}
-        <div className="space-y-6">
-          
-          {/* Backend Configuration */}
-          <div className={`p-6 rounded-xl border ${
+        {/* Configuration Form - Mobile Responsive */}
+        <div className="space-y-4 xs:space-y-5 sm:space-y-6">
+
+          {/* Backend Configuration - Mobile Responsive */}
+          <div className={`p-3 xs:p-4 sm:p-6 rounded-lg xs:rounded-xl border ${
             darkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'
           }`}>
-            <div className="flex items-center mb-4">
-              <Server className={`w-5 h-5 mr-2 ${
+            <div className="flex items-center mb-3 xs:mb-4">
+              <Server className={`w-4 h-4 xs:w-5 xs:h-5 mr-2 ${
                 darkMode ? 'text-blue-400' : 'text-blue-600'
               }`} />
-              <h3 className={`text-lg font-semibold ${
+              <h3 className={`text-base xs:text-lg font-semibold ${
                 darkMode ? 'text-white' : 'text-gray-900'
               }`}>
                 Backend Server
               </h3>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 xs:gap-4">
               <div>
-                <label className={`block text-sm font-medium mb-2 ${
+                <label className={`block text-xs xs:text-sm font-medium mb-1 xs:mb-2 ${
                   darkMode ? 'text-gray-300' : 'text-gray-700'
                 }`}>
                   Backend Host/IP
@@ -285,15 +284,16 @@ const IPConfigurationPage = ({ darkMode, toggleDarkMode }) => {
                   value={config.backendHost}
                   onChange={(e) => handleInputChange('backendHost', e.target.value)}
                   placeholder="172.20.10.4"
-                  className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    darkMode 
-                      ? 'bg-gray-600 border-gray-500 text-white placeholder-gray-400' 
+                  className={`w-full px-3 xs:px-4 py-2 xs:py-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent mobile-input touch-target ${
+                    darkMode
+                      ? 'bg-gray-600 border-gray-500 text-white placeholder-gray-400'
                       : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
                   }`}
+                  style={{ fontSize: '16px' }}
                 />
               </div>
               <div>
-                <label className={`block text-sm font-medium mb-2 ${
+                <label className={`block text-xs xs:text-sm font-medium mb-1 xs:mb-2 ${
                   darkMode ? 'text-gray-300' : 'text-gray-700'
                 }`}>
                   Backend Port
@@ -303,42 +303,43 @@ const IPConfigurationPage = ({ darkMode, toggleDarkMode }) => {
                   value={config.backendPort}
                   onChange={(e) => handleInputChange('backendPort', e.target.value)}
                   placeholder="8080"
-                  className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    darkMode 
-                      ? 'bg-gray-600 border-gray-500 text-white placeholder-gray-400' 
+                  className={`w-full px-3 xs:px-4 py-2 xs:py-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent mobile-input touch-target ${
+                    darkMode
+                      ? 'bg-gray-600 border-gray-500 text-white placeholder-gray-400'
                       : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
                   }`}
+                  style={{ fontSize: '16px' }}
                 />
               </div>
             </div>
 
-            {/* Backend Status */}
-            <div className="mt-4 flex items-center space-x-2">
+            {/* Backend Status - Mobile Responsive */}
+            <div className="mt-3 xs:mt-4 flex items-center space-x-2">
               {getStatusIcon(connectionStatus.backend.status)}
-              <span className={`text-sm ${getStatusColor(connectionStatus.backend.status)}`}>
+              <span className={`text-xs xs:text-sm ${getStatusColor(connectionStatus.backend.status)}`}>
                 {connectionStatus.backend.message || 'Not tested'}
               </span>
             </div>
           </div>
 
-          {/* Asterisk Configuration */}
-          <div className={`p-6 rounded-xl border ${
+          {/* Asterisk Configuration - Mobile Responsive */}
+          <div className={`p-3 xs:p-4 sm:p-6 rounded-lg xs:rounded-xl border ${
             darkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'
           }`}>
-            <div className="flex items-center mb-4">
-              <Network className={`w-5 h-5 mr-2 ${
+            <div className="flex items-center mb-3 xs:mb-4">
+              <Network className={`w-4 h-4 xs:w-5 xs:h-5 mr-2 ${
                 darkMode ? 'text-green-400' : 'text-green-600'
               }`} />
-              <h3 className={`text-lg font-semibold ${
+              <h3 className={`text-base xs:text-lg font-semibold ${
                 darkMode ? 'text-white' : 'text-gray-900'
               }`}>
                 Asterisk Server
               </h3>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 xs:gap-4">
               <div>
-                <label className={`block text-sm font-medium mb-2 ${
+                <label className={`block text-xs xs:text-sm font-medium mb-1 xs:mb-2 ${
                   darkMode ? 'text-gray-300' : 'text-gray-700'
                 }`}>
                   Asterisk Host/IP
@@ -347,16 +348,17 @@ const IPConfigurationPage = ({ darkMode, toggleDarkMode }) => {
                   type="text"
                   value={config.asteriskHost}
                   onChange={(e) => handleInputChange('asteriskHost', e.target.value)}
-                  placeholder="172.20.10.2"
-                  className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  placeholder="172.20.10.5"
+                  className={`w-full px-3 xs:px-4 py-2 xs:py-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent mobile-input touch-target ${
                     darkMode
                       ? 'bg-gray-600 border-gray-500 text-white placeholder-gray-400'
                       : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
                   }`}
+                  style={{ fontSize: '16px' }}
                 />
               </div>
               <div>
-                <label className={`block text-sm font-medium mb-2 ${
+                <label className={`block text-xs xs:text-sm font-medium mb-1 xs:mb-2 ${
                   darkMode ? 'text-gray-300' : 'text-gray-700'
                 }`}>
                   SIP Port
@@ -366,15 +368,16 @@ const IPConfigurationPage = ({ darkMode, toggleDarkMode }) => {
                   value={config.asteriskPort}
                   onChange={(e) => handleInputChange('asteriskPort', e.target.value)}
                   placeholder="8088"
-                  className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  className={`w-full px-3 xs:px-4 py-2 xs:py-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent mobile-input touch-target ${
                     darkMode
                       ? 'bg-gray-600 border-gray-500 text-white placeholder-gray-400'
                       : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
                   }`}
+                  style={{ fontSize: '16px' }}
                 />
               </div>
               <div>
-                <label className={`block text-sm font-medium mb-2 ${
+                <label className={`block text-xs xs:text-sm font-medium mb-1 xs:mb-2 ${
                   darkMode ? 'text-gray-300' : 'text-gray-700'
                 }`}>
                   AMI Port
@@ -384,49 +387,51 @@ const IPConfigurationPage = ({ darkMode, toggleDarkMode }) => {
                   value={config.asteriskAMIPort}
                   onChange={(e) => handleInputChange('asteriskAMIPort', e.target.value)}
                   placeholder="5038"
-                  className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  className={`w-full px-3 xs:px-4 py-2 xs:py-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent mobile-input touch-target ${
                     darkMode
                       ? 'bg-gray-600 border-gray-500 text-white placeholder-gray-400'
                       : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
                   }`}
+                  style={{ fontSize: '16px' }}
                 />
               </div>
             </div>
 
-            {/* Asterisk Status */}
-            <div className="mt-4 flex items-center space-x-2">
+            {/* Asterisk Status - Mobile Responsive */}
+            <div className="mt-3 xs:mt-4 flex items-center space-x-2">
               {getStatusIcon(connectionStatus.asterisk.status)}
-              <span className={`text-sm ${getStatusColor(connectionStatus.asterisk.status)}`}>
+              <span className={`text-xs xs:text-sm ${getStatusColor(connectionStatus.asterisk.status)}`}>
                 {connectionStatus.asterisk.message || 'Not tested'}
               </span>
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4">
+          {/* Action Buttons - Mobile Responsive */}
+          <div className="flex flex-col xs:flex-row gap-3 xs:gap-4">
             <button
               onClick={testConnections}
               disabled={testingConnection}
-              className={`flex-1 flex items-center justify-center px-6 py-3 rounded-lg font-medium transition-colors ${
+              className={`flex-1 flex items-center justify-center px-4 xs:px-6 py-3 xs:py-3 rounded-lg font-medium transition-colors touch-target tap-highlight ${
                 testingConnection
                   ? 'bg-gray-400 cursor-not-allowed'
                   : darkMode
                     ? 'bg-blue-600 hover:bg-blue-700 text-white'
                     : 'bg-blue-600 hover:bg-blue-700 text-white'
               }`}
+              style={{ minHeight: '44px' }}
             >
               {testingConnection ? (
-                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                <Loader2 className="w-4 h-4 xs:w-5 xs:h-5 mr-1 xs:mr-2 animate-spin" />
               ) : (
-                <Wifi className="w-5 h-5 mr-2" />
+                <Wifi className="w-4 h-4 xs:w-5 xs:h-5 mr-1 xs:mr-2" />
               )}
-              Test Connections
+              <span className="text-sm xs:text-base">Test Connections</span>
             </button>
 
             <button
               onClick={saveConfiguration}
               disabled={isLoading}
-              className={`flex-1 flex items-center justify-center px-6 py-3 rounded-lg font-medium transition-colors ${
+              className={`flex-1 flex items-center justify-center px-4 xs:px-6 py-3 xs:py-3 rounded-lg font-medium transition-colors touch-target tap-highlight ${
                 isLoading
                   ? 'bg-gray-400 cursor-not-allowed'
                   : connectionStatus.backend.status === 'error'
@@ -435,25 +440,29 @@ const IPConfigurationPage = ({ darkMode, toggleDarkMode }) => {
                       ? 'bg-green-600 hover:bg-green-700 text-white'
                       : 'bg-green-600 hover:bg-green-700 text-white'
               }`}
+              style={{ minHeight: '44px' }}
             >
               {isLoading ? (
-                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                <Loader2 className="w-4 h-4 xs:w-5 xs:h-5 mr-1 xs:mr-2 animate-spin" />
               ) : (
-                <ArrowRight className="w-5 h-5 mr-2" />
+                <ArrowRight className="w-4 h-4 xs:w-5 xs:h-5 mr-1 xs:mr-2" />
               )}
-              {connectionStatus.backend.status === 'error' ? 'Save Anyway' : 'Save & Continue'}
+              <span className="text-sm xs:text-base">
+                {connectionStatus.backend.status === 'error' ? 'Save Anyway' : 'Save & Continue'}
+              </span>
             </button>
           </div>
 
-          {/* Dark Mode Toggle */}
-          <div className="flex justify-center pt-4">
+          {/* Dark Mode Toggle - Mobile Responsive */}
+          <div className="flex justify-center pt-3 xs:pt-4">
             <button
               onClick={toggleDarkMode}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3 xs:px-4 py-2 rounded-lg text-xs xs:text-sm font-medium transition-colors touch-target tap-highlight ${
                 darkMode
                   ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
               }`}
+              style={{ minHeight: '44px' }}
             >
               {darkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
             </button>
@@ -461,16 +470,16 @@ const IPConfigurationPage = ({ darkMode, toggleDarkMode }) => {
         </div>
         </div>
 
-        {/* Side Panel for Configuration Help */}
+        {/* Side Panel for Configuration Help - Mobile Responsive */}
         {(connectionStatus.asterisk.status === 'error' || connectionStatus.asterisk.status === 'warning' ||
           connectionStatus.backend.status === 'error') && (
-          <div className="lg:w-96 space-y-4">
+          <div className="w-full lg:w-96 space-y-3 xs:space-y-4">
 
-            {/* Connection Details Panel */}
+            {/* Connection Details Panel - Mobile Responsive */}
             {(connectionStatus.asterisk.details || connectionStatus.backend.status === 'error') && (
               <div className={`${
                 darkMode ? 'bg-gray-800' : 'bg-white'
-              } rounded-xl shadow-lg p-6`}>
+              } rounded-lg xs:rounded-xl shadow-lg p-4 xs:p-6`}>
                 <h3 className={`text-lg font-semibold mb-4 ${
                   darkMode ? 'text-white' : 'text-gray-900'
                 }`}>

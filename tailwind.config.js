@@ -6,6 +6,20 @@ module.exports = {
   ],
   darkMode: 'class',
   theme: {
+    // Mobile-first responsive breakpoints
+    screens: {
+      'xs': '375px',    // iPhone 13 mini and similar small phones
+      'sm': '640px',    // Small tablets and large phones
+      'md': '768px',    // Tablets
+      'lg': '1024px',   // Small laptops
+      'xl': '1280px',   // Large laptops
+      '2xl': '1536px',  // Desktop monitors
+      // Custom breakpoints for specific devices
+      'iphone-se': '320px',
+      'iphone-13-mini': '375px',
+      'iphone-13': '390px',
+      'iphone-13-pro-max': '428px',
+    },
     extend: {
       colors: {
         // Professional VoIP Brand Colors - Enhanced without gradients
@@ -112,6 +126,22 @@ module.exports = {
         '18': '4.5rem',
         '88': '22rem',
         '128': '32rem',
+        // Mobile-specific spacing
+        'safe-top': 'env(safe-area-inset-top)',
+        'safe-bottom': 'env(safe-area-inset-bottom)',
+        'safe-left': 'env(safe-area-inset-left)',
+        'safe-right': 'env(safe-area-inset-right)',
+      },
+      // Enhanced touch target sizes for mobile
+      minHeight: {
+        'touch': '44px',
+        'touch-lg': '48px',
+        'touch-xl': '52px',
+      },
+      minWidth: {
+        'touch': '44px',
+        'touch-lg': '48px',
+        'touch-xl': '52px',
       },
       animation: {
         'fade-in': 'fadeIn 0.5s ease-in-out',

@@ -15,6 +15,7 @@ import {
 import { useTheme } from '../contexts/ThemeContext';
 import { cn } from '../utils/ui';
 import toast from 'react-hot-toast';
+import audioManager from '../services/audioManager';
 
 const SettingsModal = ({ isOpen, onClose, darkMode }) => {
   const { toggleDarkMode, theme, setTheme, themes } = useTheme();
@@ -62,14 +63,24 @@ const SettingsModal = ({ isOpen, onClose, darkMode }) => {
   const handleSave = () => {
     try {
       localStorage.setItem('voipSettings', JSON.stringify(settings));
-      
+
       // Apply theme changes
       if (settings.darkMode !== darkMode) {
         toggleDarkMode();
       }
-      
+
       if (settings.theme !== theme) {
         setTheme(settings.theme);
+      }
+
+      // Apply audio settings to audio manager
+      if (settings.audio) {
+        audioManager.updateSettings({
+          volume: settings.audio.volume / 100,
+          echoCancellation: settings.audio.echoCancellation,
+          noiseSuppression: settings.audio.noiseSuppression,
+          autoGainControl: settings.audio.autoGainControl
+        });
       }
 
       toast.success('Settings saved successfully!');

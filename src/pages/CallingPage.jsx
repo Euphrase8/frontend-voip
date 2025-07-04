@@ -12,19 +12,14 @@ import {
   FiClock as Clock
 } from 'react-icons/fi';
 import PropTypes from 'prop-types';
-import { connectWebSocket, sendWebSocketMessage } from '../services/websocketservice';
-import { hangupCall } from '../services/call';
-import { hangup } from '../services/hang';
 import webrtcCallService from '../services/webrtcCallService';
+import { hangupCall as comprehensiveHangup } from '../services/hangupService';
+import audioManager from '../services/audioManager';
 import { cn, getInitials } from '../utils/ui';
 import {
   buildButtonClass,
-  buildCardClass,
   buildNotificationClass,
-  responsiveStyles,
-  touchTargetStyles,
-  animationStyles,
-  callStatusStyles
+  touchTargetStyles
 } from '../utils/styling';
 
 const CallingPage = ({
@@ -45,7 +40,7 @@ const CallingPage = ({
   const initialCallStatus = navigationState.callStatus || propCallStatus || 'Connecting...';
   const isOutgoing = navigationState.isOutgoing !== undefined ? navigationState.isOutgoing : (propIsOutgoing !== undefined ? propIsOutgoing : true);
   const initialChannel = navigationState.channel || propChannel;
-  const transport = navigationState.transport || propTransport;
+  // const transport = navigationState.transport || propTransport; // Currently unused
   const callAccepted = navigationState.callAccepted || false;
   const isWebRTCCall = navigationState.isWebRTCCall || false;
   const callId = navigationState.callId;
@@ -56,11 +51,11 @@ const CallingPage = ({
   const [notification, setNotification] = useState(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
-  const [wsConnected, setWsConnected] = useState(false);
-  const [channel, setChannel] = useState(initialChannel);
+  // const [wsConnected, setWsConnected] = useState(false); // Currently unused
+  const [channel] = useState(initialChannel); // setChannel removed as unused
   const callStartTimeRef = useRef(null);
-  const animationFrameRef = useRef(null);
-  const wsRef = useRef(null);
+  // const animationFrameRef = useRef(null); // Currently unused
+  // const wsRef = useRef(null); // Currently unused
   const hangupInProgressRef = useRef(false);
 
   // Format time helper
@@ -79,26 +74,19 @@ const CallingPage = ({
       setCurrentCallStatus('Ending call...');
       setNotification({ message: 'Ending call...', type: 'info' });
 
-      // Determine if this is a WebRTC call or SIP call
-      const isWebRTCCall = channel && (channel.startsWith('webrtc-call-') || channel.includes('webrtc'));
+      // Use comprehensive hangup service for all call types
+      if (channel) {
+        console.log('[CallingPage] Ending call with comprehensive hangup service');
+        const hangupResult = await comprehensiveHangup(channel);
 
-      if (isWebRTCCall) {
-        // For WebRTC calls, use the WebRTC service
-        console.log('[CallingPage] Ending WebRTC call');
-        webrtcCallService.endCall();
-      } else if (channel) {
-        // For SIP calls, use the hangup service
-        console.log('[CallingPage] Ending SIP call with channel:', channel);
-        await hangup(channel);
-
-        // Also try the hangupCall function as fallback
-        try {
-          await hangupCall(channel);
-        } catch (fallbackError) {
-          console.warn('[CallingPage] Fallback hangup failed:', fallbackError);
+        if (hangupResult.success) {
+          console.log('[CallingPage] Hangup successful:', hangupResult);
+        } else {
+          console.warn('[CallingPage] Hangup failed:', hangupResult);
+          // Still continue with cleanup
         }
       } else {
-        // No channel available, try WebRTC service anyway
+        // No channel available, try WebRTC service directly
         console.log('[CallingPage] No channel available, trying WebRTC service');
         webrtcCallService.endCall();
       }
@@ -136,14 +124,38 @@ const CallingPage = ({
 
   // Handle mute toggle
   const handleMuteToggle = () => {
-    setIsMuted(!isMuted);
-    // Add actual mute logic here
+    try {
+      const microphoneEnabled = audioManager.toggleMute();
+      setIsMuted(!microphoneEnabled); // isMuted is opposite of microphoneEnabled
+      setNotification({
+        message: microphoneEnabled ? 'Microphone enabled' : 'Microphone muted',
+        type: 'info'
+      });
+      setTimeout(() => setNotification(null), 2000);
+    } catch (error) {
+      console.error('[CallingPage] Failed to toggle mute:', error);
+      setNotification({ message: 'Failed to toggle microphone', type: 'error' });
+      setTimeout(() => setNotification(null), 3000);
+    }
   };
 
-  // Handle speaker toggle
+  // Handle speaker toggle (volume control)
   const handleSpeakerToggle = () => {
-    setIsSpeakerOn(!isSpeakerOn);
-    // Add actual speaker logic here
+    try {
+      const currentVolume = audioManager.getVolume();
+      const newVolume = currentVolume > 0 ? 0 : 0.8; // Toggle between 0 and 80%
+      audioManager.setVolume(newVolume);
+      setIsSpeakerOn(newVolume > 0);
+      setNotification({
+        message: newVolume > 0 ? 'Speaker enabled' : 'Speaker muted',
+        type: 'info'
+      });
+      setTimeout(() => setNotification(null), 2000);
+    } catch (error) {
+      console.error('[CallingPage] Failed to toggle speaker:', error);
+      setNotification({ message: 'Failed to toggle speaker', type: 'error' });
+      setTimeout(() => setNotification(null), 3000);
+    }
   };
 
   // Update call timer
@@ -167,6 +179,19 @@ const CallingPage = ({
       setIsConnected(true);
     }
   }, [currentCallStatus]);
+
+  // Sync UI state with audio manager state
+  useEffect(() => {
+    if (isConnected) {
+      // Sync mute state
+      const micMuted = audioManager.isMuted();
+      setIsMuted(micMuted);
+
+      // Sync volume state
+      const currentVolume = audioManager.getVolume();
+      setIsSpeakerOn(currentVolume > 0);
+    }
+  }, [isConnected]);
 
   // Handle call initialization and communication setup
   useEffect(() => {
@@ -279,11 +304,13 @@ const CallingPage = ({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
           className={cn(
-            // Responsive width and max-width for different screen sizes
-            'w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl',
-            'mx-auto lg:mx-0 relative z-10 rounded-2xl sm:rounded-3xl shadow-2xl border-2',
-            // Enhanced mobile-first responsive design
-            'min-h-[500px] sm:min-h-[550px] md:min-h-[600px] lg:min-h-[650px]',
+            // Enhanced mobile-first responsive width
+            'w-full max-w-[280px] xs:max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl',
+            'mx-auto lg:mx-0 relative z-10 rounded-xl xs:rounded-2xl sm:rounded-3xl shadow-2xl border-2',
+            // Mobile-optimized height for small screens
+            'min-h-[450px] xs:min-h-[500px] sm:min-h-[550px] md:min-h-[600px] lg:min-h-[650px]',
+            // Better mobile spacing
+            'mb-16 xs:mb-20 sm:mb-24 md:mb-0',
             darkMode
               ? 'bg-slate-800 border-slate-700'
               : 'bg-white border-indigo-100'
@@ -295,7 +322,7 @@ const CallingPage = ({
           darkMode ? 'bg-indigo-600' : 'bg-indigo-500'
         )}></div>
 
-        <div className="p-4 sm:p-6 md:p-8 lg:p-10">
+        <div className="p-3 xs:p-4 sm:p-6 md:p-8 lg:p-10">
           {/* Header - Enhanced Mobile Responsive */}
           <div className="text-center mb-4 sm:mb-6 md:mb-8">
             <motion.div
@@ -303,9 +330,9 @@ const CallingPage = ({
               animate={{ scale: 1 }}
               transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
               className={cn(
-                // Responsive avatar sizing for different screen sizes
-                'inline-flex items-center justify-center rounded-full mb-3 sm:mb-4 shadow-lg border-4',
-                'w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-28 lg:h-28',
+                // Enhanced mobile-first avatar sizing
+                'inline-flex items-center justify-center rounded-full mb-2 xs:mb-3 sm:mb-4 shadow-lg border-3 xs:border-4',
+                'w-12 h-12 xs:w-16 xs:h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-28 lg:h-28',
                 darkMode
                   ? 'bg-indigo-600 border-indigo-500'
                   : 'bg-indigo-500 border-indigo-400'
@@ -320,8 +347,8 @@ const CallingPage = ({
               ) : (
                 <span className={cn(
                   'font-bold text-white',
-                  // Responsive text sizing
-                  'text-lg sm:text-xl md:text-2xl lg:text-3xl'
+                  // Enhanced mobile-first text sizing
+                  'text-sm xs:text-lg sm:text-xl md:text-2xl lg:text-3xl'
                 )}>
                   {getInitials(contact?.name || contact?.extension || 'U')}
                 </span>

@@ -1,13 +1,13 @@
 # Asterisk Configuration for VoIP Application
 
-This guide provides complete instructions for configuring Asterisk on your Kali Linux server (172.20.10.2) to work with your VoIP application.
+This guide provides complete instructions for configuring Asterisk on your Kali Linux server (172.20.10.5) to work with your VoIP application.
 
 ## ✅ Current Status (Updated: July 4, 2025)
 
 **🎉 CONFIGURATION COMPLETE AND WORKING!**
 
 - ✅ **Backend Connection**: Connected successfully
-- ✅ **Asterisk Server**: Reachable at 172.20.10.2
+- ✅ **Asterisk Server**: Reachable at 172.20.10.5
 - ✅ **AMI Authentication**: Working (admin user configured)
 - ✅ **HTTP Service**: Running on port 8088
 - ✅ **WebSocket Service**: Available at `/asterisk/ws`
@@ -25,7 +25,7 @@ This guide provides complete instructions for configuring Asterisk on your Kali 
 
 1. **Copy the configuration files to your Asterisk server:**
    ```bash
-   # On your Kali Linux server (172.20.10.2)
+   # On your Kali Linux server (172.20.10.5)
    cd /tmp
    # Copy the asterisk-config folder from your Windows machine to the server
    ```
@@ -84,8 +84,8 @@ type=transport
 protocol=ws
 bind=0.0.0.0:8088
 local_net=172.20.10.0/24
-external_media_address=172.20.10.2
-external_signaling_address=172.20.10.2
+external_media_address=172.20.10.5
+external_signaling_address=172.20.10.5
 
 ; UDP transport for traditional SIP
 [transport-udp]
@@ -93,8 +93,8 @@ type=transport
 protocol=udp
 bind=0.0.0.0:5060
 local_net=172.20.10.0/24
-external_media_address=172.20.10.2
-external_signaling_address=172.20.10.2
+external_media_address=172.20.10.5
+external_signaling_address=172.20.10.5
 
 ; WebRTC endpoint template
 [webrtc_endpoint](!)
@@ -222,7 +222,7 @@ nc -z localhost 8088 && echo "HTTP OK" || echo "HTTP Failed"
 2. Enter the IP configuration:
    - **Backend Host**: 172.20.10.4
    - **Backend Port**: 8080
-   - **Asterisk Host**: 172.20.10.2
+   - **Asterisk Host**: 172.20.10.5
    - **Asterisk SIP Port**: 8088
    - **Asterisk AMI Port**: 5038
 3. Click "Test Connections"

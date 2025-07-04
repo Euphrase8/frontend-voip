@@ -39,6 +39,16 @@ func main() {
 	// Create Gin router
 	r := gin.Default()
 
+	// Configure trusted proxies for security
+	// Only trust specific proxy IPs in production
+	trustedProxies := []string{
+		"127.0.0.1",      // localhost
+		"172.20.10.0/24", // local network range
+	}
+	if err := r.SetTrustedProxies(trustedProxies); err != nil {
+		log.Printf("Warning: Failed to set trusted proxies: %v", err)
+	}
+
 	// Configure CORS
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowOrigins = config.AppConfig.CORSOrigins
@@ -158,6 +168,17 @@ func main() {
 			admin.DELETE("/call-logs/bulk-delete", handlers.BulkDeleteCallLogs)
 			admin.GET("/export/call-logs", handlers.ExportCallLogs)
 			admin.GET("/metrics/realtime", handlers.GetRealTimeMetrics)
+
+			// System Health endpoints
+			admin.GET("/health", handlers.GetSystemHealth)
+
+			// Backup endpoints
+			admin.POST("/backup", handlers.CreateBackup)
+			admin.GET("/backup/status/:id", handlers.GetBackupStatus)
+			admin.GET("/backups", handlers.ListBackups)
+			admin.GET("/backup/download/:id", handlers.DownloadBackup)
+			admin.DELETE("/backup/:id", handlers.DeleteBackup)
+			admin.POST("/backup/restore/:id", handlers.RestoreBackup)
 		}
 	}
 

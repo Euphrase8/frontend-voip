@@ -7,7 +7,7 @@ echo "=== VoIP System Status Checker ==="
 echo "Checking connectivity and status..."
 
 # Configuration
-ASTERISK_IP="172.20.10.2"
+ASTERISK_IP="172.20.10.5"
 BACKEND_IP="172.20.10.4"
 AMI_PORT=5038
 WEBSOCKET_PORT=8088
@@ -68,7 +68,7 @@ fi
 
 echo ""
 echo "4. Manual Commands to Run on Asterisk Server:"
-echo "   SSH to your Kali Linux server (172.20.10.2) and run:"
+echo "   SSH to your Kali Linux server (172.20.10.5) and run:"
 echo "   sudo asterisk -rx 'pjsip show endpoints'"
 echo "   sudo asterisk -rx 'pjsip show contacts'"
 echo "   sudo asterisk -rx 'pjsip show transports'"

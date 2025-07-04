@@ -1,28 +1,69 @@
 import React, { useState, useEffect } from 'react';
-import WebRTCPhone from '../components/WebRTCPhone';
 import { updateUserStatus } from '../services/users';
+import webrtcCallService from '../services/webrtcCallService';
 
 const WebRTCTestPage = () => {
   const [extension, setExtension] = useState('');
   const [callStatus, setCallStatus] = useState('Ready');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [targetExtension, setTargetExtension] = useState('');
+  const [isInCall, setIsInCall] = useState(false);
 
   useEffect(() => {
     // Get extension from localStorage
     const storedExtension = localStorage.getItem('extension');
     const token = localStorage.getItem('token');
-    
+
     if (storedExtension && token) {
       setExtension(storedExtension);
       setIsLoggedIn(true);
-      
+
       // Set user status to online
       updateUserStatus('online').catch(console.error);
+
+      // Initialize WebRTC service
+      webrtcCallService.initialize(
+        storedExtension,
+        (incomingCall) => {
+          console.log('Incoming WebRTC call:', incomingCall);
+          setCallStatus(`Incoming call from ${incomingCall.from}`);
+        },
+        (status) => {
+          setCallStatus(status);
+        },
+        () => {
+          setCallStatus('Call ended');
+          setIsInCall(false);
+        }
+      );
     }
   }, []);
 
   const handleCallStatusChange = (status) => {
     setCallStatus(status);
+  };
+
+  const makeCall = async () => {
+    if (!targetExtension.trim()) {
+      setCallStatus('Please enter a target extension');
+      return;
+    }
+
+    try {
+      setCallStatus('Initiating call...');
+      setIsInCall(true);
+      await webrtcCallService.makeCall(targetExtension.trim());
+    } catch (error) {
+      console.error('Call failed:', error);
+      setCallStatus(`Call failed: ${error.message}`);
+      setIsInCall(false);
+    }
+  };
+
+  const endCall = () => {
+    webrtcCallService.endCall();
+    setCallStatus('Call ended');
+    setIsInCall(false);
   };
 
   if (!isLoggedIn) {
@@ -52,16 +93,63 @@ const WebRTCTestPage = () => {
         <p><strong>Call Status:</strong> {callStatus}</p>
       </div>
 
-      <div style={{ 
-        border: '1px solid #ddd', 
-        borderRadius: '8px', 
+      <div style={{
+        border: '1px solid #ddd',
+        borderRadius: '8px',
         padding: '20px',
         backgroundColor: 'white'
       }}>
-        <WebRTCPhone 
-          extension={extension} 
-          onCallStatusChange={handleCallStatusChange}
-        />
+        <h3>WebRTC Phone Interface</h3>
+
+        <div style={{ marginBottom: '15px' }}>
+          <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+            Target Extension:
+          </label>
+          <input
+            type="text"
+            value={targetExtension}
+            onChange={(e) => setTargetExtension(e.target.value)}
+            placeholder="Enter extension to call (e.g., 1000)"
+            style={{
+              width: '100%',
+              padding: '10px',
+              border: '1px solid #ccc',
+              borderRadius: '4px',
+              fontSize: '16px'
+            }}
+            disabled={isInCall}
+          />
+        </div>
+
+        <div style={{ marginBottom: '15px' }}>
+          <button
+            onClick={isInCall ? endCall : makeCall}
+            style={{
+              width: '100%',
+              padding: '12px',
+              backgroundColor: isInCall ? '#dc3545' : '#28a745',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              fontSize: '16px',
+              cursor: 'pointer',
+              fontWeight: 'bold'
+            }}
+            disabled={!targetExtension.trim() && !isInCall}
+          >
+            {isInCall ? '📞 End Call' : '📞 Make Call'}
+          </button>
+        </div>
+
+        <div style={{
+          padding: '10px',
+          backgroundColor: '#f8f9fa',
+          borderRadius: '4px',
+          fontSize: '14px',
+          color: '#666'
+        }}>
+          <strong>Status:</strong> {callStatus}
+        </div>
       </div>
 
       <div style={{ 
