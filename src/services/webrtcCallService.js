@@ -12,12 +12,16 @@ class WebRTCCallService {
     this.connected = false;
     this.connectionEstablished = false;
 
-    // WebRTC configuration
+    // WebRTC configuration with multiple STUN servers for better connectivity
     this.rtcConfiguration = {
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-      ]
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' }
+      ],
+      iceCandidatePoolSize: 10
     };
   }
 
@@ -206,9 +210,47 @@ class WebRTCCallService {
       }
     }
 
-    await this.createPeerConnection();
-    await this.createOffer();
-    this.onCallStatusChange && this.onCallStatusChange('Connecting...');
+    // Set up connection timeout
+    this.connectionTimeout = setTimeout(() => {
+      console.warn('[WebRTCCallService] ⏰ Connection timeout - call may be stuck');
+      this.onCallStatusChange && this.onCallStatusChange('Connection timeout - retrying...');
+
+      // Try to restart the connection
+      this.retryConnection();
+    }, 15000); // 15 second timeout
+
+    try {
+      await this.createPeerConnection();
+      await this.createOffer();
+      this.onCallStatusChange && this.onCallStatusChange('Connecting...');
+    } catch (error) {
+      console.error('[WebRTCCallService] Error in call acceptance flow:', error);
+      this.onCallStatusChange && this.onCallStatusChange('Connection failed');
+      if (this.connectionTimeout) {
+        clearTimeout(this.connectionTimeout);
+      }
+    }
+  }
+
+  // Retry connection mechanism
+  async retryConnection() {
+    console.log('[WebRTCCallService] Retrying connection...');
+
+    try {
+      // Clean up existing connection
+      if (this.peerConnection) {
+        this.peerConnection.close();
+        this.peerConnection = null;
+      }
+
+      // Recreate connection
+      await this.createPeerConnection();
+      await this.createOffer();
+      this.onCallStatusChange && this.onCallStatusChange('Retrying connection...');
+    } catch (error) {
+      console.error('[WebRTCCallService] Retry failed:', error);
+      this.onCallStatusChange && this.onCallStatusChange('Connection failed');
+    }
   }
 
   // Handle call rejected by target
@@ -244,13 +286,24 @@ class WebRTCCallService {
 
   // Create peer connection
   async createPeerConnection() {
+    console.log('[WebRTCCallService] Creating peer connection with config:', this.rtcConfiguration);
     this.peerConnection = new RTCPeerConnection(this.rtcConfiguration);
-    
+
+    // Setup local media first
+    if (!this.localStream) {
+      console.log('[WebRTCCallService] No local stream, setting up media...');
+      await this.setupLocalMedia();
+    }
+
     // Add local stream
     if (this.localStream) {
+      console.log('[WebRTCCallService] Adding local stream tracks:', this.localStream.getTracks().length);
       this.localStream.getTracks().forEach(track => {
+        console.log('[WebRTCCallService] Adding track:', track.kind, track.enabled);
         this.peerConnection.addTrack(track, this.localStream);
       });
+    } else {
+      console.error('[WebRTCCallService] No local stream available!');
     }
 
     // Handle remote stream
@@ -295,6 +348,7 @@ class WebRTCCallService {
     // Handle ICE candidates
     this.peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
+        console.log('[WebRTCCallService] Sending ICE candidate:', event.candidate.candidate);
         this.sendMessage({
           type: 'webrtc_ice_candidate',
           candidate: event.candidate,
@@ -302,6 +356,39 @@ class WebRTCCallService {
           from: this.extension,
           channel: this.currentCall.id
         });
+      } else {
+        console.log('[WebRTCCallService] ICE gathering complete');
+      }
+    };
+
+    // Handle ICE connection state changes
+    this.peerConnection.oniceconnectionstatechange = () => {
+      console.log('[WebRTCCallService] ICE connection state:', this.peerConnection.iceConnectionState);
+
+      switch (this.peerConnection.iceConnectionState) {
+        case 'connected':
+        case 'completed':
+          console.log('[WebRTCCallService] ✅ ICE connection established!');
+          this.onCallStatusChange && this.onCallStatusChange('Connected - Audio Active');
+
+          // Clear connection timeout on successful connection
+          if (this.connectionTimeout) {
+            clearTimeout(this.connectionTimeout);
+            this.connectionTimeout = null;
+          }
+          break;
+        case 'checking':
+          console.log('[WebRTCCallService] 🔄 ICE connection checking...');
+          this.onCallStatusChange && this.onCallStatusChange('Establishing Connection...');
+          break;
+        case 'disconnected':
+          console.log('[WebRTCCallService] ⚠️ ICE connection disconnected');
+          this.onCallStatusChange && this.onCallStatusChange('Connection Lost');
+          break;
+        case 'failed':
+          console.log('[WebRTCCallService] ❌ ICE connection failed');
+          this.onCallStatusChange && this.onCallStatusChange('Connection Failed');
+          break;
       }
     };
 
@@ -325,20 +412,39 @@ class WebRTCCallService {
       return;
     }
 
+    if (!this.peerConnection) {
+      console.error('[WebRTCCallService] Cannot create offer: no peer connection');
+      return;
+    }
+
     console.log('[WebRTCCallService] Creating offer for call:', this.currentCall);
+    console.log('[WebRTCCallService] Peer connection state:', this.peerConnection.connectionState);
+    console.log('[WebRTCCallService] ICE connection state:', this.peerConnection.iceConnectionState);
 
-    const offer = await this.peerConnection.createOffer();
-    await this.peerConnection.setLocalDescription(offer);
+    try {
+      const offer = await this.peerConnection.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: false
+      });
 
-    this.sendMessage({
-      type: 'webrtc_offer',
-      offer: offer,
-      to: this.currentCall.target,
-      from: this.extension,
-      channel: this.currentCall.id
-    });
+      console.log('[WebRTCCallService] Offer created:', offer.type, offer.sdp.length, 'chars');
 
-    console.log('[WebRTCCallService] Offer sent to:', this.currentCall.target);
+      await this.peerConnection.setLocalDescription(offer);
+      console.log('[WebRTCCallService] Local description set');
+
+      this.sendMessage({
+        type: 'webrtc_offer',
+        offer: offer,
+        to: this.currentCall.target,
+        from: this.extension,
+        channel: this.currentCall.id
+      });
+
+      console.log('[WebRTCCallService] ✅ Offer sent to:', this.currentCall.target);
+    } catch (error) {
+      console.error('[WebRTCCallService] ❌ Failed to create/send offer:', error);
+      this.onCallStatusChange && this.onCallStatusChange('Failed to create offer');
+    }
   }
 
   // Handle received offer
@@ -363,13 +469,18 @@ class WebRTCCallService {
         return;
       }
 
-      console.log('[WebRTCCallService] Setting remote description with offer:', offer);
+      console.log('[WebRTCCallService] Setting remote description with offer:', offer.type, offer.sdp.length, 'chars');
       await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+      console.log('[WebRTCCallService] ✅ Remote description set');
 
+      console.log('[WebRTCCallService] Creating answer...');
       const answer = await this.peerConnection.createAnswer();
-      await this.peerConnection.setLocalDescription(answer);
+      console.log('[WebRTCCallService] Answer created:', answer.type, answer.sdp.length, 'chars');
 
-      console.log('[WebRTCCallService] Sending answer:', answer);
+      await this.peerConnection.setLocalDescription(answer);
+      console.log('[WebRTCCallService] ✅ Local description set with answer');
+
+      console.log('[WebRTCCallService] Sending answer to:', message.from);
 
       this.sendMessage({
         type: 'webrtc_answer',
