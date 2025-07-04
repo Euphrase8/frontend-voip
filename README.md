@@ -87,28 +87,37 @@ sequenceDiagram
     participant U as User Browser
     participant F as React Frontend
     participant B as Go Backend
+    participant DB as SQLite Database
     participant A as Asterisk PBX
     participant T as Target User
 
-    Note over U,T: Call Initiation Flow
+    Note over U,T: Authentication Flow
+    U->>F: Login Request
+    F->>B: POST /api/login
+    B->>DB: Validate Credentials
+    DB-->>B: User Data
+    B-->>F: JWT Token + User Info
+    F-->>U: Login Success
 
+    Note over U,T: Call Initiation Flow
     U->>F: Click Call Button
-    F->>B: POST /protected/call/initiate
+    F->>B: POST /protected/call/initiate (JWT)
+    B->>B: Validate JWT & Extract User
+    B->>DB: Log Call Attempt
     B->>A: AMI Originate Command
     B->>T: WebSocket Notification
     T->>B: Accept/Reject Call
+    B->>DB: Update Call Status
     B->>U: WebSocket Status Update
 
     Note over U,T: WebRTC Negotiation
-
     U->>F: WebRTC Offer Creation
     F->>B: WebSocket Offer Message
-    B->>T: Forward Offer
+    B->>T: Forward Offer via WebSocket
     T->>B: WebRTC Answer
-    B->>U: Forward Answer
+    B->>U: Forward Answer via WebSocket
 
     Note over U,T: ICE Candidate Exchange
-
     U->>F: Generate ICE Candidates
     F->>B: WebSocket ICE Message
     B->>T: Forward ICE Candidates
@@ -116,9 +125,241 @@ sequenceDiagram
     B->>U: Forward ICE Candidates
 
     Note over U,T: Call Established
-
     U<-->T: Direct P2P Audio Stream
+    B->>DB: Update Call Duration
+
+    Note over U,T: Call Termination
+    U->>F: Hangup Call
+    F->>B: POST /protected/call/hangup
+    B->>DB: Log Call End & Duration
+    B->>T: WebSocket Call Ended
+    B->>A: AMI Hangup Command
 ```
+
+### Authentication & Authorization Flow
+
+```mermaid
+flowchart TD
+    A[User Login] --> B{Valid Credentials?}
+    B -->|No| C[Return 401 Error]
+    B -->|Yes| D[Generate JWT Token]
+    D --> E[Include User Role in Token]
+    E --> F[Return Token to Client]
+    F --> G[Client Stores Token]
+
+    G --> H[API Request with Token]
+    H --> I{Valid Token?}
+    I -->|No| J[Return 401 Unauthorized]
+    I -->|Yes| K{Admin Endpoint?}
+    K -->|No| L[Allow Access]
+    K -->|Yes| M{User Role = Admin?}
+    M -->|No| N[Return 403 Forbidden]
+    M -->|Yes| O[Allow Admin Access]
+
+    style A fill:#e1f5fe
+    style D fill:#c8e6c9
+    style L fill:#c8e6c9
+    style O fill:#c8e6c9
+    style C fill:#ffcdd2
+    style J fill:#ffcdd2
+    style N fill:#ffcdd2
+```
+
+### WebSocket Communication Flow
+
+```mermaid
+sequenceDiagram
+    participant C1 as Caller Browser
+    participant WS1 as Caller WebSocket
+    participant B as Go Backend
+    participant WS2 as Target WebSocket
+    participant C2 as Target Browser
+
+    Note over C1,C2: WebSocket Connection Establishment
+    C1->>WS1: Connect ws://localhost:8080/ws?extension=1001
+    WS1->>B: Register Client (Extension: 1001)
+    C2->>WS2: Connect ws://localhost:8080/ws?extension=1002
+    WS2->>B: Register Client (Extension: 1002)
+
+    Note over C1,C2: Real-time Call Invitation
+    C1->>WS1: Initiate Call to 1002
+    WS1->>B: WebSocket Message: call_initiate
+    B->>B: Process Call Logic
+    B->>WS2: Forward Call Invitation
+    WS2->>C2: Display Incoming Call UI
+
+    Note over C1,C2: Call Response
+    C2->>WS2: Accept/Reject Call
+    WS2->>B: WebSocket Message: call_response
+    B->>WS1: Forward Response
+    WS1->>C1: Update Call Status
+
+    Note over C1,C2: WebRTC Signaling
+    C1->>WS1: WebRTC Offer
+    WS1->>B: Forward Offer
+    B->>WS2: Send Offer
+    WS2->>C2: Process Offer
+    C2->>WS2: WebRTC Answer
+    WS2->>B: Forward Answer
+    B->>WS1: Send Answer
+    WS1->>C1: Process Answer
+
+    Note over C1,C2: ICE Candidates Exchange
+    C1->>WS1: ICE Candidate
+    WS1->>B: Forward ICE
+    B->>WS2: Send ICE
+    WS2->>C2: Add ICE Candidate
+    C2->>WS2: ICE Candidate
+    WS2->>B: Forward ICE
+    B->>WS1: Send ICE
+    WS1->>C1: Add ICE Candidate
+
+    Note over C1,C2: Direct P2P Connection
+    C1<-->C2: Direct Audio Stream (P2P)
+
+    Note over C1,C2: Call Status Updates
+    B->>WS1: Call Connected Status
+    B->>WS2: Call Connected Status
+    WS1->>C1: Update UI (Connected)
+    WS2->>C2: Update UI (Connected)
+```
+
+### System Component Interaction
+
+```mermaid
+graph LR
+    subgraph "User Interface Layer"
+        UI[React Components]
+        THEME[Theme Provider]
+        ROUTER[React Router]
+    end
+
+    subgraph "Service Layer"
+        AUTH[Auth Service]
+        CALL[Call Service]
+        WS[WebSocket Service]
+        ADMIN[Admin Service]
+    end
+
+    subgraph "Backend Services"
+        API[REST API Handlers]
+        MIDDLEWARE[Auth Middleware]
+        WEBSOCKET[WebSocket Hub]
+        AMI[Asterisk AMI Client]
+    end
+
+    subgraph "Data Layer"
+        MODELS[Data Models]
+        DB[SQLite Database]
+        CACHE[In-Memory Cache]
+    end
+
+    subgraph "External Systems"
+        ASTERISK[Asterisk PBX]
+        STUN[STUN Servers]
+        BROWSER[Browser WebRTC]
+    end
+
+    UI --> AUTH
+    UI --> CALL
+    UI --> WS
+    UI --> ADMIN
+
+    AUTH --> API
+    CALL --> API
+    WS --> WEBSOCKET
+    ADMIN --> API
+
+    API --> MIDDLEWARE
+    MIDDLEWARE --> MODELS
+    WEBSOCKET --> MODELS
+    AMI --> ASTERISK
+
+    MODELS --> DB
+    MODELS --> CACHE
+
+    CALL --> BROWSER
+    BROWSER --> STUN
+    API --> AMI
+
+    classDef ui fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef service fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef backend fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    classDef data fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef external fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+
+    class UI,THEME,ROUTER ui
+    class AUTH,CALL,WS,ADMIN service
+    class API,MIDDLEWARE,WEBSOCKET,AMI backend
+    class MODELS,DB,CACHE data
+    class ASTERISK,STUN,BROWSER external
+```
+
+### API Request Flow
+
+```mermaid
+flowchart TD
+    A[Client Request] --> B{Public Endpoint?}
+    B -->|Yes| C[Direct Handler]
+    B -->|No| D[Auth Middleware]
+
+    D --> E{Valid JWT?}
+    E -->|No| F[Return 401]
+    E -->|Yes| G{Admin Endpoint?}
+
+    G -->|No| H[User Handler]
+    G -->|Yes| I{Admin Role?}
+
+    I -->|No| J[Return 403]
+    I -->|Yes| K[Admin Handler]
+
+    C --> L[Process Request]
+    H --> L
+    K --> L
+
+    L --> M{Database Operation?}
+    M -->|Yes| N[Database Query]
+    M -->|No| O[Business Logic]
+
+    N --> P{Query Success?}
+    P -->|No| Q[Return 500]
+    P -->|Yes| R[Format Response]
+
+    O --> S{External API?}
+    S -->|Yes| T[Asterisk AMI Call]
+    S -->|No| R
+
+    T --> U{AMI Success?}
+    U -->|No| V[Return Error]
+    U -->|Yes| R
+
+    R --> W[Return JSON Response]
+
+    style A fill:#e1f5fe
+    style W fill:#c8e6c9
+    style F fill:#ffcdd2
+    style J fill:#ffcdd2
+    style Q fill:#ffcdd2
+    style V fill:#ffcdd2
+```
+
+### Complete System Data Flow Summary
+
+The VoIP application follows a comprehensive data flow pattern:
+
+1. **Authentication Layer**: JWT-based authentication with role-based access control
+2. **API Layer**: RESTful endpoints with middleware protection
+3. **Real-time Layer**: WebSocket connections for instant communication
+4. **Database Layer**: SQLite for persistent data storage
+5. **PBX Integration**: Asterisk AMI for traditional telephony features
+6. **WebRTC Layer**: Browser-to-browser direct communication
+
+**Key Data Flows:**
+- **User Authentication**: Login → JWT Generation → Token Validation → Role-based Access
+- **Call Initiation**: UI Action → API Call → Database Logging → WebSocket Notification
+- **WebRTC Signaling**: Offer/Answer Exchange → ICE Candidates → P2P Connection
+- **Real-time Updates**: WebSocket Hub → Multi-client Broadcasting → UI Updates
+- **Admin Operations**: Role Validation → Database Operations → System Monitoring
 
 ## Features Overview
 
@@ -215,8 +456,18 @@ npm start
 
 #### Step 5: Access the Application
 - Open your browser and navigate to `http://localhost:3000`
-- Register a new account or use default credentials
+- Use default credentials or register a new account
 - Start making WebRTC calls between extensions!
+
+**Default User Accounts:**
+| Username | Password | Extension | Role | Access Level |
+|----------|----------|-----------|------|--------------|
+| `admin` | `password` | `1000` | `admin` | Full admin access |
+| `user1` | `password` | `1001` | `user` | Regular user |
+| `user2` | `password` | `1002` | `user` | Regular user |
+| `user3` | `password` | `1003` | `user` | Regular user |
+
+> **Note**: For admin dashboard access, use the `admin` account. Regular users can only access user features.
 
 ### Method 2: Full Setup with Asterisk PBX
 
@@ -357,10 +608,17 @@ security:
 4. **Accept Incoming**: Answer incoming calls with the green button
 
 #### 3. Admin Functions
-1. **Access Admin Panel**: Login with admin credentials
+1. **Access Admin Panel**: Login with admin credentials (`admin`/`password`)
 2. **Manage Users**: Create, edit, or delete user accounts
 3. **Monitor Calls**: View active calls and call history
 4. **System Health**: Check system status and diagnostics
+
+**Quick Admin Tasks:**
+- **View System Stats**: Navigate to Admin Dashboard → Statistics
+- **Create New User**: Admin Panel → Users → Create User
+- **Monitor Active Calls**: Admin Panel → Call Monitoring
+- **Export Call Logs**: Admin Panel → Call Logs → Export CSV
+- **System Diagnostics**: Admin Panel → Health Check
 
 ### User Interface Guide
 
@@ -778,7 +1036,46 @@ tail -f backend/logs/app.log
 - Check firewall settings
 - Verify network connectivity
 
-#### 2. WebRTC Call Issues
+#### 2. Authentication & Authorization Issues
+
+**Problem**: 403 Forbidden errors on admin endpoints
+```bash
+[GIN] 2025/07/04 - 23:39:02 | 403 | 332µs | 172.20.10.4 | GET "/protected/admin/health"
+[GIN] 2025/07/04 - 23:39:02 | 403 | 0s | 172.20.10.4 | GET "/protected/admin/stats"
+```
+
+**Root Cause**: User logged in with regular user role instead of admin role
+
+**Solutions**:
+1. **Check Current User Role**:
+   ```bash
+   # Check JWT token payload (decode at jwt.io)
+   # Look for "role" field in token
+   ```
+
+2. **Login with Admin Credentials**:
+   ```bash
+   # Default admin credentials:
+   Username: admin
+   Password: password
+   Extension: 1000
+   ```
+
+3. **Verify Admin User Exists**:
+   ```bash
+   # Check database for admin user
+   cd backend
+   sqlite3 voip.db "SELECT username, role, extension FROM users WHERE role='admin';"
+   ```
+
+4. **Create Admin User if Missing**:
+   ```bash
+   # The system should auto-create admin user on startup
+   # Check backend logs for admin user creation message
+   tail -f backend/logs/app.log | grep "admin user"
+   ```
+
+#### 3. WebRTC Call Issues
 
 **Problem**: Calls not connecting
 ```javascript
