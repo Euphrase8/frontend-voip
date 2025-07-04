@@ -1817,7 +1817,7 @@ const SettingsTab = ({ darkMode }) => {
     maxCallLogs: 1000,
     sessionTimeout: 24,
     enableDebugMode: false,
-    asteriskHost: '172.20.10.6',
+    asteriskHost: '172.20.10.2',
     backendHost: '172.20.10.4',
     sipPort: '8088',
   });
@@ -2111,7 +2111,7 @@ const SettingsTab = ({ darkMode }) => {
                   maxCallLogs: 1000,
                   sessionTimeout: 24,
                   enableDebugMode: false,
-                  asteriskHost: '172.20.10.6',
+                  asteriskHost: '172.20.10.2',
                   backendHost: '172.20.10.4',
                   sipPort: '8088',
                 });

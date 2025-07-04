@@ -97,11 +97,11 @@ A Go-based backend server for the VoIP web application that integrates with Aste
 | `JWT_SECRET` | JWT signing secret | `default-secret-change-this` |
 | `JWT_EXPIRY_HOURS` | JWT token expiry | `24` |
 | `DB_PATH` | SQLite database path | `./voip.db` |
-| `ASTERISK_HOST` | Asterisk server IP | `172.20.10.6` |
+| `ASTERISK_HOST` | Asterisk server IP | `172.20.10.2` |
 | `ASTERISK_AMI_PORT` | Asterisk AMI port | `5038` |
 | `ASTERISK_AMI_USERNAME` | AMI username | `admin` |
 | `ASTERISK_AMI_SECRET` | AMI password | `amp111` |
-| `SIP_DOMAIN` | SIP domain | `172.20.10.6` |
+| `SIP_DOMAIN` | SIP domain | `172.20.10.2` |
 | `SIP_PORT` | SIP port | `8088` |
 | `CORS_ORIGINS` | Allowed CORS origins | `http://localhost:3000` |
 | `DEBUG` | Debug mode | `true` |

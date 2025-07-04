@@ -86,7 +86,7 @@ const App = () => {
             },
             callStatus: 'Incoming',
             isOutgoing: false,
-            channel: `${call.from}@172.20.10.6`,
+            channel: `${call.from}@172.20.10.2`,
             session: call.session,
           },
         });

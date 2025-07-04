@@ -116,6 +116,7 @@ func main() {
 		public.POST("/login", handlers.Login)
 		public.POST("/register", handlers.Register)
 		public.POST("/refresh", handlers.RefreshToken)
+		public.POST("/test-asterisk", handlers.TestAsteriskConnectionsPublic)
 	}
 
 	// Protected routes (authentication required)
@@ -144,6 +145,7 @@ func main() {
 
 		// Diagnostic routes
 		protected.GET("/diagnostics", handlers.GetSystemDiagnostics)
+		protected.GET("/test-asterisk", handlers.TestAsteriskConnections)
 
 		// Admin routes
 		admin := protected.Group("/admin")

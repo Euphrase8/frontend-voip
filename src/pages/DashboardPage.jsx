@@ -214,7 +214,7 @@ const DashboardPage = ({ user, onLogout, darkMode, setIncomingCall }) => {
           console.log('[Dashboard] Incoming WebRTC call:', incomingCallData);
           setLocalIncomingCall(incomingCallData);
           setNotification({
-            message: `Incoming call from ${incomingCallData.fromUsername || incomingCallData.from}`,
+            message: `📞 ${incomingCallData.fromUsername || incomingCallData.caller_username || `Extension ${incomingCallData.from}`} is calling`,
             type: "info"
           });
         },
@@ -278,9 +278,12 @@ const DashboardPage = ({ user, onLogout, darkMode, setIncomingCall }) => {
       navigate("/calling", {
         state: {
           contact,
-          callStatus: "Connected",
+          callStatus: "Connecting...",
           isOutgoing: true,
           channel,
+          callAccepted: false,
+          isWebRTCCall: channel && channel.startsWith('webrtc-call-'),
+          callId: channel
         },
       });
     } catch (error) {
@@ -352,9 +355,12 @@ const DashboardPage = ({ user, onLogout, darkMode, setIncomingCall }) => {
         <IncomingCallPage
           callData={{
             from: (incomingCall?.caller || incomingCall?.from),
+            fromUsername: incomingCall?.fromUsername,
+            caller_username: incomingCall?.caller_username,
             channel: (incomingCall?.channel || incomingCall?.callId),
             priority: (incomingCall?.priority || 'normal'),
-            transport: (incomingCall?.transport || 'transport-ws')
+            transport: (incomingCall?.transport || 'transport-ws'),
+            call_id: incomingCall?.callId
           }}
           contacts={contacts}
           user={user}
@@ -552,7 +558,7 @@ const DashboardPage = ({ user, onLogout, darkMode, setIncomingCall }) => {
                   </div>
                   <h3 className="text-lg font-semibold">Incoming Call</h3>
                   <p className="text-gray-600 dark:text-gray-300">
-                    {incomingCall.fromUsername || `Extension ${incomingCall.from}`}
+                    {incomingCall.fromUsername || incomingCall.caller_username || `Extension ${incomingCall.from}`} is calling
                   </p>
                 </div>
                 <div className="flex space-x-4">
@@ -599,7 +605,7 @@ const DashboardPage = ({ user, onLogout, darkMode, setIncomingCall }) => {
                     : "bg-white border-secondary-200"
                 )}>
                   <div className="p-4 lg:p-6 h-full overflow-hidden">
-                    <HomePage onCall={startCall} darkMode={isDarkMode} />
+                    <HomePage onCall={(extension) => startCall({ extension, name: `Extension ${extension}` })} darkMode={isDarkMode} />
                   </div>
                 </div>
               )}
@@ -626,7 +632,7 @@ const DashboardPage = ({ user, onLogout, darkMode, setIncomingCall }) => {
                 )}>
                   <div className="p-4 lg:p-6 h-full">
                     <ContactsPage
-                      onCall={startCall}
+                      onCall={(extension) => startCall({ extension, name: `Extension ${extension}` })}
                       darkMode={isDarkMode}
                       userID={user?.username}
                     />

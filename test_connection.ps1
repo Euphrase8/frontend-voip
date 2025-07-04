@@ -1,9 +1,9 @@
 # Quick Connection Test for VoIP App
-# Tests connectivity between your PC (172.20.10.4) and Asterisk (172.20.10.6)
+# Tests connectivity between your PC (172.20.10.4) and Asterisk (172.20.10.2)
 
 Write-Host "=== VoIP Connection Test ===" -ForegroundColor Green
 Write-Host "PC IP: 172.20.10.4" -ForegroundColor Cyan
-Write-Host "Asterisk IP: 172.20.10.6" -ForegroundColor Cyan
+Write-Host "Asterisk IP: 172.20.10.2" -ForegroundColor Cyan
 
 # Test 1: Backend Health
 Write-Host "`n1. Testing Backend Health..." -ForegroundColor Yellow
@@ -36,22 +36,22 @@ try {
 Write-Host "`n3. Testing Asterisk Connectivity..." -ForegroundColor Yellow
 
 # Test AMI port (5038)
-Write-Host "   Testing AMI port (172.20.10.6:5038)..." -NoNewline
+Write-Host "   Testing AMI port (172.20.10.2:5038)..." -NoNewline
 try {
     $tcpClient = New-Object System.Net.Sockets.TcpClient
-    $tcpClient.Connect("172.20.10.6", 5038)
+    $tcpClient.Connect("172.20.10.2", 5038)
     $tcpClient.Close()
     Write-Host " ✓ OPEN" -ForegroundColor Green
 } catch {
     Write-Host " ✗ CLOSED" -ForegroundColor Red
-    Write-Host "   Check if Asterisk is running on 172.20.10.6" -ForegroundColor Yellow
+    Write-Host "   Check if Asterisk is running on 172.20.10.2" -ForegroundColor Yellow
 }
 
 # Test WebSocket port (8088)
-Write-Host "   Testing WebSocket port (172.20.10.6:8088)..." -NoNewline
+Write-Host "   Testing WebSocket port (172.20.10.2:8088)..." -NoNewline
 try {
     $tcpClient = New-Object System.Net.Sockets.TcpClient
-    $tcpClient.Connect("172.20.10.6", 8088)
+    $tcpClient.Connect("172.20.10.2", 8088)
     $tcpClient.Close()
     Write-Host " ✓ OPEN" -ForegroundColor Green
 } catch {
@@ -72,7 +72,7 @@ if (Test-Path ".env") {
     Write-Host "   WebSocket: $wsUrl" -ForegroundColor White
     Write-Host "   SIP Server: $sipServer" -ForegroundColor White
     
-    if ($apiUrl -eq "http://172.20.10.4:8080" -and $sipServer -eq "172.20.10.6") {
+    if ($apiUrl -eq "http://172.20.10.4:8080" -and $sipServer -eq "172.20.10.2") {
         Write-Host "   ✓ Configuration looks correct" -ForegroundColor Green
     } else {
         Write-Host "   ⚠ Configuration may need adjustment" -ForegroundColor Yellow
@@ -90,7 +90,7 @@ Write-Host "4. Check browser console for any errors" -ForegroundColor White
 
 Write-Host "`n=== Troubleshooting ===" -ForegroundColor Yellow
 Write-Host "• If backend fails: cd backend && go run main.go" -ForegroundColor White
-Write-Host "• If Asterisk ports closed: Check Asterisk server at 172.20.10.6" -ForegroundColor White
+Write-Host "• If Asterisk ports closed: Check Asterisk server at 172.20.10.2" -ForegroundColor White
 Write-Host "• If frontend fails: Check .env configuration" -ForegroundColor White
 Write-Host "• For WebRTC calls: No Asterisk SIP registration needed!" -ForegroundColor White
 

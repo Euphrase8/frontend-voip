@@ -6,6 +6,7 @@ const WebRTCPhone = ({ extension, onCallStatusChange }) => {
   const [callStatus, setCallStatus] = useState('Ready');
   const [isInCall, setIsInCall] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
+  const [currentCallId, setCurrentCallId] = useState(null);
   
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -106,10 +107,11 @@ const WebRTCPhone = ({ extension, onCallStatusChange }) => {
       if (response.ok) {
         console.log('[WebRTCPhone] Call initiated:', data);
         setCallStatus(`Calling ${targetExtension}...`);
-        
+        setCurrentCallId(data.call_id);
+
         // Setup local media for the call
         await setupLocalMedia();
-        
+
         onCallStatusChange && onCallStatusChange(`Calling ${targetExtension}...`);
       } else {
         setCallStatus(`Failed: ${data.error}`);
@@ -124,6 +126,7 @@ const WebRTCPhone = ({ extension, onCallStatusChange }) => {
 
   const handleIncomingCall = (message) => {
     setIncomingCall(message);
+    setCurrentCallId(message.call_id);
     setCallStatus(`Incoming call from ${message.caller_extension}`);
     onCallStatusChange && onCallStatusChange(`Incoming call from ${message.caller_extension}`);
   };
@@ -138,7 +141,9 @@ const WebRTCPhone = ({ extension, onCallStatusChange }) => {
       wsRef.current.send(JSON.stringify({
         type: 'webrtc_call_accepted',
         call_id: incomingCall.call_id,
-        target_extension: incomingCall.caller_extension
+        to: incomingCall.caller_extension,
+        from: extension,
+        channel: incomingCall.call_id
       }));
 
       setIsInCall(true);
@@ -158,7 +163,9 @@ const WebRTCPhone = ({ extension, onCallStatusChange }) => {
     wsRef.current.send(JSON.stringify({
       type: 'webrtc_call_rejected',
       call_id: incomingCall.call_id,
-      target_extension: incomingCall.caller_extension
+      to: incomingCall.caller_extension,
+      from: extension,
+      channel: incomingCall.call_id
     }));
 
     setIncomingCall(null);
@@ -284,7 +291,9 @@ const WebRTCPhone = ({ extension, onCallStatusChange }) => {
         wsRef.current.send(JSON.stringify({
           type: 'webrtc_ice_candidate',
           candidate: event.candidate,
-          target_extension: targetExtension
+          to: targetExtension,
+          from: extension,
+          channel: currentCallId
         }));
       }
     };
@@ -297,7 +306,9 @@ const WebRTCPhone = ({ extension, onCallStatusChange }) => {
     wsRef.current.send(JSON.stringify({
       type: 'webrtc_offer',
       offer: offer,
-      target_extension: targetExtension
+      to: targetExtension,
+      from: extension,
+      channel: currentCallId
     }));
   };
 
@@ -311,7 +322,9 @@ const WebRTCPhone = ({ extension, onCallStatusChange }) => {
     wsRef.current.send(JSON.stringify({
       type: 'webrtc_answer',
       answer: answer,
-      target_extension: message.caller_extension
+      to: message.caller_extension,
+      from: extension,
+      channel: message.call_id
     }));
   };
 
@@ -336,7 +349,9 @@ const WebRTCPhone = ({ extension, onCallStatusChange }) => {
 
     wsRef.current.send(JSON.stringify({
       type: 'webrtc_call_ended',
-      target_extension: targetExtension
+      to: targetExtension,
+      from: extension,
+      channel: currentCallId
     }));
 
     setIsInCall(false);

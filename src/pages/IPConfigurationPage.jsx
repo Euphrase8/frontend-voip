@@ -13,6 +13,7 @@ import {
   RefreshCw,
   AlertTriangle
 } from 'lucide-react';
+import ipConfigService from '../services/ipConfigService';
 
 const IPConfigurationPage = ({ darkMode, toggleDarkMode }) => {
   const navigate = useNavigate();
@@ -83,113 +84,27 @@ const IPConfigurationPage = ({ darkMode, toggleDarkMode }) => {
 
   const testAsteriskConnection = async () => {
     try {
-      // Test multiple Asterisk endpoints to ensure connectivity
-      const testResults = [];
+      // Use the ipConfigService to test Asterisk connections through backend
+      const result = await ipConfigService.testAsteriskConnection(config);
 
-      // 1. Test HTTP interface (if enabled)
-      try {
-        const httpUrl = `http://${config.asteriskHost}:${config.asteriskPort}`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
-
-        const httpResponse = await fetch(httpUrl, {
-          method: 'GET',
-          signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-        testResults.push({ method: 'HTTP', success: true, status: httpResponse.status });
-      } catch (httpError) {
-        testResults.push({ method: 'HTTP', success: false, error: httpError.message });
-      }
-
-      // 2. Test WebSocket connectivity (basic connection test)
-      try {
-        const wsUrl = `ws://${config.asteriskHost}:${config.asteriskPort}/ws`;
-        const wsTestPromise = new Promise((resolve, reject) => {
-          const ws = new WebSocket(wsUrl);
-          const timeout = setTimeout(() => {
-            ws.close();
-            reject(new Error('WebSocket connection timeout'));
-          }, 3000);
-
-          ws.onopen = () => {
-            clearTimeout(timeout);
-            ws.close();
-            resolve({ method: 'WebSocket', success: true });
-          };
-
-          ws.onerror = (error) => {
-            clearTimeout(timeout);
-            reject(new Error('WebSocket connection failed'));
-          };
-        });
-
-        const wsResult = await wsTestPromise;
-        testResults.push(wsResult);
-      } catch (wsError) {
-        testResults.push({ method: 'WebSocket', success: false, error: wsError.message });
-      }
-
-      // 3. Test basic TCP connectivity to AMI port
-      try {
-        // We can't directly test TCP from browser, but we can try a fetch to the AMI port
-        // This will likely fail but gives us info about host reachability
-        const amiUrl = `http://${config.asteriskHost}:${config.asteriskAMIPort}`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000);
-
-        await fetch(amiUrl, {
-          method: 'GET',
-          signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-        testResults.push({ method: 'AMI', success: true });
-      } catch (amiError) {
-        // AMI port might not respond to HTTP, but if we get a specific error, host is reachable
-        if (amiError.message.includes('Failed to fetch')) {
-          testResults.push({ method: 'AMI', success: false, error: 'Port not accessible via HTTP (expected for AMI)' });
-        } else {
-          testResults.push({ method: 'AMI', success: false, error: amiError.message });
-        }
-      }
-
-      // Evaluate results
-      const successfulTests = testResults.filter(test => test.success);
-      const hasHttpSuccess = testResults.some(test => test.method === 'HTTP' && test.success);
-      const hasWsSuccess = testResults.some(test => test.method === 'WebSocket' && test.success);
-
-      if (hasHttpSuccess || hasWsSuccess) {
+      if (result.success) {
         return {
           status: 'success',
-          message: `Asterisk server is reachable (${successfulTests.map(t => t.method).join(', ')})`,
-          details: testResults
+          message: result.message,
+          details: result.details
         };
       } else {
-        // Check if any test suggests the host is reachable but services are not configured
-        const hostReachable = testResults.some(test =>
-          test.error && !test.error.includes('Failed to fetch') && !test.error.includes('timeout')
-        );
-
-        if (hostReachable) {
-          return {
-            status: 'warning',
-            message: 'Host reachable but Asterisk services may not be properly configured',
-            details: testResults
-          };
-        } else {
-          return {
-            status: 'error',
-            message: `Cannot reach Asterisk server at ${config.asteriskHost}`,
-            details: testResults
-          };
-        }
+        return {
+          status: 'warning',
+          message: result.message,
+          details: result.details
+        };
       }
     } catch (error) {
       return {
         status: 'error',
-        message: `Asterisk connection test failed: ${error.message}`
+        message: `Asterisk connection test failed: ${error.message}`,
+        details: { error: error.message }
       };
     }
   };
@@ -224,9 +139,13 @@ const IPConfigurationPage = ({ darkMode, toggleDarkMode }) => {
 
       // Show overall result
       if (backendResult.status === 'success' && asteriskResult.status === 'success') {
-        toast.success('All connections successful!');
+        toast.success('All connections successful! Ready to save configuration.');
+      } else if (backendResult.status === 'success' && asteriskResult.status === 'warning') {
+        toast.success('Backend connected. Asterisk reachable but may need configuration. You can save and configure Asterisk later.');
+      } else if (backendResult.status === 'success') {
+        toast.error('Backend connected but Asterisk connection failed. Check Asterisk IP and configuration.');
       } else {
-        toast.error('Some connections failed. Please check the configuration.');
+        toast.error('Connection tests failed. Please check your configuration.');
       }
 
     } catch (error) {
@@ -250,13 +169,20 @@ const IPConfigurationPage = ({ darkMode, toggleDarkMode }) => {
       // Save to localStorage
       localStorage.setItem('voipIPConfig', JSON.stringify(config));
       localStorage.setItem('voipConfigured', 'true');
-      
-      toast.success('Configuration saved successfully!');
-      
+
+      // Show appropriate success message based on connection status
+      if (connectionStatus.backend.status === 'success' && connectionStatus.asterisk.status === 'success') {
+        toast.success('Configuration saved! All services are ready.');
+      } else if (connectionStatus.backend.status === 'success') {
+        toast.success('Configuration saved! You can configure Asterisk services later.');
+      } else {
+        toast.success('Configuration saved! Please verify your settings after login.');
+      }
+
       // Navigate to login page
       setTimeout(() => {
         navigate('/login');
-      }, 1000);
+      }, 1500);
 
     } catch (error) {
       console.error('Failed to save configuration:', error);
@@ -297,12 +223,14 @@ const IPConfigurationPage = ({ darkMode, toggleDarkMode }) => {
   };
 
   return (
-    <div className={`min-h-screen flex items-center justify-center p-4 ${
+    <div className={`min-h-screen p-4 ${
       darkMode ? 'bg-gray-900' : 'bg-gradient-to-br from-blue-50 to-indigo-100'
     }`}>
-      <div className={`w-full max-w-2xl ${
-        darkMode ? 'bg-gray-800' : 'bg-white'
-      } rounded-2xl shadow-2xl p-8`}>
+      <div className="flex flex-col lg:flex-row gap-6 max-w-7xl mx-auto">
+        {/* Main Configuration Card */}
+        <div className={`flex-1 ${
+          darkMode ? 'bg-gray-800' : 'bg-white'
+        } rounded-2xl shadow-2xl p-8`}>
         
         {/* Header */}
         <div className="text-center mb-8">
@@ -531,6 +459,178 @@ const IPConfigurationPage = ({ darkMode, toggleDarkMode }) => {
             </button>
           </div>
         </div>
+        </div>
+
+        {/* Side Panel for Configuration Help */}
+        {(connectionStatus.asterisk.status === 'error' || connectionStatus.asterisk.status === 'warning' ||
+          connectionStatus.backend.status === 'error') && (
+          <div className="lg:w-96 space-y-4">
+
+            {/* Connection Details Panel */}
+            {(connectionStatus.asterisk.details || connectionStatus.backend.status === 'error') && (
+              <div className={`${
+                darkMode ? 'bg-gray-800' : 'bg-white'
+              } rounded-xl shadow-lg p-6`}>
+                <h3 className={`text-lg font-semibold mb-4 ${
+                  darkMode ? 'text-white' : 'text-gray-900'
+                }`}>
+                  Connection Details
+                </h3>
+
+                {/* Backend Details */}
+                {connectionStatus.backend.status === 'error' && (
+                  <div className="mb-4">
+                    <h4 className="font-medium text-red-600 dark:text-red-400 mb-2">Backend Issues:</h4>
+                    <p className="text-sm text-red-700 dark:text-red-300">
+                      {connectionStatus.backend.message}
+                    </p>
+                  </div>
+                )}
+
+                {/* Asterisk Details */}
+                {connectionStatus.asterisk.details && (
+                  <div>
+                    <h4 className="font-medium text-yellow-600 dark:text-yellow-400 mb-2">Asterisk Test Results:</h4>
+                    <div className="space-y-2">
+                      {/* Handle object structure instead of array */}
+                      {connectionStatus.asterisk.details.ami && (
+                        <div className={`flex items-center space-x-2 text-sm ${
+                          darkMode ? 'text-gray-300' : 'text-gray-700'
+                        }`}>
+                          <span className={`w-2 h-2 rounded-full ${
+                            connectionStatus.asterisk.details.ami.success ? 'bg-green-400' : 'bg-red-400'
+                          }`}></span>
+                          <span className="font-medium">AMI:</span>
+                          <span className={connectionStatus.asterisk.details.ami.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                            {connectionStatus.asterisk.details.ami.success ? 'Connected' : 'Failed'}
+                          </span>
+                        </div>
+                      )}
+                      {connectionStatus.asterisk.details.http && (
+                        <div className={`flex items-center space-x-2 text-sm ${
+                          darkMode ? 'text-gray-300' : 'text-gray-700'
+                        }`}>
+                          <span className={`w-2 h-2 rounded-full ${
+                            connectionStatus.asterisk.details.http.success ? 'bg-green-400' : 'bg-red-400'
+                          }`}></span>
+                          <span className="font-medium">HTTP:</span>
+                          <span className={connectionStatus.asterisk.details.http.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                            {connectionStatus.asterisk.details.http.success ? 'Connected' : 'Failed'}
+                          </span>
+                        </div>
+                      )}
+                      {connectionStatus.asterisk.details.websocket && (
+                        <div className={`flex items-center space-x-2 text-sm ${
+                          darkMode ? 'text-gray-300' : 'text-gray-700'
+                        }`}>
+                          <span className={`w-2 h-2 rounded-full ${
+                            connectionStatus.asterisk.details.websocket.success ? 'bg-green-400' : 'bg-red-400'
+                          }`}></span>
+                          <span className="font-medium">WebSocket:</span>
+                          <span className={connectionStatus.asterisk.details.websocket.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                            {connectionStatus.asterisk.details.websocket.success ? 'Connected' : 'Failed'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Asterisk Configuration Helper */}
+            {(connectionStatus.asterisk.status === 'error' || connectionStatus.asterisk.status === 'warning') && (
+              <div className={`${
+                darkMode ? 'bg-gray-800' : 'bg-white'
+              } rounded-xl shadow-lg p-6`}>
+                <div className="flex items-center mb-4">
+                  <AlertTriangle className={`w-5 h-5 mr-2 ${
+                    connectionStatus.asterisk.status === 'error' ? 'text-red-500' : 'text-yellow-500'
+                  }`} />
+                  <h3 className={`text-lg font-semibold ${
+                    darkMode ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Asterisk Setup Required
+                  </h3>
+                </div>
+
+                <div className="space-y-4 text-sm">
+                  <div>
+                    <p className={`font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                      1. Enable HTTP Interface
+                    </p>
+                    <div className={`p-3 rounded-lg font-mono text-xs ${
+                      darkMode ? 'bg-gray-900 text-green-400' : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      # /etc/asterisk/http.conf<br/>
+                      [general]<br/>
+                      enabled=yes<br/>
+                      bindaddr=0.0.0.0<br/>
+                      bindport=8088
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className={`font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                      2. Configure WebSocket Transport
+                    </p>
+                    <div className={`p-3 rounded-lg font-mono text-xs ${
+                      darkMode ? 'bg-gray-900 text-green-400' : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      # /etc/asterisk/pjsip.conf<br/>
+                      [transport-ws]<br/>
+                      type=transport<br/>
+                      protocol=ws<br/>
+                      bind=0.0.0.0:8088
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className={`font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                      3. Setup AMI Access
+                    </p>
+                    <div className={`p-3 rounded-lg font-mono text-xs ${
+                      darkMode ? 'bg-gray-900 text-green-400' : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      # /etc/asterisk/manager.conf<br/>
+                      [general]<br/>
+                      enabled = yes<br/>
+                      port = 5038<br/>
+                      bindaddr = 0.0.0.0<br/><br/>
+                      [admin]<br/>
+                      secret = amp111<br/>
+                      read = all<br/>
+                      write = all
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className={`font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                      4. Restart Services
+                    </p>
+                    <div className={`p-3 rounded-lg font-mono text-xs ${
+                      darkMode ? 'bg-gray-900 text-green-400' : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      sudo systemctl restart asterisk<br/>
+                      sudo systemctl status asterisk
+                    </div>
+                  </div>
+
+                  <div className={`p-3 rounded-lg border-l-4 ${
+                    darkMode
+                      ? 'border-blue-400 bg-blue-900/20 text-blue-200'
+                      : 'border-blue-500 bg-blue-50 text-blue-800'
+                  }`}>
+                    <p className="text-xs">
+                      <strong>💡 Pro Tip:</strong> You can save this configuration now and set up Asterisk later.
+                      The VoIP application will work for user management, and calls will be enabled once Asterisk is configured.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -163,8 +163,8 @@ func (c *Config) resolveAsteriskHost() string {
 		"asterisk.local",
 		"asterisk",
 		"voip-asterisk",
-		"172.20.10.6", // Updated to your new Asterisk IP
-		"172.20.10.6",  // Old fallback
+		"172.20.10.2", // Updated to your new Asterisk IP
+		"172.20.10.2", // Old fallback
 	}
 
 	for _, host := range candidates {
@@ -176,7 +176,7 @@ func (c *Config) resolveAsteriskHost() string {
 	}
 
 	// If nothing works, return the first candidate
-	return "172.20.10.6"
+	return "172.20.10.2"
 }
 
 // getPublicHost determines the best public host for frontend connections
@@ -215,7 +215,7 @@ func (c *Config) isHostReachable(host, port string) bool {
 
 	// For now, return true for known good hosts, false for others
 	// In production, you'd implement actual network connectivity testing
-	goodHosts := []string{"asterisk.local", "asterisk", "172.20.10.6", "localhost"}
+	goodHosts := []string{"asterisk.local", "asterisk", "172.20.10.2", "localhost"}
 	for _, goodHost := range goodHosts {
 		if host == goodHost {
 			return true

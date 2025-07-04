@@ -2,12 +2,12 @@
 
 ## Your Network Setup
 - **Your PC**: 172.20.10.4 (Frontend + Backend)
-- **Asterisk Server**: 172.20.10.6 (SSH access)
+- **Asterisk Server**: 172.20.10.2 (SSH access)
 
 ## ✅ Current Status
 - ✅ Backend running on 172.20.10.4:8080
-- ✅ Asterisk AMI reachable at 172.20.10.6:5038
-- ✅ Asterisk WebSocket reachable at 172.20.10.6:8088
+- ✅ Asterisk AMI reachable at 172.20.10.2:5038
+- ✅ Asterisk WebSocket reachable at 172.20.10.2:8088
 - ✅ Configuration updated for your network
 - ✅ WebRTC calling system implemented
 
@@ -72,14 +72,14 @@ curl http://172.20.10.4:8080/config
 ```env
 REACT_APP_API_URL=http://172.20.10.4:8080
 REACT_APP_WS_URL=ws://172.20.10.4:8080/ws
-REACT_APP_SIP_SERVER=172.20.10.6
-REACT_APP_SIP_WS_URL=ws://172.20.10.6:8088/ws
+REACT_APP_SIP_SERVER=172.20.10.2
+REACT_APP_SIP_WS_URL=ws://172.20.10.2:8088/ws
 REACT_APP_CLIENT_IP=172.20.10.4
 ```
 
 ### Backend (backend/.env)
 ```env
-ASTERISK_HOST=172.20.10.6
+ASTERISK_HOST=172.20.10.2
 PUBLIC_HOST=172.20.10.4
 CORS_ORIGINS=http://localhost:3000,http://172.20.10.4:3000
 ```
@@ -110,7 +110,7 @@ npm start
 ### Asterisk Issues
 ```bash
 # SSH to Asterisk server
-ssh user@172.20.10.6
+ssh user@172.20.10.2
 
 # Check Asterisk status
 sudo asterisk -rx "core show version"
@@ -121,8 +121,8 @@ sudo asterisk -rx "manager show connected"
 ### Network Issues
 ```bash
 # Test connectivity from your PC
-Test-NetConnection -ComputerName 172.20.10.6 -Port 5038
-Test-NetConnection -ComputerName 172.20.10.6 -Port 8088
+Test-NetConnection -ComputerName 172.20.10.2 -Port 5038
+Test-NetConnection -ComputerName 172.20.10.2 -Port 8088
 
 # Check firewall on Asterisk server
 sudo ufw status

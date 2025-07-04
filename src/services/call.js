@@ -3,6 +3,7 @@ import { sendWebSocketMessage } from './websocketservice';
 import { getToken } from './login';
 import CONFIG from './config';
 import sipManager from './sipManager';
+import webrtcCallService from './webrtcCallService';
 
 const API_URL = CONFIG.API_URL;
 const MEDIA_CONSTRAINTS = CONFIG.MEDIA_CONSTRAINTS;
@@ -84,8 +85,21 @@ export const getAppMediaStream = async () => {
 export const call = async (extension) => {
   console.log(`[call.js] Initiating call to extension: ${extension}`);
 
-  if (!/^\d{4,6}$/.test(extension)) {
-    throw new Error(`Invalid extension "${extension}". Must be 4-6 digits.`);
+  // Validate extension parameter
+  if (!extension) {
+    console.error('[call.js] ERROR: Extension is null or undefined');
+    throw new Error('Extension is required');
+  }
+
+  if (typeof extension !== 'string' && typeof extension !== 'number') {
+    console.error('[call.js] ERROR: Extension must be a string or number, got:', typeof extension);
+    throw new Error(`Extension must be a string or number, got ${typeof extension}`);
+  }
+
+  const extensionStr = String(extension);
+  if (!/^\d{3,6}$/.test(extensionStr)) {
+    console.error(`[call.js] ERROR: Invalid extension format: "${extensionStr}"`);
+    throw new Error(`Invalid extension "${extensionStr}". Must be 3-6 digits.`);
   }
 
   try {
@@ -94,7 +108,7 @@ export const call = async (extension) => {
     // First, notify backend about call initiation using WebRTC method
     const { data } = await axios.post(
       `${API_URL}/protected/call/initiate?method=webrtc`,
-      { target_extension: extension },
+      { target_extension: extensionStr },
       { headers: getAuthHeaders() }
     );
 
@@ -103,6 +117,21 @@ export const call = async (extension) => {
     // Check if this is a WebRTC call (no need for SIP manager)
     if (data.method === 'webrtc') {
       console.log('[call.js] Step 3: WebRTC call initiated, waiting for target response');
+
+      // Set up the outgoing call in WebRTC service
+      if (webrtcCallService) {
+        webrtcCallService.currentCall = {
+          id: data.call_id,
+          target: extensionStr,
+          caller: webrtcCallService.extension,
+          type: 'outgoing'
+        };
+        console.log('[call.js] Step 4: WebRTC service prepared for outgoing call');
+        console.log('[call.js] WebRTC service extension:', webrtcCallService.extension);
+        console.log('[call.js] Current call set:', webrtcCallService.currentCall);
+      } else {
+        console.error('[call.js] WebRTC service not available!');
+      }
 
       return {
         apiChannel: data.channel,
@@ -211,10 +240,29 @@ export const hangupCall = async (session = null) => {
 export const initializeSIP = async ({ extension }, onIncomingCall, useWebRTC = true) => {
   console.log(`[initializeSIP] Initializing SIP for extension: ${extension}, WebRTC mode: ${useWebRTC}`);
 
-  // Skip SIP registration if using WebRTC mode
+  // Initialize WebRTC service if using WebRTC mode
   if (useWebRTC) {
-    console.log('[initializeSIP] Using WebRTC mode - skipping traditional SIP registration');
-    return { success: true, method: 'webrtc' };
+    console.log('[initializeSIP] Using WebRTC mode - initializing WebRTC service');
+
+    try {
+      // Initialize WebRTC service for both incoming and outgoing calls
+      webrtcCallService.initialize(
+        extension,
+        onIncomingCall,
+        (status) => {
+          console.log(`[initializeSIP] WebRTC call status: ${status}`);
+        },
+        () => {
+          console.log('[initializeSIP] WebRTC call ended');
+        }
+      );
+
+      console.log('[initializeSIP] WebRTC service initialized successfully');
+      return { success: true, method: 'webrtc', service: webrtcCallService };
+    } catch (error) {
+      console.error('[initializeSIP] WebRTC initialization failed:', error);
+      throw new Error(`WebRTC initialization failed: ${error.message}`);
+    }
   }
 
   try {

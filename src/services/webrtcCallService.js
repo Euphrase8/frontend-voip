@@ -9,7 +9,9 @@ class WebRTCCallService {
     this.localStream = null;
     this.onIncomingCall = null;
     this.onCallStatusChange = null;
-    
+    this.connected = false;
+    this.connectionEstablished = false;
+
     // WebRTC configuration
     this.rtcConfiguration = {
       iceServers: [
@@ -107,6 +109,7 @@ class WebRTCCallService {
       id: message.call_id,
       caller: message.caller_extension,
       callerUsername: message.caller_username,
+      callee: this.extension,
       type: 'incoming'
     };
 
@@ -121,7 +124,7 @@ class WebRTCCallService {
       });
     }
 
-    this.onCallStatusChange && this.onCallStatusChange(`Incoming call from ${message.caller_extension}`);
+    this.onCallStatusChange && this.onCallStatusChange(`Incoming call from ${message.caller_username || message.caller_extension}`);
   }
 
   // Accept incoming call
@@ -138,10 +141,15 @@ class WebRTCCallService {
       this.sendMessage({
         type: 'webrtc_call_accepted',
         call_id: this.currentCall.id,
-        target_extension: this.currentCall.caller
+        to: this.currentCall.caller,
+        from: this.currentCall.callee,
+        channel: this.currentCall.id
       });
 
       this.onCallStatusChange && this.onCallStatusChange(`Connecting to ${this.currentCall.caller}...`);
+
+      // Set up connection monitoring
+      this.connectionEstablished = false;
       
     } catch (error) {
       console.error('[WebRTCCallService] Failed to accept call:', error);
@@ -165,7 +173,9 @@ class WebRTCCallService {
     this.sendMessage({
       type: 'webrtc_call_rejected',
       call_id: this.currentCall.id,
-      target_extension: this.currentCall.caller
+      to: this.currentCall.caller,
+      from: this.currentCall.callee,
+      channel: this.currentCall.id
     });
 
     this.currentCall = null;
@@ -174,7 +184,28 @@ class WebRTCCallService {
 
   // Handle call accepted by target
   async handleCallAccepted(message) {
-    console.log('[WebRTCCallService] Call accepted by target');
+    console.log('[WebRTCCallService] Call accepted by target', message);
+
+    // Check if we have a current call
+    if (!this.currentCall) {
+      console.error('[WebRTCCallService] No current call found when handling acceptance');
+      console.log('[WebRTCCallService] Message details:', message);
+
+      // Try to reconstruct call info from the message
+      if (message.channel && message.from && message.to) {
+        this.currentCall = {
+          id: message.channel,
+          target: message.from, // The person who accepted (we're calling them)
+          caller: message.to,   // Us (the caller)
+          type: 'outgoing'
+        };
+        console.log('[WebRTCCallService] Reconstructed call info:', this.currentCall);
+      } else {
+        console.error('[WebRTCCallService] Cannot reconstruct call info from message');
+        return;
+      }
+    }
+
     await this.createPeerConnection();
     await this.createOffer();
     this.onCallStatusChange && this.onCallStatusChange('Connecting...');
@@ -226,13 +257,39 @@ class WebRTCCallService {
     this.peerConnection.ontrack = (event) => {
       console.log('[WebRTCCallService] Received remote stream');
       const remoteStream = event.streams[0];
-      
+
       // Play remote audio
       const audio = new Audio();
       audio.srcObject = remoteStream;
       audio.play().catch(console.error);
-      
+
+      // Mark connection as established
+      this.connectionEstablished = true;
+      this.connected = true;
       this.onCallStatusChange && this.onCallStatusChange('Connected');
+    };
+
+    // Handle connection state changes
+    this.peerConnection.onconnectionstatechange = () => {
+      console.log('[WebRTCCallService] Connection state:', this.peerConnection.connectionState);
+
+      switch (this.peerConnection.connectionState) {
+        case 'connected':
+          this.connectionEstablished = true;
+          this.connected = true;
+          this.onCallStatusChange && this.onCallStatusChange('Connected');
+          break;
+        case 'disconnected':
+        case 'failed':
+        case 'closed':
+          this.connectionEstablished = false;
+          this.connected = false;
+          this.onCallStatusChange && this.onCallStatusChange('Disconnected');
+          break;
+        case 'connecting':
+          this.onCallStatusChange && this.onCallStatusChange('Connecting...');
+          break;
+      }
     };
 
     // Handle ICE candidates
@@ -241,7 +298,9 @@ class WebRTCCallService {
         this.sendMessage({
           type: 'webrtc_ice_candidate',
           candidate: event.candidate,
-          target_extension: this.currentCall.caller || this.currentCall.target
+          to: this.currentCall.caller || this.currentCall.target,
+          from: this.extension,
+          channel: this.currentCall.id
         });
       }
     };
@@ -261,40 +320,118 @@ class WebRTCCallService {
 
   // Create and send offer
   async createOffer() {
+    if (!this.currentCall) {
+      console.error('[WebRTCCallService] Cannot create offer: no current call');
+      return;
+    }
+
+    console.log('[WebRTCCallService] Creating offer for call:', this.currentCall);
+
     const offer = await this.peerConnection.createOffer();
     await this.peerConnection.setLocalDescription(offer);
-    
+
     this.sendMessage({
       type: 'webrtc_offer',
       offer: offer,
-      target_extension: this.currentCall.target
+      to: this.currentCall.target,
+      from: this.extension,
+      channel: this.currentCall.id
     });
+
+    console.log('[WebRTCCallService] Offer sent to:', this.currentCall.target);
   }
 
   // Handle received offer
   async handleOffer(message) {
-    await this.createPeerConnection();
-    await this.peerConnection.setRemoteDescription(message.offer);
-    
-    const answer = await this.peerConnection.createAnswer();
-    await this.peerConnection.setLocalDescription(answer);
-    
-    this.sendMessage({
-      type: 'webrtc_answer',
-      answer: answer,
-      target_extension: message.caller_extension
-    });
+    console.log('[WebRTCCallService] Received offer:', message);
+    console.log('[WebRTCCallService] Offer object:', message.offer);
+    console.log('[WebRTCCallService] Offer type:', typeof message.offer);
+
+    try {
+      await this.createPeerConnection();
+
+      // Ensure the offer is in the correct format
+      let offer = message.offer;
+      if (typeof offer === 'string') {
+        console.log('[WebRTCCallService] Offer is string, parsing...');
+        offer = JSON.parse(offer);
+      }
+
+      // Validate offer structure
+      if (!offer || !offer.type || !offer.sdp) {
+        console.error('[WebRTCCallService] Invalid offer structure:', offer);
+        return;
+      }
+
+      console.log('[WebRTCCallService] Setting remote description with offer:', offer);
+      await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+
+      const answer = await this.peerConnection.createAnswer();
+      await this.peerConnection.setLocalDescription(answer);
+
+      console.log('[WebRTCCallService] Sending answer:', answer);
+
+      this.sendMessage({
+        type: 'webrtc_answer',
+        answer: answer,
+        to: message.from || message.caller_extension || this.currentCall.caller,
+        from: this.extension,
+        channel: message.channel || this.currentCall.id
+      });
+    } catch (error) {
+      console.error('[WebRTCCallService] Error handling offer:', error);
+      console.error('[WebRTCCallService] Offer that caused error:', message.offer);
+    }
   }
 
   // Handle received answer
   async handleAnswer(message) {
-    await this.peerConnection.setRemoteDescription(message.answer);
+    console.log('[WebRTCCallService] Received answer:', message);
+    console.log('[WebRTCCallService] Answer object:', message.answer);
+
+    try {
+      // Ensure the answer is in the correct format
+      let answer = message.answer;
+      if (typeof answer === 'string') {
+        console.log('[WebRTCCallService] Answer is string, parsing...');
+        answer = JSON.parse(answer);
+      }
+
+      // Validate answer structure
+      if (!answer || !answer.type || !answer.sdp) {
+        console.error('[WebRTCCallService] Invalid answer structure:', answer);
+        return;
+      }
+
+      console.log('[WebRTCCallService] Setting remote description with answer:', answer);
+      await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+
+      console.log('[WebRTCCallService] Call connected successfully!');
+      this.onCallStatusChange && this.onCallStatusChange('Connected');
+    } catch (error) {
+      console.error('[WebRTCCallService] Error handling answer:', error);
+      console.error('[WebRTCCallService] Answer that caused error:', message.answer);
+    }
   }
 
   // Handle ICE candidate
   async handleIceCandidate(message) {
-    if (this.peerConnection) {
-      await this.peerConnection.addIceCandidate(message.candidate);
+    console.log('[WebRTCCallService] Received ICE candidate:', message);
+
+    try {
+      if (this.peerConnection && message.candidate) {
+        // Ensure the candidate is in the correct format
+        let candidate = message.candidate;
+        if (typeof candidate === 'string') {
+          candidate = JSON.parse(candidate);
+        }
+
+        console.log('[WebRTCCallService] Adding ICE candidate:', candidate);
+        await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      }
+    } catch (error) {
+      console.error('[WebRTCCallService] Error handling ICE candidate:', error);
+      console.error('[WebRTCCallService] Candidate that caused error:', message.candidate);
     }
   }
 
@@ -330,7 +467,23 @@ class WebRTCCallService {
     }
 
     this.currentCall = null;
+    this.connected = false;
+    this.connectionEstablished = false;
     this.onCallStatusChange && this.onCallStatusChange('Call ended');
+  }
+
+  // Check if connection is established
+  isConnected() {
+    return this.connected && this.connectionEstablished;
+  }
+
+  // Get connection status
+  getConnectionStatus() {
+    if (this.connectionEstablished) return 'connected';
+    if (this.peerConnection) {
+      return this.peerConnection.connectionState || 'connecting';
+    }
+    return 'disconnected';
   }
 
   // Send message via WebSocket

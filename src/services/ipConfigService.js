@@ -151,41 +151,87 @@ class IPConfigService {
     }
   }
 
-  // Test Asterisk connection (basic reachability test)
+  // Test Asterisk connection through backend (recommended approach)
   async testAsteriskConnection(config = null) {
     const testConfig = config || this.getConfig();
-    
+
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      // Test through backend API instead of direct connection
+      const backendUrl = `http://${testConfig.backendHost}:${testConfig.backendPort}`;
 
-      // Test HTTP interface first
-      const testUrl = `http://${testConfig.asteriskHost}:${testConfig.asteriskPort}`;
-      
-      const response = await fetch(testUrl, {
-        method: 'GET',
-        signal: controller.signal
-      });
+      // Get auth token from localStorage (optional for initial configuration)
+      const token = localStorage.getItem('token');
 
-      clearTimeout(timeoutId);
+      // Try public endpoint first (for initial configuration), then protected endpoint
+      let response;
+      let endpoint;
 
-      // Asterisk HTTP interface might return various responses, 
-      // so we consider any response as "reachable"
-      return { 
-        success: true, 
-        message: 'Asterisk host is reachable',
-        status: response.status 
-      };
-    } catch (error) {
-      if (error.name === 'AbortError') {
-        return { 
-          success: false, 
-          message: 'Asterisk connection timeout' 
+      if (!token) {
+        // Use public endpoint for initial configuration
+        endpoint = `${backendUrl}/api/test-asterisk`;
+        response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            asteriskHost: testConfig.asteriskHost,
+            asteriskPort: testConfig.asteriskPort,
+            asteriskAMIPort: testConfig.asteriskAMIPort
+          }),
+          timeout: 10000
+        });
+      } else {
+        // Use protected endpoint when authenticated
+        endpoint = `${backendUrl}/protected/test-asterisk`;
+        response = await fetch(endpoint, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000
+        });
+      }
+
+      if (!response.ok) {
+        throw new Error(`Backend test failed: HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.results) {
+        const tests = data.results.tests;
+        const overallSuccess = data.results.overall_success;
+
+        return {
+          success: overallSuccess,
+          message: overallSuccess
+            ? 'All Asterisk services are working correctly'
+            : 'Some Asterisk services need configuration',
+          details: {
+            ami: tests.ami,
+            http: tests.http,
+            websocket: tests.websocket,
+            summary: data.results.summary
+          }
+        };
+      } else {
+        return {
+          success: false,
+          message: 'Backend test endpoint returned unexpected response',
+          details: data
         };
       }
-      return { 
-        success: false, 
-        message: `Asterisk connection failed: ${error.message}` 
+    } catch (error) {
+      // Fallback: If backend test fails, indicate that backend connection is the issue
+      return {
+        success: false,
+        message: `Cannot test Asterisk through backend: ${error.message}`,
+        details: {
+          error: error.message,
+          suggestion: 'Check if backend is running and accessible'
+        }
       };
     }
   }

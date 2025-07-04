@@ -5,7 +5,7 @@ Write-Host "=== VoIP System Status Checker ===" -ForegroundColor Green
 Write-Host "Checking connectivity and status..." -ForegroundColor Yellow
 
 # Configuration
-$ASTERISK_IP = "172.20.10.6"
+$ASTERISK_IP = "172.20.10.2"
 $BACKEND_IP = "172.20.10.4"
 $AMI_PORT = 5038
 $WEBSOCKET_PORT = 8088
@@ -73,7 +73,7 @@ try {
 }
 
 Write-Host "`n4. Manual Commands to Run on Asterisk Server:" -ForegroundColor Cyan
-Write-Host "   SSH to your Kali Linux server (172.20.10.6) and run:" -ForegroundColor Yellow
+Write-Host "   SSH to your Kali Linux server (172.20.10.2) and run:" -ForegroundColor Yellow
 Write-Host "   sudo asterisk -rx 'pjsip show endpoints'" -ForegroundColor White
 Write-Host "   sudo asterisk -rx 'pjsip show contacts'" -ForegroundColor White
 Write-Host "   sudo asterisk -rx 'pjsip show transports'" -ForegroundColor White

@@ -126,12 +126,15 @@ const HomePage = ({ darkMode = false, onCall }) => {
     return (
       <CallingPage
         contact={{ name: `Extension ${extension}`, extension }}
-        callStatus="Dialing..."
+        callStatus="Initiating Call..."
         isOutgoing={true}
         channel={callData?.channel}
         transport={callData?.method === 'webrtc' ? 'transport-ws' : 'transport-sip'}
         onEndCall={handleEndCall}
         darkMode={darkMode}
+        callAccepted={false}
+        isWebRTCCall={callData?.method === 'webrtc'}
+        callId={callData?.callId}
       />
     );
   }

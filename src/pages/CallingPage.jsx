@@ -46,6 +46,9 @@ const CallingPage = ({
   const isOutgoing = navigationState.isOutgoing !== undefined ? navigationState.isOutgoing : (propIsOutgoing !== undefined ? propIsOutgoing : true);
   const initialChannel = navigationState.channel || propChannel;
   const transport = navigationState.transport || propTransport;
+  const callAccepted = navigationState.callAccepted || false;
+  const isWebRTCCall = navigationState.isWebRTCCall || false;
+  const callId = navigationState.callId;
 
   const [callTime, setCallTime] = useState(0);
   const [currentCallStatus, setCurrentCallStatus] = useState(initialCallStatus || 'Connecting...');
@@ -164,6 +167,55 @@ const CallingPage = ({
       setIsConnected(true);
     }
   }, [currentCallStatus]);
+
+  // Handle call initialization and communication setup
+  useEffect(() => {
+    if (callAccepted && !isOutgoing) {
+      // This is an accepted incoming call, initialize communication
+      console.log('[CallingPage] Initializing communication for accepted call');
+
+      if (isWebRTCCall) {
+        // For WebRTC calls, set up connection monitoring
+        setCurrentCallStatus('Establishing WebRTC Connection...');
+
+        // Monitor WebRTC call service for connection status
+        const checkWebRTCConnection = () => {
+          // Check if WebRTC service has established connection
+          if (webrtcCallService.isConnected && webrtcCallService.isConnected()) {
+            setCurrentCallStatus('Connected');
+            setIsConnected(true);
+            callStartTimeRef.current = Date.now();
+          } else {
+            // Keep checking for connection
+            setTimeout(checkWebRTCConnection, 500);
+          }
+        };
+
+        // Start monitoring after a brief delay
+        setTimeout(checkWebRTCConnection, 1000);
+
+      } else {
+        // For SIP calls, simulate connection establishment
+        setCurrentCallStatus('Establishing Connection...');
+
+        setTimeout(() => {
+          setCurrentCallStatus('Connected');
+          setIsConnected(true);
+          callStartTimeRef.current = Date.now();
+        }, 2000);
+      }
+    } else if (isOutgoing) {
+      // This is an outgoing call, handle differently
+      console.log('[CallingPage] Handling outgoing call');
+
+      // For outgoing calls, wait for actual connection confirmation
+      if (initialCallStatus === 'Connected') {
+        // Don't immediately show as connected for outgoing calls
+        setCurrentCallStatus('Connecting...');
+        setIsConnected(false);
+      }
+    }
+  }, [callAccepted, isOutgoing, isWebRTCCall, callId, initialCallStatus]);
 
   return (
     <div className={cn(

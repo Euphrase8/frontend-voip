@@ -18,12 +18,22 @@ const IncomingCallPage = ({ callData, contacts, user, darkMode = false, onCallAc
   const callHandlerRef = useRef(null);
 
 
-  const caller = useMemo(() =>
-    (contacts || []).find((c) => c.extension === callData?.from) || {
-      name: `Ext ${callData?.from || 'Unknown'}`,
+  const caller = useMemo(() => {
+    // First try to find in contacts
+    const contactMatch = (contacts || []).find((c) => c.extension === callData?.from);
+    if (contactMatch) {
+      return contactMatch;
+    }
+
+    // If not in contacts, use the username from call data if available
+    const callerName = callData?.fromUsername || callData?.caller_username || `Ext ${callData?.from || 'Unknown'}`;
+
+    return {
+      name: callerName,
       extension: callData?.from || 'Unknown',
       avatar: null,
-    }, [contacts, callData?.from]);
+    };
+  }, [contacts, callData?.from, callData?.fromUsername, callData?.caller_username]);
 
   useEffect(() => {
     // Safety check for callData
@@ -57,11 +67,30 @@ const IncomingCallPage = ({ callData, contacts, user, darkMode = false, onCallAc
           if (isWebRTCCall) {
             // For WebRTC calls, delegate to WebRTC call service
             console.log('[IncomingCallPage] Accepting WebRTC call via service');
+            setConnectionStatus('Accepting call...');
+
+            // Accept the call and wait for connection establishment
             await webrtcCallService.acceptCall();
-            setConnectionStatus('WebRTC call accepted! Establishing connection...');
+            setConnectionStatus('Call accepted! Initializing communication...');
+
+            // Navigate immediately to calling page with "Connecting" status
+            navigate("/calling", {
+              state: {
+                contact: caller,
+                callStatus: "Initializing Communication",
+                isOutgoing: false,
+                channel: callData?.channel,
+                transport: callData?.transport || "transport-ws",
+                callAccepted: true,
+                isWebRTCCall: true,
+                callId: callData?.call_id
+              },
+            });
           } else {
             // For traditional SIP calls, send answer_call message
             console.log('[IncomingCallPage] Accepting SIP call via WebSocket');
+            setConnectionStatus('Accepting call...');
+
             await sendWebSocketMessage({
               type: "answer_call",
               to: callData.from,
@@ -69,27 +98,29 @@ const IncomingCallPage = ({ callData, contacts, user, darkMode = false, onCallAc
               channel: callData.channel,
               transport: callData.transport || "transport-ws",
             });
-            setConnectionStatus('SIP call accepted! Connecting...');
-          }
 
-          // Wait a moment to show the connection message
-          setTimeout(() => {
-            // Notify parent component that call was accepted
-            if (onCallAccepted) {
-              onCallAccepted();
-            }
+            setConnectionStatus('Call accepted! Connecting...');
 
-            // Navigate to calling page
+            // Navigate to calling page with "Connecting" status
             navigate("/calling", {
               state: {
                 contact: caller,
-                callStatus: "Connected",
+                callStatus: "Connecting",
                 isOutgoing: false,
                 channel: callData?.channel,
                 transport: callData?.transport || "transport-ws",
+                callAccepted: true,
+                isWebRTCCall: false
               },
             });
-          }, 2000); // Show connection message for 2 seconds
+          }
+
+          // Notify parent component that call was accepted (after navigation to avoid state update during render)
+          setTimeout(() => {
+            if (onCallAccepted) {
+              onCallAccepted();
+            }
+          }, 100);
 
         } catch (error) {
           console.error("Error accepting call:", error);
@@ -117,10 +148,12 @@ const IncomingCallPage = ({ callData, contacts, user, darkMode = false, onCallAc
             });
           }
 
-          // Notify parent component that call was rejected
-          if (onCallRejected) {
-            onCallRejected();
-          }
+          // Notify parent component that call was rejected (use setTimeout to avoid state update during render)
+          setTimeout(() => {
+            if (onCallRejected) {
+              onCallRejected();
+            }
+          }, 100);
 
           setNotification({ message: "Call rejected", type: "info" });
           setTimeout(() => setNotification(null), 3000);
@@ -279,14 +312,14 @@ const IncomingCallPage = ({ callData, contacts, user, darkMode = false, onCallAc
               aria-live="polite"
               style={{ textShadow: "0 1px 2px rgba(0, 0, 0, 0.5)" }}
             >
-              {callAccepted ? "📞 Connecting..." : "📞 Incoming Call"}
+              {callAccepted ? "📞 Connecting..." : `📞 ${caller.name} is calling`}
             </h2>
             <p
               className={`text-sm sm:text-base md:text-lg font-semibold ${
                 darkMode ? "text-blue-200" : "text-blue-200"
               } leading-tight`}
             >
-              From: {caller.name} (Ext: {caller.extension})
+              Extension: {caller.extension}
             </p>
             <p
               className={`text-xs sm:text-sm md:text-base ${
