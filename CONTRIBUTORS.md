@@ -1,20 +1,40 @@
 # Contributors
 
-## Project Creator & Lead Developer
+## Project Creators & Lead Developers
+
+### Frontend Lead Developer
 
 **JOACHIM J. EUPHRASE**
 - **Organization**: DevHub
 - **Location**: Dar es Salaam, Tanzania
 - **Email**: joachim.euphrase@gmail.com
 - **GitHub**: [@Euphrase8](https://github.com/Euphrase8)
-- **Role**: Project Creator, Lead Developer, System Architect
+- **Role**: Frontend Lead Developer, Project Co-Creator, System Architect
 
-### Contributions:
+#### Contributions:
 - Initial project conception and architecture design
-- Full-stack development (React frontend + Go backend)
-- Asterisk PBX integration and WebRTC implementation
-- System deployment and infrastructure setup
-- Documentation and project management
+- React frontend development and UI/UX design
+- WebRTC client-side implementation
+- Frontend system integration and testing
+- User interface design and responsive layout
+- Frontend documentation and deployment
+
+### Backend Lead Developer
+
+**KEVIN N. MRANDA**
+- **Organization**: DevHub
+- **Location**: Dar es Salaam, Tanzania
+- **Email**: kevinmranda042@gmail.com
+- **GitHub**: [@kevinmranda](https://github.com/kevinmranda)
+- **Role**: Backend Lead Developer, Project Co-Creator, Infrastructure Architect
+
+#### Contributions:
+- Go backend server development and API design
+- Asterisk PBX integration and AMI implementation
+- WebSocket server and real-time communication
+- Database design and management
+- Authentication and security implementation
+- Backend infrastructure and deployment
 
 ---
 
@@ -37,6 +57,16 @@ All contributors will be acknowledged in this file and in project releases.
 ## Contact
 
 For questions about contributing or the project:
-- **Primary Contact**: JOACHIM J. EUPHRASE (joachim.euphrase@gmail.com)
+
+### Frontend Related Questions:
+- **Contact**: JOACHIM J. EUPHRASE (joachim.euphrase@gmail.com)
+- **GitHub**: [@Euphrase8](https://github.com/Euphrase8)
+
+### Backend Related Questions:
+- **Contact**: KEVIN N. MRANDA (kevinmranda042@gmail.com)
+- **GitHub**: [@kevinmranda](https://github.com/kevinmranda)
+
+### General Project Information:
 - **Organization**: DevHub
+- **Location**: Dar es Salaam, Tanzania
 - **GitHub Issues**: [Report bugs or request features](https://github.com/Euphrase8/voip-application/issues)

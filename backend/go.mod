@@ -1,5 +1,6 @@
 // Enterprise VoIP Backend
-// Author: JOACHIM J. EUPHRASE <joachim.euphrase@gmail.com>
+// Frontend Lead: JOACHIM J. EUPHRASE <joachim.euphrase@gmail.com>
+// Backend Lead: KEVIN N. MRANDA <kevinmranda042@gmail.com>
 // Organization: DevHub, Dar es Salaam, Tanzania
 // License: Apache-2.0
 

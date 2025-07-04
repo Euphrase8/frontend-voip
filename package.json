@@ -2,12 +2,22 @@
   "name": "enterprise-voip-application",
   "version": "1.0.0",
   "description": "Enterprise VoIP Web Application - Professional voice communication solution",
-  "author": {
-    "name": "JOACHIM J. EUPHRASE",
-    "email": "joachim.euphrase@gmail.com",
-    "organization": "DevHub",
-    "location": "Dar es Salaam, Tanzania"
-  },
+  "authors": [
+    {
+      "name": "JOACHIM J. EUPHRASE",
+      "email": "joachim.euphrase@gmail.com",
+      "role": "Frontend Lead Developer",
+      "organization": "DevHub",
+      "location": "Dar es Salaam, Tanzania"
+    },
+    {
+      "name": "KEVIN N. MRANDA",
+      "email": "kevinmranda042@gmail.com",
+      "role": "Backend Lead Developer",
+      "organization": "DevHub",
+      "location": "Dar es Salaam, Tanzania"
+    }
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/Euphrase8/voip-application.git"
