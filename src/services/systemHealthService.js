@@ -19,63 +19,77 @@ class SystemHealthService {
     };
   }
 
-  // Get comprehensive system health with timeout and optimization
+  // Check if user is authenticated
+  isAuthenticated() {
+    const token = localStorage.getItem('token');
+    return token && token !== 'null' && token !== 'undefined' && token.length > 0;
+  }
+
+  // Check if user is authenticated
+  isAuthenticated() {
+    const token = localStorage.getItem('token');
+    return token && token !== 'null' && token !== 'undefined';
+  }
+
+  // Get comprehensive system health with fast timeout and optimization
   async getSystemHealth() {
     try {
-      // Add timeout to prevent hanging
+      // Use longer timeout for better reliability
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
       let response;
-      try {
-        // Try admin health endpoint first
-        response = await fetch(`${this.baseURL}/protected/admin/health`, {
-          method: 'GET',
-          headers: this.getAuthHeaders(),
-          signal: controller.signal
-        });
-      } catch (adminError) {
-        console.warn('[SystemHealthService] Admin health endpoint failed, trying fallback');
-        // Fallback to basic health endpoint
+      let usingBasicHealth = false;
+
+      // Check if user is authenticated
+      if (!this.isAuthenticated()) {
+        console.warn('[SystemHealthService] User not authenticated, using basic health check');
+        usingBasicHealth = true;
+      }
+
+      if (!usingBasicHealth) {
+        try {
+          // Try fast admin health endpoint first for speed
+          response = await fetch(`${this.baseURL}/protected/admin/health/fast`, {
+            method: 'GET',
+            headers: this.getAuthHeaders(),
+            signal: controller.signal
+          });
+        } catch (adminError) {
+          // Try regular admin health endpoint
+          try {
+            response = await fetch(`${this.baseURL}/protected/admin/health`, {
+              method: 'GET',
+              headers: this.getAuthHeaders(),
+              signal: controller.signal
+            });
+          } catch (fullAdminError) {
+            console.warn('[SystemHealthService] Admin endpoints failed, falling back to basic health');
+            usingBasicHealth = true;
+          }
+        }
+      }
+
+      if (usingBasicHealth) {
+        // Use basic health endpoint
         try {
           response = await fetch(`${this.baseURL}/health`, {
             method: 'GET',
             signal: controller.signal
           });
         } catch (basicError) {
-          console.warn('[SystemHealthService] Basic health endpoint also failed, returning offline status');
           clearTimeout(timeoutId);
-          // Return offline status if both endpoints fail
-          return {
-            status: 'offline',
-            timestamp: new Date().toISOString(),
-            uptime: 'Unavailable',
-            response_time_ms: 0,
-            services: {
-              backend: { status: 'offline', message: 'Backend is not responding' },
-              asterisk: { status: 'unknown', message: 'Cannot check Asterisk status' }
-            },
-            system_metrics: {
-              cpu: { usage_percent: 0 },
-              memory: { usage_percent: 0 },
-              disk: { usage_percent: 0 }
-            },
-            database_health: {
-              status: 'offline',
-              total_users: 0,
-              active_calls: 0,
-              call_logs_count: 0
-            }
-          };
+          // Return fast offline status
+          return this._getOfflineStatus();
         }
       }
 
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        // If admin endpoint returns 403, try basic health endpoint
-        if (response.status === 403) {
-          console.warn('[SystemHealthService] Admin access denied, using basic health check');
+        // Quick fallback for 403/401 errors (authentication issues)
+        if (response.status === 403 || response.status === 401) {
+          console.warn('[SystemHealthService] Authentication failed, falling back to basic health check');
           try {
             const basicResponse = await fetch(`${this.baseURL}/health`, {
               method: 'GET'
@@ -83,36 +97,23 @@ class SystemHealthService {
 
             if (basicResponse.ok) {
               const basicData = await basicResponse.json();
-              // Convert basic health to expected format
-              return {
-                status: basicData.status === 'ok' ? 'healthy' : 'unhealthy',
-                timestamp: new Date().toISOString(),
-                uptime: 'Available',
-                response_time_ms: basicData.response_time_ms || 0,
-                services: {
-                  backend: { status: 'healthy', message: 'Backend is responding' }
-                },
-                system_metrics: {
-                  cpu: { usage_percent: 0 },
-                  memory: { usage_percent: 0 },
-                  disk: { usage_percent: 0 }
-                },
-                database_health: {
-                  status: 'unknown',
-                  total_users: 0,
-                  active_calls: 0,
-                  call_logs_count: 0
-                }
-              };
+              return this._convertBasicHealth(basicData);
             }
           } catch (fallbackError) {
-            console.warn('[SystemHealthService] Fallback health check failed');
+            console.error('[SystemHealthService] Basic health check also failed:', fallbackError);
           }
         }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const data = await response.json();
+
+      // Handle basic health response (no success field)
+      if (usingBasicHealth) {
+        return this._convertBasicHealth(data);
+      }
+
+      // Handle admin health response
       if (!data.success) {
         throw new Error(data.error || 'Failed to get system health');
       }
@@ -120,32 +121,88 @@ class SystemHealthService {
       return data.health;
     } catch (error) {
       if (error.name === 'AbortError') {
-        console.error('[SystemHealthService] System health request timed out');
-        // Return timeout status instead of throwing
-        return {
-          status: 'timeout',
-          timestamp: new Date().toISOString(),
-          uptime: 'Timeout',
-          response_time_ms: 5000,
-          services: {
-            backend: { status: 'timeout', message: 'Backend health check timed out' }
-          },
-          system_metrics: {
-            cpu: { usage_percent: 0 },
-            memory: { usage_percent: 0 },
-            disk: { usage_percent: 0 }
-          },
-          database_health: {
-            status: 'timeout',
-            total_users: 0,
-            active_calls: 0,
-            call_logs_count: 0
-          }
-        };
+        return this._getTimeoutStatus();
       }
       console.error('[SystemHealthService] Failed to get system health:', error);
       throw error;
     }
+  }
+
+  // Fast offline status response
+  _getOfflineStatus() {
+    return {
+      status: 'offline',
+      timestamp: new Date().toISOString(),
+      uptime: 'Unavailable',
+      response_time_ms: 0,
+      services: {
+        backend: { status: 'offline', message: 'Backend is not responding' },
+        asterisk: { status: 'unknown', message: 'Cannot check Asterisk status' }
+      },
+      system_metrics: {
+        cpu: { usage_percent: 0 },
+        memory: { usage_percent: 0 },
+        disk: { usage_percent: 0 }
+      },
+      database_health: {
+        status: 'offline',
+        total_users: 0,
+        active_calls: 0,
+        call_logs_count: 0
+      }
+    };
+  }
+
+  // Fast timeout status response
+  _getTimeoutStatus() {
+    return {
+      status: 'warning',
+      timestamp: new Date().toISOString(),
+      uptime: 'Health check timed out',
+      response_time_ms: 5000,
+      services: {
+        backend: { status: 'warning', message: 'Backend health check timed out - system may still be functional' },
+        asterisk: { status: 'unknown', message: 'Unable to check Asterisk status due to timeout' }
+      },
+      system_metrics: {
+        cpu: { usage_percent: 0 },
+        memory: { usage_percent: 0 },
+        disk: { usage_percent: 0 }
+      },
+      database_health: {
+        status: 'unknown',
+        total_users: 0,
+        active_calls: 0,
+        call_logs_count: 0
+      }
+    };
+  }
+
+  // Convert basic health to expected format
+  _convertBasicHealth(basicData) {
+    return {
+      status: basicData.status === 'ok' ? 'healthy' : 'unhealthy',
+      timestamp: new Date().toISOString(),
+      uptime: 'Backend available - login required for full metrics',
+      response_time_ms: basicData.response_time_ms || 0,
+      services: {
+        backend: { status: 'healthy', message: 'Backend is responding (basic health check)' },
+        asterisk: { status: 'unknown', message: 'Login required for Asterisk status' },
+        database: { status: 'unknown', message: 'Login required for database status' },
+        websocket: { status: 'unknown', message: 'Login required for WebSocket status' }
+      },
+      system_metrics: {
+        cpu: { usage_percent: 0 },
+        memory: { usage_percent: 0 },
+        disk: { usage_percent: 0 }
+      },
+      database_health: {
+        status: 'unknown',
+        total_users: 0,
+        active_calls: 0,
+        call_logs_count: 0
+      }
+    };
   }
 
   // Get real-time metrics
@@ -172,13 +229,19 @@ class SystemHealthService {
     }
   }
 
-  // Get all users with their extensions and status
+  // Get all users with their extensions and status (optimized)
   async getAllUsers() {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1000); // 1 second timeout
+
       const response = await fetch(`${this.baseURL}/protected/admin/users`, {
         method: 'GET',
-        headers: this.getAuthHeaders()
+        headers: this.getAuthHeaders(),
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -191,18 +254,28 @@ class SystemHealthService {
 
       return data.users || [];
     } catch (error) {
+      if (error.name === 'AbortError') {
+        console.warn('[SystemHealthService] Users request timed out');
+        return [];
+      }
       console.error('[SystemHealthService] Failed to get users:', error);
       throw error;
     }
   }
 
-  // Get connection status for all users
+  // Get connection status for all users (optimized)
   async getConnectionStatus() {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1000); // 1 second timeout
+
       const response = await fetch(`${this.baseURL}/protected/extensions/status`, {
         method: 'GET',
-        headers: this.getAuthHeaders()
+        headers: this.getAuthHeaders(),
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -215,18 +288,28 @@ class SystemHealthService {
 
       return data.connection_status || [];
     } catch (error) {
+      if (error.name === 'AbortError') {
+        console.warn('[SystemHealthService] Connection status request timed out');
+        return [];
+      }
       console.error('[SystemHealthService] Failed to get connection status:', error);
       throw error;
     }
   }
 
-  // Get comprehensive user data with status and extensions
+  // Get comprehensive user data with status and extensions (optimized)
   async getUsersWithStatus() {
     try {
+      // Use fast timeouts and parallel requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1500); // 1.5 second timeout
+
       const [users, connectionStatus] = await Promise.all([
-        this.getAllUsers(),
-        this.getConnectionStatus()
+        this.getAllUsers().catch(() => []), // Fallback to empty array on error
+        this.getConnectionStatus().catch(() => []) // Fallback to empty array on error
       ]);
+
+      clearTimeout(timeoutId);
 
       // Create a map of connection status by extension
       const connectionMap = new Map();
@@ -234,9 +317,11 @@ class SystemHealthService {
         connectionMap.set(status.extension, status);
       });
 
-      // Merge user data with connection status
+      // Merge user data with connection status (optimized)
       const usersWithStatus = users.map(user => {
         const connection = connectionMap.get(user.extension) || {};
+        const actual_status = this.determineActualStatus(user, connection);
+
         return {
           id: user.id,
           username: user.username,
@@ -253,14 +338,18 @@ class SystemHealthService {
           client_count: connection.client_count || 0,
           status_match: connection.status_match || false,
           // Determine actual online status
-          actual_status: this.determineActualStatus(user, connection)
+          actual_status
         };
       });
 
       return usersWithStatus;
     } catch (error) {
+      if (error.name === 'AbortError') {
+        console.warn('[SystemHealthService] Users with status request timed out, returning empty list');
+        return [];
+      }
       console.error('[SystemHealthService] Failed to get users with status:', error);
-      throw error;
+      return []; // Return empty array instead of throwing
     }
   }
 

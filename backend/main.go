@@ -171,6 +171,7 @@ func main() {
 
 			// System Health endpoints
 			admin.GET("/health", handlers.GetSystemHealth)
+			admin.GET("/health/fast", handlers.GetFastSystemHealth)
 
 			// Backup endpoints
 			admin.POST("/backup", handlers.CreateBackup)

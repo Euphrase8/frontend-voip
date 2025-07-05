@@ -79,6 +79,99 @@ type DatabaseHealth struct {
 	DatabaseSize  string `json:"database_size"`
 }
 
+// GetFastSystemHealth returns basic system health information quickly
+func GetFastSystemHealth(c *gin.Context) {
+	startTime := time.Now()
+
+	health := SystemHealthResponse{
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Status:      "healthy",
+		Services:    make(map[string]ServiceInfo),
+		Environment: config.AppConfig.Environment,
+		Version:     "1.0.0",
+	}
+
+	// Check system uptime (same as full health check)
+	if hostInfo, err := host.Info(); err == nil {
+		uptime := time.Duration(hostInfo.Uptime) * time.Second
+		health.Uptime = formatUptime(uptime)
+	} else {
+		health.Uptime = "Unavailable"
+	}
+
+	// Quick backend check
+	health.Services["backend"] = ServiceInfo{
+		Status:       "healthy",
+		LastCheck:    time.Now(),
+		ResponseTime: time.Since(startTime).Milliseconds(),
+	}
+
+	// Quick database check
+	db := database.GetDB()
+	if db != nil {
+		health.Services["database"] = ServiceInfo{
+			Status:       "healthy",
+			LastCheck:    time.Now(),
+			ResponseTime: 0,
+		}
+	} else {
+		health.Services["database"] = ServiceInfo{
+			Status:       "unhealthy",
+			Error:        "Database not available",
+			LastCheck:    time.Now(),
+			ResponseTime: 0,
+		}
+	}
+
+	// Quick WebSocket check
+	hub := websocket.GetHub()
+	if hub != nil {
+		health.Services["websocket"] = ServiceInfo{
+			Status:       "healthy",
+			LastCheck:    time.Now(),
+			ResponseTime: 0,
+			Details: map[string]interface{}{
+				"active_clients":       hub.GetClientCount(),
+				"connected_extensions": len(hub.GetConnectedExtensions()),
+			},
+		}
+	} else {
+		health.Services["websocket"] = ServiceInfo{
+			Status:    "unhealthy",
+			Error:     "WebSocket hub not available",
+			LastCheck: time.Now(),
+		}
+	}
+
+	// Quick Asterisk check (without AMI command)
+	client := asterisk.GetAMIClient()
+	if client != nil {
+		health.Services["asterisk"] = ServiceInfo{
+			Status:       "healthy",
+			LastCheck:    time.Now(),
+			ResponseTime: 0,
+		}
+	} else {
+		health.Services["asterisk"] = ServiceInfo{
+			Status:    "warning",
+			Error:     "AMI client not available",
+			LastCheck: time.Now(),
+		}
+	}
+
+	// Get real system metrics (lightweight version)
+	health.SystemMetrics = getSystemMetrics()
+
+	// Get real database health
+	health.DatabaseHealth = getDatabaseHealth()
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":          true,
+		"health":           health,
+		"response_time_ms": time.Since(startTime).Milliseconds(),
+	})
+}
+
 // GetSystemHealth returns comprehensive system health information
 func GetSystemHealth(c *gin.Context) {
 	startTime := time.Now()
@@ -97,15 +190,82 @@ func GetSystemHealth(c *gin.Context) {
 		health.Uptime = formatUptime(uptime)
 	}
 
-	// Check all services
-	health.Services["asterisk"] = checkAsteriskHealth()
-	health.Services["database"] = checkDatabaseHealth()
-	health.Services["websocket"] = checkWebSocketHealth()
-	health.Services["backend"] = checkBackendHealth()
+	// Check all services in parallel for faster response
+	type serviceResult struct {
+		name string
+		info ServiceInfo
+	}
 
-	// Get system metrics
-	health.SystemMetrics = getSystemMetrics()
-	health.DatabaseHealth = getDatabaseHealth()
+	serviceChan := make(chan serviceResult, 4)
+
+	// Start all service checks concurrently
+	go func() {
+		serviceChan <- serviceResult{"asterisk", checkAsteriskHealth()}
+	}()
+	go func() {
+		serviceChan <- serviceResult{"database", checkDatabaseHealth()}
+	}()
+	go func() {
+		serviceChan <- serviceResult{"websocket", checkWebSocketHealth()}
+	}()
+	go func() {
+		serviceChan <- serviceResult{"backend", checkBackendHealth()}
+	}()
+
+	// Collect results with timeout
+	timeout := time.After(1 * time.Second) // 1 second timeout for all checks
+	servicesChecked := 0
+
+	for servicesChecked < 4 {
+		select {
+		case result := <-serviceChan:
+			health.Services[result.name] = result.info
+			servicesChecked++
+		case <-timeout:
+			// Add timeout status for remaining services
+			for _, serviceName := range []string{"asterisk", "database", "websocket", "backend"} {
+				if _, exists := health.Services[serviceName]; !exists {
+					health.Services[serviceName] = ServiceInfo{
+						Status:       "timeout",
+						Error:        "Health check timed out",
+						LastCheck:    time.Now(),
+						ResponseTime: 1000,
+					}
+				}
+			}
+			servicesChecked = 4 // Exit loop
+		}
+	}
+
+	// Get system metrics and database health in parallel
+	var systemMetrics SystemMetrics
+	var dbHealth DatabaseHealth
+
+	metricsChan := make(chan bool, 2)
+	go func() {
+		systemMetrics = getSystemMetrics()
+		metricsChan <- true
+	}()
+	go func() {
+		dbHealth = getDatabaseHealth()
+		metricsChan <- true
+	}()
+
+	// Wait for both with timeout
+	metricsTimeout := time.After(500 * time.Millisecond) // 500ms timeout
+	metricsReceived := 0
+
+	for metricsReceived < 2 {
+		select {
+		case <-metricsChan:
+			metricsReceived++
+		case <-metricsTimeout:
+			metricsReceived = 2 // Exit loop
+		}
+	}
+
+	health.SystemMetrics = systemMetrics
+	health.DatabaseHealth = dbHealth
 
 	// Determine overall status
 	overallStatus := "healthy"
@@ -293,8 +453,15 @@ func getSystemMetrics() SystemMetrics {
 		metrics.Memory.UsagePercent = memInfo.UsedPercent
 	}
 
-	// Disk metrics (root partition)
-	if diskInfo, err := disk.Usage("/"); err == nil {
+	// Disk metrics (cross-platform root partition)
+	var diskPath string
+	if runtime.GOOS == "windows" {
+		diskPath = "C:\\"
+	} else {
+		diskPath = "/"
+	}
+
+	if diskInfo, err := disk.Usage(diskPath); err == nil {
 		metrics.Disk.Total = diskInfo.Total
 		metrics.Disk.Used = diskInfo.Used
 		metrics.Disk.Free = diskInfo.Free

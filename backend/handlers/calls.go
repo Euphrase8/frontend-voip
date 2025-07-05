@@ -976,6 +976,58 @@ func exportCallLogsJSON(c *gin.Context, callLogs []models.CallLog) {
 	})
 }
 
+// CallStatistics represents call performance statistics
+type CallStatistics struct {
+	TotalCalls      int64   `json:"total_calls"`
+	SuccessfulCalls int64   `json:"successful_calls"`
+	SuccessRate     float64 `json:"success_rate"`
+	AvgDuration     int     `json:"avg_duration_seconds"`
+	AvgDurationStr  string  `json:"avg_duration_formatted"`
+	TotalDuration   int64   `json:"total_duration_seconds"`
+}
+
+// calculateCallStatistics calculates call performance metrics
+func calculateCallStatistics() CallStatistics {
+	var stats CallStatistics
+
+	// Get total call count
+	database.GetDB().Model(&models.CallLog{}).Count(&stats.TotalCalls)
+
+	// Get successful calls (answered and ended calls)
+	database.GetDB().Model(&models.CallLog{}).Where("status IN (?)", []string{"answered", "ended"}).Count(&stats.SuccessfulCalls)
+
+	// Calculate success rate
+	if stats.TotalCalls > 0 {
+		stats.SuccessRate = float64(stats.SuccessfulCalls) / float64(stats.TotalCalls) * 100
+	}
+
+	// Calculate average duration for completed calls
+	type DurationResult struct {
+		TotalDuration int64
+		CallCount     int64
+	}
+
+	var result DurationResult
+	database.GetDB().Model(&models.CallLog{}).
+		Select("COALESCE(SUM(duration), 0) as total_duration, COUNT(*) as call_count").
+		Where("status = ? AND duration > 0", "ended").
+		Scan(&result)
+
+	if result.CallCount > 0 {
+		stats.AvgDuration = int(result.TotalDuration / result.CallCount)
+		stats.TotalDuration = result.TotalDuration
+
+		// Format duration as MM:SS
+		minutes := stats.AvgDuration / 60
+		seconds := stats.AvgDuration % 60
+		stats.AvgDurationStr = fmt.Sprintf("%d:%02d", minutes, seconds)
+	} else {
+		stats.AvgDurationStr = "0:00"
+	}
+
+	return stats
+}
+
 // GetRealTimeMetrics returns real-time system metrics (admin only)
 func GetRealTimeMetrics(c *gin.Context) {
 	// Get current statistics
@@ -987,6 +1039,9 @@ func GetRealTimeMetrics(c *gin.Context) {
 	database.GetDB().Model(&models.User{}).Where("status = ? AND is_online = ? AND last_seen > ?", "online", true, fiveMinutesAgo).Count(&onlineUsers)
 	database.GetDB().Model(&models.ActiveCall{}).Count(&activeCalls)
 	database.GetDB().Model(&models.CallLog{}).Where("DATE(created_at) = DATE(NOW())").Count(&callsToday)
+
+	// Calculate call statistics
+	callStats := calculateCallStatistics()
 
 	// Get WebSocket connections
 	hub := websocket.GetHub()
@@ -1011,7 +1066,12 @@ func GetRealTimeMetrics(c *gin.Context) {
 			"calls_today":          callsToday,
 			"ws_connections":       wsConnections,
 			"connected_extensions": connectedExtensions,
+			"call_success_rate":    callStats.SuccessRate,
+			"avg_call_duration":    callStats.AvgDurationStr,
+			"total_call_logs":      callStats.TotalCalls,
+			"successful_calls":     callStats.SuccessfulCalls,
 		},
 		"recent_calls": recentCalls,
+		"call_stats":   callStats,
 	})
 }
