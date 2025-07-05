@@ -149,10 +149,20 @@ func checkAsteriskHealth() ServiceInfo {
 	// Check AMI connection
 	client := asterisk.GetAMIClient()
 	if client == nil {
-		service.Status = "unhealthy"
-		service.Error = "AMI client not available"
-		service.ResponseTime = time.Since(startTime).Milliseconds()
-		return service
+		// Try to initialize AMI connection
+		if err := asterisk.InitAMI(); err != nil {
+			service.Status = "unhealthy"
+			service.Error = "AMI client not available: " + err.Error()
+			service.ResponseTime = time.Since(startTime).Milliseconds()
+			return service
+		}
+		client = asterisk.GetAMIClient()
+		if client == nil {
+			service.Status = "unhealthy"
+			service.Error = "AMI client initialization failed"
+			service.ResponseTime = time.Since(startTime).Milliseconds()
+			return service
+		}
 	}
 
 	// Test AMI command

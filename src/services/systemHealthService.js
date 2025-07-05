@@ -19,15 +19,96 @@ class SystemHealthService {
     };
   }
 
-  // Get comprehensive system health
+  // Get comprehensive system health with timeout and optimization
   async getSystemHealth() {
     try {
-      const response = await fetch(`${this.baseURL}/protected/admin/health`, {
-        method: 'GET',
-        headers: this.getAuthHeaders()
-      });
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+      let response;
+      try {
+        // Try admin health endpoint first
+        response = await fetch(`${this.baseURL}/protected/admin/health`, {
+          method: 'GET',
+          headers: this.getAuthHeaders(),
+          signal: controller.signal
+        });
+      } catch (adminError) {
+        console.warn('[SystemHealthService] Admin health endpoint failed, trying fallback');
+        // Fallback to basic health endpoint
+        try {
+          response = await fetch(`${this.baseURL}/health`, {
+            method: 'GET',
+            signal: controller.signal
+          });
+        } catch (basicError) {
+          console.warn('[SystemHealthService] Basic health endpoint also failed, returning offline status');
+          clearTimeout(timeoutId);
+          // Return offline status if both endpoints fail
+          return {
+            status: 'offline',
+            timestamp: new Date().toISOString(),
+            uptime: 'Unavailable',
+            response_time_ms: 0,
+            services: {
+              backend: { status: 'offline', message: 'Backend is not responding' },
+              asterisk: { status: 'unknown', message: 'Cannot check Asterisk status' }
+            },
+            system_metrics: {
+              cpu: { usage_percent: 0 },
+              memory: { usage_percent: 0 },
+              disk: { usage_percent: 0 }
+            },
+            database_health: {
+              status: 'offline',
+              total_users: 0,
+              active_calls: 0,
+              call_logs_count: 0
+            }
+          };
+        }
+      }
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
+        // If admin endpoint returns 403, try basic health endpoint
+        if (response.status === 403) {
+          console.warn('[SystemHealthService] Admin access denied, using basic health check');
+          try {
+            const basicResponse = await fetch(`${this.baseURL}/health`, {
+              method: 'GET'
+            });
+
+            if (basicResponse.ok) {
+              const basicData = await basicResponse.json();
+              // Convert basic health to expected format
+              return {
+                status: basicData.status === 'ok' ? 'healthy' : 'unhealthy',
+                timestamp: new Date().toISOString(),
+                uptime: 'Available',
+                response_time_ms: basicData.response_time_ms || 0,
+                services: {
+                  backend: { status: 'healthy', message: 'Backend is responding' }
+                },
+                system_metrics: {
+                  cpu: { usage_percent: 0 },
+                  memory: { usage_percent: 0 },
+                  disk: { usage_percent: 0 }
+                },
+                database_health: {
+                  status: 'unknown',
+                  total_users: 0,
+                  active_calls: 0,
+                  call_logs_count: 0
+                }
+              };
+            }
+          } catch (fallbackError) {
+            console.warn('[SystemHealthService] Fallback health check failed');
+          }
+        }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
@@ -38,6 +119,30 @@ class SystemHealthService {
 
       return data.health;
     } catch (error) {
+      if (error.name === 'AbortError') {
+        console.error('[SystemHealthService] System health request timed out');
+        // Return timeout status instead of throwing
+        return {
+          status: 'timeout',
+          timestamp: new Date().toISOString(),
+          uptime: 'Timeout',
+          response_time_ms: 5000,
+          services: {
+            backend: { status: 'timeout', message: 'Backend health check timed out' }
+          },
+          system_metrics: {
+            cpu: { usage_percent: 0 },
+            memory: { usage_percent: 0 },
+            disk: { usage_percent: 0 }
+          },
+          database_health: {
+            status: 'timeout',
+            total_users: 0,
+            active_calls: 0,
+            call_logs_count: 0
+          }
+        };
+      }
       console.error('[SystemHealthService] Failed to get system health:', error);
       throw error;
     }
@@ -65,6 +170,119 @@ class SystemHealthService {
       console.error('[SystemHealthService] Failed to get real-time metrics:', error);
       throw error;
     }
+  }
+
+  // Get all users with their extensions and status
+  async getAllUsers() {
+    try {
+      const response = await fetch(`${this.baseURL}/protected/admin/users`, {
+        method: 'GET',
+        headers: this.getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to get users');
+      }
+
+      return data.users || [];
+    } catch (error) {
+      console.error('[SystemHealthService] Failed to get users:', error);
+      throw error;
+    }
+  }
+
+  // Get connection status for all users
+  async getConnectionStatus() {
+    try {
+      const response = await fetch(`${this.baseURL}/protected/extensions/status`, {
+        method: 'GET',
+        headers: this.getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to get connection status');
+      }
+
+      return data.connection_status || [];
+    } catch (error) {
+      console.error('[SystemHealthService] Failed to get connection status:', error);
+      throw error;
+    }
+  }
+
+  // Get comprehensive user data with status and extensions
+  async getUsersWithStatus() {
+    try {
+      const [users, connectionStatus] = await Promise.all([
+        this.getAllUsers(),
+        this.getConnectionStatus()
+      ]);
+
+      // Create a map of connection status by extension
+      const connectionMap = new Map();
+      connectionStatus.forEach(status => {
+        connectionMap.set(status.extension, status);
+      });
+
+      // Merge user data with connection status
+      const usersWithStatus = users.map(user => {
+        const connection = connectionMap.get(user.extension) || {};
+        return {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          extension: user.extension,
+          role: user.role,
+          status: user.status,
+          is_online: user.is_online,
+          last_login: user.last_login,
+          last_seen: user.last_seen,
+          created_at: user.created_at,
+          // Connection status from WebSocket
+          ws_connected: connection.ws_connected || false,
+          client_count: connection.client_count || 0,
+          status_match: connection.status_match || false,
+          // Determine actual online status
+          actual_status: this.determineActualStatus(user, connection)
+        };
+      });
+
+      return usersWithStatus;
+    } catch (error) {
+      console.error('[SystemHealthService] Failed to get users with status:', error);
+      throw error;
+    }
+  }
+
+  // Determine actual user status based on database and WebSocket connection
+  determineActualStatus(user, connection) {
+    // If WebSocket is connected with active clients, user is definitely online
+    if (connection.ws_connected && connection.client_count > 0) {
+      return 'online';
+    }
+
+    // If user has database status as online but no WebSocket connection,
+    // they might be recently logged in but not actively connected - show as away
+    if (user.status === 'online' && !connection.ws_connected) {
+      return 'away';
+    }
+
+    // If no WebSocket connection, user is effectively offline regardless of database status
+    if (!connection.ws_connected) {
+      return 'offline';
+    }
+
+    return user.status || 'offline';
   }
 
   // Start automatic health monitoring

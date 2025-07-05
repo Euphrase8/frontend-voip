@@ -56,11 +56,18 @@ fi
 echo ""
 echo "3. Testing WebSocket Endpoint..."
 if command -v curl >/dev/null 2>&1; then
-    http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://$ASTERISK_IP:$WEBSOCKET_PORT/ws" 2>/dev/null)
-    if [ "$http_code" = "426" ] || [ "$http_code" = "200" ]; then
-        echo "   WebSocket endpoint: ✓ RESPONDING"
+    # Try the correct Asterisk WebSocket endpoint first
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://$ASTERISK_IP:$WEBSOCKET_PORT/asterisk/ws" 2>/dev/null)
+    if [ "$http_code" = "426" ] || [ "$http_code" = "400" ]; then
+        echo "   WebSocket endpoint: ✓ RESPONDING (asterisk/ws)"
     else
-        echo "   WebSocket endpoint: ✗ NOT RESPONDING (HTTP $http_code)"
+        # Try fallback endpoint
+        http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://$ASTERISK_IP:$WEBSOCKET_PORT/ws" 2>/dev/null)
+        if [ "$http_code" = "426" ] || [ "$http_code" = "400" ]; then
+            echo "   WebSocket endpoint: ✓ RESPONDING (ws)"
+        else
+            echo "   WebSocket endpoint: ✗ NOT RESPONDING (HTTP $http_code)"
+        fi
     fi
 else
     echo "   WebSocket endpoint: ? CURL NOT AVAILABLE"

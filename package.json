@@ -54,7 +54,12 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "configure-asterisk": "node scripts/configure-asterisk.js configure",
+    "discover-asterisk": "node scripts/configure-asterisk.js discover",
+    "show-config": "node scripts/configure-asterisk.js show",
+    "check-errors": "node scripts/fix-errors.js check",
+    "fix-errors": "node scripts/fix-errors.js fix"
   },
   "eslintConfig": {
     "extends": [

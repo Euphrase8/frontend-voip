@@ -33,6 +33,9 @@ import NotificationsPage from './NotificationsPage';
 import ConfirmationModal from '../components/ConfirmationModal';
 import CreateUserModal from '../components/CreateUserModal';
 
+import EnhancedSystemTab from '../components/EnhancedSystemTab';
+import AsteriskDiagnostics from '../components/AsteriskDiagnostics';
+
 // Chart Components
 const UserStatusChart = ({ stats, darkMode }) => {
   const total = stats.total_users || 1;
@@ -535,6 +538,7 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [deleteConfirmation, setDeleteConfirmation] = useState({ show: false, user: null, loading: false });
   const [deleteLogConfirmation, setDeleteLogConfirmation] = useState({ show: false, log: null, loading: false });
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
+  const [showAsteriskDiagnostics, setShowAsteriskDiagnostics] = useState(false);
 
   // Asterisk Diagnostics State (currently unused but kept for future features)
   // const [diagnosticsRunning, setDiagnosticsRunning] = useState(false);
@@ -1201,7 +1205,11 @@ const AdminDashboard = ({ user, onLogout }) => {
         )}
         {activeTab === 'system' && (
           <div className="h-full overflow-y-auto p-4 sm:p-6">
-            <SystemTab systemStatus={systemStatus} darkMode={darkMode} />
+            <EnhancedSystemTab
+              systemStatus={systemStatus}
+              darkMode={darkMode}
+              systemHealth={systemHealth}
+            />
           </div>
         )}
         {activeTab === 'notifications' && (
@@ -1217,6 +1225,7 @@ const AdminDashboard = ({ user, onLogout }) => {
               onRestoreBackup={handleRestoreBackup}
               onDownloadBackup={handleDownloadBackup}
               onUpdateSystemHealth={updateSystemHealth}
+              setShowAsteriskDiagnostics={setShowAsteriskDiagnostics}
             />
           </div>
         )}
@@ -1273,6 +1282,14 @@ const AdminDashboard = ({ user, onLogout }) => {
         onCreateUser={handleCreateUser}
         darkMode={darkMode}
       />
+
+      {/* Asterisk Diagnostics Modal */}
+      {showAsteriskDiagnostics && (
+        <AsteriskDiagnostics
+          darkMode={darkMode}
+          onClose={() => setShowAsteriskDiagnostics(false)}
+        />
+      )}
     </div>
   );
 };
@@ -2322,7 +2339,8 @@ const SettingsTab = ({
   onCreateBackup,
   onRestoreBackup,
   onDownloadBackup,
-  onUpdateSystemHealth
+  onUpdateSystemHealth,
+  setShowAsteriskDiagnostics
 }) => {
   const [settings, setSettings] = useState({
     autoRefresh: true,
@@ -3140,6 +3158,19 @@ const SettingsTab = ({
             >
               <RefreshCw className="w-4 h-4" />
               <span>Check System</span>
+            </button>
+
+            <button
+              onClick={() => setShowAsteriskDiagnostics(true)}
+              className={cn(
+                "flex items-center justify-center space-x-2 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 min-h-[44px] w-full",
+                darkMode
+                  ? "bg-orange-700 hover:bg-orange-600 text-white border border-orange-600 transform hover:scale-105"
+                  : "bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-300 transform hover:scale-105"
+              )}
+            >
+              <Activity className="w-4 h-4" />
+              <span>Asterisk Diagnostics</span>
             </button>
 
             {/* Debug button for testing backup listing */}

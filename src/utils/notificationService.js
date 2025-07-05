@@ -8,13 +8,15 @@ class NotificationService {
   constructor() {
     this.notifications = [];
     this.logs = [];
+    this.understandingLogs = [];
     this.listeners = [];
     this.maxNotifications = 50;
     this.maxLogs = 100;
-    
+    this.maxUnderstandingLogs = 200;
+
     // Load existing data
     this.loadFromStorage();
-    
+
     // Set up console monitoring
     this.setupConsoleMonitoring();
   }
@@ -26,10 +28,15 @@ class NotificationService {
       if (savedNotifications) {
         this.notifications = JSON.parse(savedNotifications);
       }
-      
+
       const savedLogs = localStorage.getItem('voipSystemLogs');
       if (savedLogs) {
         this.logs = JSON.parse(savedLogs);
+      }
+
+      const savedUnderstandingLogs = localStorage.getItem('voipUnderstandingLogs');
+      if (savedUnderstandingLogs) {
+        this.understandingLogs = JSON.parse(savedUnderstandingLogs);
       }
     } catch (error) {
       console.error('Failed to load notifications from storage:', error);
@@ -41,6 +48,7 @@ class NotificationService {
     try {
       localStorage.setItem('voipNotifications', JSON.stringify(this.notifications));
       localStorage.setItem('voipSystemLogs', JSON.stringify(this.logs));
+      localStorage.setItem('voipUnderstandingLogs', JSON.stringify(this.understandingLogs));
     } catch (error) {
       console.error('Failed to save notifications to storage:', error);
     }
@@ -116,7 +124,7 @@ class NotificationService {
     };
 
     this.logs.unshift(log);
-    
+
     // Keep only the latest logs
     if (this.logs.length > this.maxLogs) {
       this.logs = this.logs.slice(0, this.maxLogs);
@@ -126,6 +134,32 @@ class NotificationService {
     this.notifyListeners('log', log);
 
     return log;
+  }
+
+  // Add an understanding log
+  addUnderstandingLog(type, action, details = {}) {
+    const understandingLog = {
+      id: Date.now() + Math.random(),
+      type, // 'user_action', 'ai_response', 'comprehension', 'error_recovery', 'learning'
+      action,
+      details,
+      timestamp: new Date().toISOString(),
+      sessionId: this.getSessionId(),
+      confidence: details.confidence || null,
+      context: details.context || {}
+    };
+
+    this.understandingLogs.unshift(understandingLog);
+
+    // Keep only the latest understanding logs
+    if (this.understandingLogs.length > this.maxUnderstandingLogs) {
+      this.understandingLogs = this.understandingLogs.slice(0, this.maxUnderstandingLogs);
+    }
+
+    this.saveToStorage();
+    this.notifyListeners('understanding_log', understandingLog);
+
+    return understandingLog;
   }
 
   // Show toast notification using enhanced toast methods
@@ -230,6 +264,28 @@ class NotificationService {
     return this.logs;
   }
 
+  // Get all understanding logs
+  getUnderstandingLogs() {
+    return this.understandingLogs;
+  }
+
+  // Get combined logs (system + understanding)
+  getCombinedLogs() {
+    const systemLogs = this.logs.map(log => ({
+      ...log,
+      logType: 'system'
+    }));
+
+    const understandingLogs = this.understandingLogs.map(log => ({
+      ...log,
+      logType: 'understanding'
+    }));
+
+    // Combine and sort by timestamp
+    return [...systemLogs, ...understandingLogs]
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  }
+
   // Get unread notifications count
   getUnreadCount() {
     return this.notifications.filter(n => !n.read).length;
@@ -264,6 +320,21 @@ class NotificationService {
     this.logs = [];
     this.saveToStorage();
     this.notifyListeners('clearLogs');
+  }
+
+  // Clear understanding logs
+  clearUnderstandingLogs() {
+    this.understandingLogs = [];
+    this.saveToStorage();
+    this.notifyListeners('clearUnderstandingLogs');
+  }
+
+  // Clear all logs (system + understanding)
+  clearAllLogs() {
+    this.logs = [];
+    this.understandingLogs = [];
+    this.saveToStorage();
+    this.notifyListeners('clearAllLogs');
   }
 
   // Add listener for notifications/logs updates
@@ -302,16 +373,49 @@ class NotificationService {
     });
   }
 
+  // Get session ID for understanding logs
+  getSessionId() {
+    if (!this.sessionId) {
+      this.sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+    return this.sessionId;
+  }
+
+  // Helper methods for understanding logs
+  logUserAction(action, details = {}) {
+    return this.addUnderstandingLog('user_action', action, details);
+  }
+
+  logAIResponse(response, confidence = null, context = {}) {
+    return this.addUnderstandingLog('ai_response', response, { confidence, context });
+  }
+
+  logComprehension(level, details = {}) {
+    return this.addUnderstandingLog('comprehension', level, details);
+  }
+
+  logErrorRecovery(error, recovery, details = {}) {
+    return this.addUnderstandingLog('error_recovery', `${error} -> ${recovery}`, details);
+  }
+
+  logLearning(insight, confidence = null, context = {}) {
+    return this.addUnderstandingLog('learning', insight, { confidence, context });
+  }
+
   // Get statistics
   getStats() {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
-    const todayNotifications = this.notifications.filter(n => 
+
+    const todayNotifications = this.notifications.filter(n =>
       new Date(n.timestamp) >= today
     );
-    
-    const todayLogs = this.logs.filter(l => 
+
+    const todayLogs = this.logs.filter(l =>
+      new Date(l.timestamp) >= today
+    );
+
+    const todayUnderstandingLogs = this.understandingLogs.filter(l =>
       new Date(l.timestamp) >= today
     );
 
@@ -322,7 +426,12 @@ class NotificationService {
       totalLogs: this.logs.length,
       todayLogs: todayLogs.length,
       errorLogs: this.logs.filter(l => l.level === 'error').length,
-      warningLogs: this.logs.filter(l => l.level === 'warning').length
+      warningLogs: this.logs.filter(l => l.level === 'warning').length,
+      totalUnderstandingLogs: this.understandingLogs.length,
+      todayUnderstandingLogs: todayUnderstandingLogs.length,
+      userActions: this.understandingLogs.filter(l => l.type === 'user_action').length,
+      aiResponses: this.understandingLogs.filter(l => l.type === 'ai_response').length,
+      comprehensionEvents: this.understandingLogs.filter(l => l.type === 'comprehension').length
     };
   }
 }

@@ -10,20 +10,29 @@ import {
   FiCheckCircle as CheckCircle,
   FiXCircle as XCircle,
   FiTrash2 as Trash,
-  FiRefreshCw as Refresh
+  FiRefreshCw as Refresh,
+  FiCpu as Brain,
+  FiActivity as Activity,
+  FiFilter as Filter
 } from 'react-icons/fi';
 import { cn } from '../utils/ui';
 import notificationService from '../utils/notificationService';
+import { generateExampleUnderstandingLogs, generateExampleSystemLogs } from '../utils/understandingLogExamples';
 
 const NotificationsPanel = ({ isOpen, onClose, darkMode }) => {
   const [notifications, setNotifications] = useState([]);
   const [systemLogs, setSystemLogs] = useState([]);
+  const [understandingLogs, setUnderstandingLogs] = useState([]);
+  const [combinedLogs, setCombinedLogs] = useState([]);
   const [activeTab, setActiveTab] = useState('notifications');
+  const [logFilter, setLogFilter] = useState('all'); // 'all', 'system', 'understanding'
 
   useEffect(() => {
     // Load initial data from notification service
     setNotifications(notificationService.getNotifications());
     setSystemLogs(notificationService.getLogs());
+    setUnderstandingLogs(notificationService.getUnderstandingLogs());
+    setCombinedLogs(notificationService.getCombinedLogs());
 
     // Set up listener for real-time updates
     const unsubscribe = notificationService.addListener((type, data) => {
@@ -31,10 +40,22 @@ const NotificationsPanel = ({ isOpen, onClose, darkMode }) => {
         setNotifications(notificationService.getNotifications());
       } else if (type === 'log') {
         setSystemLogs(notificationService.getLogs());
+        setCombinedLogs(notificationService.getCombinedLogs());
+      } else if (type === 'understanding_log') {
+        setUnderstandingLogs(notificationService.getUnderstandingLogs());
+        setCombinedLogs(notificationService.getCombinedLogs());
       } else if (type === 'clear') {
         setNotifications([]);
       } else if (type === 'clearLogs') {
         setSystemLogs([]);
+        setCombinedLogs(notificationService.getCombinedLogs());
+      } else if (type === 'clearUnderstandingLogs') {
+        setUnderstandingLogs([]);
+        setCombinedLogs(notificationService.getCombinedLogs());
+      } else if (type === 'clearAllLogs') {
+        setSystemLogs([]);
+        setUnderstandingLogs([]);
+        setCombinedLogs([]);
       }
     });
 
@@ -74,7 +95,38 @@ const NotificationsPanel = ({ isOpen, onClose, darkMode }) => {
     }
   };
 
-  const getLogIcon = (level) => {
+  const clearUnderstandingLogs = () => {
+    notificationService.clearUnderstandingLogs();
+  };
+
+  const clearAllLogs = () => {
+    notificationService.clearAllLogs();
+  };
+
+  const generateTestLogs = () => {
+    generateExampleSystemLogs();
+    generateExampleUnderstandingLogs();
+  };
+
+  const getLogIcon = (level, logType) => {
+    if (logType === 'understanding') {
+      switch (level || 'info') {
+        case 'user_action':
+          return <Activity className="w-4 h-4 text-blue-500" />;
+        case 'ai_response':
+          return <Brain className="w-4 h-4 text-purple-500" />;
+        case 'comprehension':
+          return <CheckCircle className="w-4 h-4 text-green-500" />;
+        case 'error_recovery':
+          return <AlertTriangle className="w-4 h-4 text-orange-500" />;
+        case 'learning':
+          return <Brain className="w-4 h-4 text-indigo-500" />;
+        default:
+          return <Info className="w-4 h-4 text-primary-500" />;
+      }
+    }
+
+    // System logs
     switch (level) {
       case 'error':
         return <XCircle className="w-4 h-4 text-danger-500" />;
@@ -89,6 +141,38 @@ const NotificationsPanel = ({ isOpen, onClose, darkMode }) => {
 
   const formatTime = (timestamp) => {
     return new Date(timestamp).toLocaleTimeString();
+  };
+
+  const getFilteredLogs = () => {
+    switch (logFilter) {
+      case 'system':
+        return systemLogs.map(log => ({ ...log, logType: 'system' }));
+      case 'understanding':
+        return understandingLogs.map(log => ({ ...log, logType: 'understanding' }));
+      case 'all':
+      default:
+        return combinedLogs;
+    }
+  };
+
+  const getLogTypeLabel = (logType, type) => {
+    if (logType === 'understanding') {
+      switch (type) {
+        case 'user_action':
+          return 'User Action';
+        case 'ai_response':
+          return 'AI Response';
+        case 'comprehension':
+          return 'Comprehension';
+        case 'error_recovery':
+          return 'Error Recovery';
+        case 'learning':
+          return 'Learning';
+        default:
+          return 'Understanding';
+      }
+    }
+    return 'System';
   };
 
   if (!isOpen) return null;
@@ -157,7 +241,7 @@ const NotificationsPanel = ({ isOpen, onClose, darkMode }) => {
                   : darkMode ? "text-secondary-400 hover:text-white" : "text-secondary-600 hover:text-secondary-900"
               )}
             >
-              System Logs ({systemLogs.length})
+              All Logs ({combinedLogs.length})
             </button>
           </div>
 
@@ -222,47 +306,92 @@ const NotificationsPanel = ({ isOpen, onClose, darkMode }) => {
             ) : (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-semibold">System Logs</h3>
-                  <button
-                    onClick={clearSystemLogs}
-                    className="text-xs px-3 py-1 bg-danger-600 text-white rounded-md hover:bg-danger-700 transition-colors"
-                  >
-                    Clear Logs
-                  </button>
+                  <h3 className="font-semibold">System & Understanding Logs</h3>
+                  <div className="flex items-center space-x-2">
+                    <select
+                      value={logFilter}
+                      onChange={(e) => setLogFilter(e.target.value)}
+                      className={cn(
+                        "text-xs px-2 py-1 rounded border",
+                        darkMode
+                          ? "bg-secondary-800 border-secondary-600 text-white"
+                          : "bg-white border-secondary-300 text-secondary-900"
+                      )}
+                    >
+                      <option value="all">All Logs ({combinedLogs.length})</option>
+                      <option value="system">System ({systemLogs.length})</option>
+                      <option value="understanding">Understanding ({understandingLogs.length})</option>
+                    </select>
+                    <button
+                      onClick={generateTestLogs}
+                      className="text-xs px-3 py-1 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                    >
+                      Generate Test Logs
+                    </button>
+                    <button
+                      onClick={clearAllLogs}
+                      className="text-xs px-3 py-1 bg-danger-600 text-white rounded-md hover:bg-danger-700 transition-colors"
+                    >
+                      Clear All
+                    </button>
+                  </div>
                 </div>
 
-                {systemLogs.length === 0 ? (
+                {getFilteredLogs().length === 0 ? (
                   <div className="text-center py-8 text-secondary-500">
                     <Info className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                    <p>No system logs yet</p>
+                    <p>No logs yet</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {systemLogs.map((log) => (
+                    {getFilteredLogs().map((log) => (
                       <div
                         key={log.id}
                         className={cn(
-                          "p-3 rounded-md border text-sm font-mono",
+                          "p-3 rounded-md border text-sm",
+                          log.logType === 'understanding' ? "font-sans" : "font-mono",
                           darkMode ? "bg-secondary-800 border-secondary-700" : "bg-secondary-50 border-secondary-200"
                         )}
                       >
                         <div className="flex items-start space-x-2">
-                          {getLogIcon(log.level)}
+                          {getLogIcon(log.level || log.type, log.logType)}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between">
-                              <span className={cn(
-                                "text-xs font-medium uppercase",
-                                log.level === 'error' ? "text-danger-500" :
-                                log.level === 'warning' ? "text-warning-500" :
-                                log.level === 'info' ? "text-primary-500" : "text-success-500"
-                              )}>
-                                {log.level}
-                              </span>
+                              <div className="flex items-center space-x-2">
+                                <span className={cn(
+                                  "text-xs font-medium uppercase px-2 py-1 rounded",
+                                  log.logType === 'understanding'
+                                    ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+                                    : log.level === 'error' ? "bg-danger-100 text-danger-700 dark:bg-danger-900/30 dark:text-danger-400" :
+                                      log.level === 'warning' ? "bg-warning-100 text-warning-700 dark:bg-warning-900/30 dark:text-warning-400" :
+                                      log.level === 'info' ? "bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400" :
+                                      "bg-success-100 text-success-700 dark:bg-success-900/30 dark:text-success-400"
+                                )}>
+                                  {getLogTypeLabel(log.logType, log.type || log.level)}
+                                </span>
+                                {log.confidence && (
+                                  <span className="text-xs text-secondary-500">
+                                    {Math.round(log.confidence * 100)}%
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-xs text-secondary-500">
                                 {formatTime(log.timestamp)}
                               </span>
                             </div>
-                            <p className="mt-1 break-all">{log.message}</p>
+                            <p className="mt-1 break-all">
+                              {log.logType === 'understanding' ? log.action : log.message}
+                            </p>
+                            {log.details && Object.keys(log.details).length > 0 && (
+                              <details className="mt-2">
+                                <summary className="text-xs text-secondary-500 cursor-pointer hover:text-secondary-700">
+                                  Details
+                                </summary>
+                                <pre className="text-xs mt-1 p-2 bg-secondary-100 dark:bg-secondary-900 rounded overflow-x-auto">
+                                  {JSON.stringify(log.details, null, 2)}
+                                </pre>
+                              </details>
+                            )}
                           </div>
                         </div>
                       </div>

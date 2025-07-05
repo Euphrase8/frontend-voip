@@ -251,7 +251,7 @@ func (c *Config) GetWebSocketURL() string {
 
 // GetAsteriskWebSocketURL returns the Asterisk WebSocket URL
 func (c *Config) GetAsteriskWebSocketURL() string {
-	return "ws://" + c.AsteriskHost + ":" + c.SIPPort + "/ws"
+	return "ws://" + c.AsteriskHost + ":" + c.SIPPort + "/asterisk/ws"
 }
 
 // GetAsteriskAMIAddress returns the Asterisk AMI address

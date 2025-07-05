@@ -11,20 +11,28 @@ import {
   FiTrash2 as Trash,
   FiRefreshCw as Refresh,
   FiActivity as Activity,
-  FiClock as Clock
+  FiClock as Clock,
+  FiCpu as Brain,
+  FiFilter as Filter
 } from 'react-icons/fi';
 import { cn } from '../utils/ui';
 import notificationService from '../utils/notificationService';
+import { generateExampleUnderstandingLogs, generateExampleSystemLogs } from '../utils/understandingLogExamples';
 
 const NotificationsPage = ({ darkMode, user }) => {
   const [notifications, setNotifications] = useState([]);
   const [systemLogs, setSystemLogs] = useState([]);
+  const [understandingLogs, setUnderstandingLogs] = useState([]);
+  const [combinedLogs, setCombinedLogs] = useState([]);
   const [activeTab, setActiveTab] = useState('notifications');
+  const [logFilter, setLogFilter] = useState('all');
 
   useEffect(() => {
     // Load initial data from notification service
     setNotifications(notificationService.getNotifications());
     setSystemLogs(notificationService.getLogs());
+    setUnderstandingLogs(notificationService.getUnderstandingLogs());
+    setCombinedLogs(notificationService.getCombinedLogs());
 
     // Set up listener for real-time updates
     const unsubscribe = notificationService.addListener((type, data) => {
@@ -32,10 +40,22 @@ const NotificationsPage = ({ darkMode, user }) => {
         setNotifications(notificationService.getNotifications());
       } else if (type === 'log') {
         setSystemLogs(notificationService.getLogs());
+        setCombinedLogs(notificationService.getCombinedLogs());
+      } else if (type === 'understanding_log') {
+        setUnderstandingLogs(notificationService.getUnderstandingLogs());
+        setCombinedLogs(notificationService.getCombinedLogs());
       } else if (type === 'clear') {
         setNotifications([]);
       } else if (type === 'clearLogs') {
         setSystemLogs([]);
+        setCombinedLogs(notificationService.getCombinedLogs());
+      } else if (type === 'clearUnderstandingLogs') {
+        setUnderstandingLogs([]);
+        setCombinedLogs(notificationService.getCombinedLogs());
+      } else if (type === 'clearAllLogs') {
+        setSystemLogs([]);
+        setUnderstandingLogs([]);
+        setCombinedLogs([]);
       }
     });
 
@@ -75,7 +95,50 @@ const NotificationsPage = ({ darkMode, user }) => {
     }
   };
 
-  const getLogIcon = (level) => {
+  const clearUnderstandingLogs = () => {
+    notificationService.clearUnderstandingLogs();
+  };
+
+  const clearAllLogs = () => {
+    notificationService.clearAllLogs();
+  };
+
+  const generateTestLogs = () => {
+    generateExampleSystemLogs();
+    generateExampleUnderstandingLogs();
+  };
+
+  const getFilteredLogs = () => {
+    switch (logFilter) {
+      case 'system':
+        return systemLogs.map(log => ({ ...log, logType: 'system' }));
+      case 'understanding':
+        return understandingLogs.map(log => ({ ...log, logType: 'understanding' }));
+      case 'all':
+      default:
+        return combinedLogs;
+    }
+  };
+
+  const getLogIcon = (level, logType) => {
+    if (logType === 'understanding') {
+      switch (level || 'info') {
+        case 'user_action':
+          return <Activity className="w-4 h-4 text-blue-500" />;
+        case 'ai_response':
+          return <Brain className="w-4 h-4 text-purple-500" />;
+        case 'comprehension':
+          return <CheckCircle className="w-4 h-4 text-green-500" />;
+        case 'error_recovery':
+          return <AlertTriangle className="w-4 h-4 text-orange-500" />;
+        case 'learning':
+          return <Brain className="w-4 h-4 text-indigo-500" />;
+        default:
+          return <Info className="w-4 h-4 text-blue-500" />;
+      }
+    }
+
+    // System logs
     switch (level) {
       case 'error':
         return <XCircle className="w-4 h-4 text-danger-500" />;
@@ -86,6 +149,26 @@ const NotificationsPage = ({ darkMode, user }) => {
       default:
         return <CheckCircle className="w-4 h-4 text-success-500" />;
     }
+  };
+
+  const getLogTypeLabel = (logType, type) => {
+    if (logType === 'understanding') {
+      switch (type) {
+        case 'user_action':
+          return 'User Action';
+        case 'ai_response':
+          return 'AI Response';
+        case 'comprehension':
+          return 'Comprehension';
+        case 'error_recovery':
+          return 'Error Recovery';
+        case 'learning':
+          return 'Learning';
+        default:
+          return 'Understanding';
+      }
+    }
+    return 'System';
   };
 
   const formatTime = (timestamp) => {
@@ -99,7 +182,7 @@ const NotificationsPage = ({ darkMode, user }) => {
   const tabs = [
     { id: 'notifications', label: 'Notifications', icon: Bell, count: notifications.length },
     ...(user?.role === 'admin' ? [
-      { id: 'logs', label: 'System Logs', icon: Activity, count: systemLogs.length }
+      { id: 'logs', label: 'All Logs', icon: Activity, count: combinedLogs.length }
     ] : [])
   ];
 
@@ -149,19 +232,42 @@ const NotificationsPage = ({ darkMode, user }) => {
                 </button>
               </>
             ) : user?.role === 'admin' && activeTab === 'logs' ? (
-              <button
-                onClick={clearLogs}
-                className={cn(
-                  "flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                  systemLogs.length === 0
-                    ? "opacity-50 cursor-not-allowed"
-                    : "text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20 border border-red-300 dark:border-red-700"
-                )}
-                disabled={systemLogs.length === 0}
-              >
-                <Trash className="w-4 h-4" />
-                <span className="hidden sm:inline">Clear Logs</span>
-              </button>
+              <div className="flex items-center space-x-2">
+                <select
+                  value={logFilter}
+                  onChange={(e) => setLogFilter(e.target.value)}
+                  className={cn(
+                    "px-3 py-2 rounded-lg text-sm border",
+                    darkMode
+                      ? "bg-secondary-800 border-secondary-600 text-white"
+                      : "bg-white border-secondary-300 text-secondary-900"
+                  )}
+                >
+                  <option value="all">All Logs ({combinedLogs.length})</option>
+                  <option value="system">System ({systemLogs.length})</option>
+                  <option value="understanding">Understanding ({understandingLogs.length})</option>
+                </select>
+                <button
+                  onClick={generateTestLogs}
+                  className="flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-primary-600 hover:text-primary-700 hover:bg-primary-50 dark:text-primary-400 dark:hover:text-primary-300 dark:hover:bg-primary-900/20 border border-primary-300 dark:border-primary-700"
+                >
+                  <Activity className="w-4 h-4" />
+                  <span className="hidden sm:inline">Generate Test Logs</span>
+                </button>
+                <button
+                  onClick={clearAllLogs}
+                  className={cn(
+                    "flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                    combinedLogs.length === 0
+                      ? "opacity-50 cursor-not-allowed"
+                      : "text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20 border border-red-300 dark:border-red-700"
+                  )}
+                  disabled={combinedLogs.length === 0}
+                >
+                  <Trash className="w-4 h-4" />
+                  <span className="hidden sm:inline">Clear All</span>
+                </button>
+              </div>
             ) : null}
           </div>
         </div>
@@ -290,7 +396,7 @@ const NotificationsPage = ({ darkMode, user }) => {
 
         {activeTab === 'logs' && user?.role === 'admin' && (
           <div className="p-4 lg:p-6">
-            {systemLogs.length === 0 ? (
+            {getFilteredLogs().length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center">
                 <Activity className={cn(
                   'w-16 h-16 mb-4',
@@ -300,53 +406,86 @@ const NotificationsPage = ({ darkMode, user }) => {
                   'text-lg font-medium mb-2',
                   darkMode ? 'text-secondary-400' : 'text-secondary-600'
                 )}>
-                  No system logs
+                  No logs available
                 </h3>
                 <p className={cn(
                   'text-sm',
                   darkMode ? 'text-secondary-500' : 'text-secondary-500'
                 )}>
-                  System activity logs will appear here.
+                  System and understanding logs will appear here.
                 </p>
               </div>
             ) : (
               <div className="space-y-2">
-                {systemLogs.map((log, index) => (
+                {getFilteredLogs().map((log, index) => (
                   <motion.div
-                    key={index}
+                    key={log.id || index}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.05 }}
                     className={cn(
-                      'p-3 rounded border text-sm font-mono',
+                      'p-3 rounded border text-sm',
+                      log.logType === 'understanding' ? 'font-sans' : 'font-mono',
                       darkMode
                         ? 'bg-secondary-800 border-secondary-700'
                         : 'bg-secondary-50 border-secondary-200'
                     )}
                   >
-                    <div className="flex items-center space-x-3">
-                      {getLogIcon(log.level)}
-                      <span className={cn(
-                        'text-xs',
-                        darkMode ? 'text-secondary-400' : 'text-secondary-500'
-                      )}>
-                        {formatTime(log.timestamp)}
-                      </span>
-                      <span className={cn(
-                        'px-2 py-1 text-xs rounded uppercase font-semibold',
-                        log.level === 'error' ? 'bg-danger-100 text-danger-700' :
-                        log.level === 'warning' ? 'bg-warning-100 text-warning-700' :
-                        log.level === 'info' ? 'bg-primary-100 text-primary-700' :
-                        'bg-success-100 text-success-700'
-                      )}>
-                        {log.level}
-                      </span>
-                      <span className={cn(
-                        'flex-1',
-                        darkMode ? 'text-secondary-300' : 'text-secondary-700'
-                      )}>
-                        {log.message}
-                      </span>
+                    <div className="flex items-start space-x-3">
+                      {getLogIcon(log.level || log.type, log.logType)}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center space-x-2">
+                            <span className={cn(
+                              'px-2 py-1 text-xs rounded uppercase font-semibold',
+                              log.logType === 'understanding'
+                                ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+                                : log.level === 'error' ? 'bg-danger-100 text-danger-700 dark:bg-danger-900/30 dark:text-danger-400' :
+                                  log.level === 'warning' ? 'bg-warning-100 text-warning-700 dark:bg-warning-900/30 dark:text-warning-400' :
+                                  log.level === 'info' ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' :
+                                  'bg-success-100 text-success-700 dark:bg-success-900/30 dark:text-success-400'
+                            )}>
+                              {getLogTypeLabel(log.logType, log.type || log.level)}
+                            </span>
+                            {log.confidence && (
+                              <span className={cn(
+                                'text-xs px-2 py-1 rounded bg-gray-100 text-gray-600',
+                                darkMode ? 'bg-gray-800 text-gray-400' : ''
+                              )}>
+                                {Math.round(log.confidence * 100)}%
+                              </span>
+                            )}
+                          </div>
+                          <span className={cn(
+                            'text-xs',
+                            darkMode ? 'text-secondary-400' : 'text-secondary-500'
+                          )}>
+                            {formatTime(log.timestamp)}
+                          </span>
+                        </div>
+                        <p className={cn(
+                          'break-all',
+                          darkMode ? 'text-secondary-300' : 'text-secondary-700'
+                        )}>
+                          {log.logType === 'understanding' ? log.action : log.message}
+                        </p>
+                        {log.details && Object.keys(log.details).length > 0 && (
+                          <details className="mt-2">
+                            <summary className={cn(
+                              'text-xs cursor-pointer hover:underline',
+                              darkMode ? 'text-secondary-400' : 'text-secondary-500'
+                            )}>
+                              View Details
+                            </summary>
+                            <pre className={cn(
+                              'text-xs mt-1 p-2 rounded overflow-x-auto',
+                              darkMode ? 'bg-secondary-900 text-secondary-300' : 'bg-secondary-100 text-secondary-700'
+                            )}>
+                              {JSON.stringify(log.details, null, 2)}
+                            </pre>
+                          </details>
+                        )}
+                      </div>
                     </div>
                   </motion.div>
                 ))}

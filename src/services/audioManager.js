@@ -1,6 +1,8 @@
 // Audio Manager Service
 // Centralized audio control for the VoIP application
 
+import { microphoneFix } from '../utils/microphoneFix';
+
 class AudioManager {
   constructor() {
     this.localStream = null;
@@ -101,44 +103,61 @@ class AudioManager {
     }
   }
 
-  // Set up local media stream
+  // Set up local media stream with enhanced microphone fix
   async setupLocalMedia() {
     try {
       if (this.localStream && this.localStream.active) {
+        console.log('[AudioManager] Local media already available');
         return this.localStream;
       }
 
-      // Check if getUserMedia is available
-      if (!navigator || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        console.warn('[AudioManager] getUserMedia not available, trying fallback methods');
-        // Try legacy getUserMedia
-        const getUserMedia = navigator.getUserMedia ||
-                           navigator.webkitGetUserMedia ||
-                           navigator.mozGetUserMedia ||
-                           navigator.msGetUserMedia;
+      console.log('[AudioManager] Setting up local media with enhanced microphone fix...');
 
-        if (getUserMedia) {
-          const constraints = this.getAudioConstraints();
-          this.localStream = await new Promise((resolve, reject) => {
-            getUserMedia.call(navigator, constraints, resolve, reject);
-          });
-        } else {
-          throw new Error('No getUserMedia method available');
+      // Use the enhanced microphone fix utility
+      const micResult = await microphoneFix.requestMicrophoneAccess();
+
+      if (!micResult.success) {
+        console.error('[AudioManager] Microphone access failed:', micResult.error);
+
+        // Generate user-friendly instructions
+        const instructions = microphoneFix.generateFixInstructions(micResult.error);
+
+        let errorMessage = instructions.title;
+        if (instructions.steps.length > 0) {
+          errorMessage += '\n\nSteps to fix:\n' + instructions.steps.map((step, i) => `${i + 1}. ${step}`).join('\n');
         }
-      } else {
-        const constraints = this.getAudioConstraints();
-        this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+        console.error('[AudioManager] Microphone fix instructions:', errorMessage);
+        throw new Error(errorMessage);
+      }
+
+      this.localStream = micResult.stream;
+      console.log('[AudioManager] ✅ Local media setup successful using:', micResult.method);
+
+      // Test microphone levels
+      try {
+        const levelTest = await microphoneFix.testMicrophoneLevel(this.localStream, 1000);
+        console.log('[AudioManager] Microphone test:', levelTest);
+
+        if (!levelTest.isWorking) {
+          console.warn('[AudioManager] Microphone may not be working properly');
+        } else {
+          console.log('[AudioManager] ✅ Microphone is working, quality:', levelTest.quality);
+        }
+      } catch (testError) {
+        console.warn('[AudioManager] Microphone level test failed:', testError);
       }
 
       // Apply current mute state
       this.setMute(this.settings.isMuted);
 
-      console.log('[AudioManager] Local media setup successful');
+      console.log('[AudioManager] Local media setup completed successfully');
       return this.localStream;
     } catch (error) {
       console.error('[AudioManager] Failed to setup local media:', error);
-      // Don't throw error, return null to allow app to continue
-      return null;
+
+      // For enhanced error handling, throw the error so the calling code can handle it
+      throw error;
     }
   }
 

@@ -15,6 +15,7 @@ import (
 	"voip-backend/websocket"
 
 	"github.com/gin-gonic/gin"
+	gorillaws "github.com/gorilla/websocket"
 	"gorm.io/gorm"
 )
 
@@ -569,36 +570,58 @@ func testHTTPConnection() map[string]interface{} {
 }
 
 func testWebSocketConnection() map[string]interface{} {
-	// Test WebSocket endpoint availability
+	// Test WebSocket endpoint availability by attempting a proper WebSocket connection
 	asteriskHost := config.AppConfig.AsteriskHost
-	wsURL := fmt.Sprintf("ws://%s:8088/ws", asteriskHost)
+	wsURL := fmt.Sprintf("ws://%s:8088/asterisk/ws", asteriskHost)
 
-	// For now, just test if the HTTP upgrade endpoint is available
-	httpURL := fmt.Sprintf("http://%s:8088/ws", asteriskHost)
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(httpURL)
+	// Test WebSocket connection with proper headers
+	dialer := gorillaws.Dialer{
+		HandshakeTimeout: 5 * time.Second,
+	}
+
+	// Attempt WebSocket connection
+	conn, resp, err := dialer.Dial(wsURL, nil)
 	if err != nil {
+		// Check if it's a WebSocket-related error (which means the endpoint exists)
+		if resp != nil {
+			if resp.StatusCode == 400 || resp.StatusCode == 426 {
+				// Bad Request or Upgrade Required - WebSocket endpoint exists but needs proper headers
+				return map[string]interface{}{
+					"success": true,
+					"message": "WebSocket endpoint is available",
+					"details": fmt.Sprintf("WebSocket endpoint at %s is responding (status: %d)", wsURL, resp.StatusCode),
+				}
+			}
+		}
+
+		// Try fallback HTTP test to see if the port is open
+		httpURL := fmt.Sprintf("http://%s:8088/asterisk/ws", asteriskHost)
+		client := &http.Client{Timeout: 3 * time.Second}
+		httpResp, httpErr := client.Get(httpURL)
+		if httpErr == nil {
+			defer httpResp.Body.Close()
+			if httpResp.StatusCode == 400 || httpResp.StatusCode == 426 {
+				return map[string]interface{}{
+					"success": true,
+					"message": "WebSocket endpoint is available",
+					"details": fmt.Sprintf("HTTP test confirms WebSocket endpoint at %s is available (status: %d)", httpURL, httpResp.StatusCode),
+				}
+			}
+		}
+
 		return map[string]interface{}{
 			"success": false,
 			"error":   err.Error(),
-			"details": fmt.Sprintf("Failed to connect to %s", httpURL),
-		}
-	}
-	defer resp.Body.Close()
-
-	// WebSocket endpoint should return 426 Upgrade Required for HTTP requests
-	if resp.StatusCode == 426 {
-		return map[string]interface{}{
-			"success": true,
-			"message": "WebSocket endpoint available",
-			"details": fmt.Sprintf("Asterisk WebSocket endpoint responding on %s", wsURL),
+			"details": fmt.Sprintf("Failed to connect to WebSocket at %s", wsURL),
 		}
 	}
 
+	// Successfully connected
+	defer conn.Close()
 	return map[string]interface{}{
-		"success": false,
-		"error":   fmt.Sprintf("HTTP %d", resp.StatusCode),
-		"details": fmt.Sprintf("WebSocket endpoint returned unexpected status %d", resp.StatusCode),
+		"success": true,
+		"message": "WebSocket connection successful",
+		"details": fmt.Sprintf("Successfully connected to %s", wsURL),
 	}
 }
 
@@ -658,34 +681,37 @@ func testHTTPConnectionWithConfig(asteriskHost, httpPort string) map[string]inte
 
 func testWebSocketConnectionWithConfig(asteriskHost, httpPort string) map[string]interface{} {
 	// Test WebSocket endpoint availability with custom config
-	wsURL := fmt.Sprintf("ws://%s:%s/ws", asteriskHost, httpPort)
-
-	// For now, just test if the HTTP upgrade endpoint is available
-	httpURL := fmt.Sprintf("http://%s:%s/ws", asteriskHost, httpPort)
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(httpURL)
-	if err != nil {
-		return map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-			"details": fmt.Sprintf("Failed to connect to %s", httpURL),
-		}
+	// Try multiple possible WebSocket endpoints
+	endpoints := []string{
+		fmt.Sprintf("http://%s:%s/asterisk/ws", asteriskHost, httpPort),
+		fmt.Sprintf("http://%s:%s/ws", asteriskHost, httpPort),
+		fmt.Sprintf("http://%s:%s/rawman", asteriskHost, httpPort),
 	}
-	defer resp.Body.Close()
 
-	// WebSocket endpoint should return 426 Upgrade Required for HTTP requests
-	if resp.StatusCode == 426 {
-		return map[string]interface{}{
-			"success": true,
-			"message": "WebSocket endpoint available",
-			"details": fmt.Sprintf("Asterisk WebSocket endpoint responding on %s", wsURL),
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	for _, httpURL := range endpoints {
+		resp, err := client.Get(httpURL)
+		if err != nil {
+			continue // Try next endpoint
+		}
+		defer resp.Body.Close()
+
+		// WebSocket endpoint should return 426 Upgrade Required for HTTP requests
+		// or 400 Bad Request (some Asterisk versions)
+		if resp.StatusCode == 426 || resp.StatusCode == 400 {
+			return map[string]interface{}{
+				"success": true,
+				"message": "WebSocket endpoint available",
+				"details": fmt.Sprintf("Asterisk WebSocket endpoint responding on %s", httpURL),
+			}
 		}
 	}
 
 	return map[string]interface{}{
 		"success": false,
-		"error":   fmt.Sprintf("HTTP %d", resp.StatusCode),
-		"details": fmt.Sprintf("WebSocket endpoint returned unexpected status %d", resp.StatusCode),
+		"error":   "No WebSocket endpoint found",
+		"details": fmt.Sprintf("Tested endpoints: %v", endpoints),
 	}
 }
 

@@ -2,6 +2,7 @@ import CONFIG from './config';
 import { checkBrowserCompatibility, getMediaStreamWithFallback } from '../utils/browserCompat';
 import audioManager from './audioManager';
 import webrtcMonitor from '../utils/webrtcMonitor';
+import { microphoneFix } from '../utils/microphoneFix';
 
 class WebRTCCallService {
   constructor() {

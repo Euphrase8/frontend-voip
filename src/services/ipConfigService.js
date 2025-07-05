@@ -6,9 +6,9 @@ class IPConfigService {
     this.CONFIG_KEY = 'voipIPConfig';
     this.CONFIGURED_KEY = 'voipConfigured';
     this.defaultConfig = {
-      backendHost: '172.20.10.2',
+      backendHost: 'localhost',
       backendPort: '8080',
-      asteriskHost: '172.20.10.2',
+      asteriskHost: '172.20.10.5',
       asteriskPort: '8088',
       asteriskAMIPort: '5038'
     };
@@ -82,7 +82,7 @@ class IPConfigService {
   // Get Asterisk WebSocket URL
   getAsteriskWebSocketUrl() {
     const config = this.getConfig();
-    return `ws://${config.asteriskHost}:${config.asteriskPort}/ws`;
+    return `ws://${config.asteriskHost}:${config.asteriskPort}/asterisk/ws`;
   }
 
   // Get Asterisk AMI URL

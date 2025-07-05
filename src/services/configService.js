@@ -94,7 +94,7 @@ class ConfigService {
       ...(configuredBackendUrl ? [configuredBackendUrl] : []),
 
       // Known backend server IP (for network access)
-      'http://172.20.10.2:8080',
+      'http://localhost:8080',
 
       // Same host as frontend (common in development)
       `${protocol}//${currentHost}:8080`,
@@ -126,9 +126,9 @@ class ConfigService {
       backendHost = config.backendHost;
       asteriskHost = config.asteriskHost;
     } else {
-      // Use known backend IP for network access, fallback to current host
+      // Use localhost for development, fallback to current host
       backendHost = (currentHost === 'localhost' || currentHost === '127.0.0.1')
-        ? '172.20.10.4'
+        ? 'localhost'
         : currentHost;
       asteriskHost = '172.20.10.5';
     }
@@ -138,7 +138,7 @@ class ConfigService {
       ws_url: `ws://${backendHost}:8080/ws`,
       asterisk: {
         host: asteriskHost,
-        ws_url: `ws://${asteriskHost}:8088/ws`,
+        ws_url: `ws://${asteriskHost}:8088/asterisk/ws`,
       },
       environment: 'development',
       debug: true,
@@ -190,7 +190,7 @@ class ConfigService {
     if (ipConfigService.isConfigured()) {
       return ipConfigService.getAsteriskWebSocketUrl();
     }
-    return this.get('asterisk.ws_url', 'ws://172.20.10.2:8088/ws');
+    return this.get('asterisk.ws_url', 'ws://172.20.10.2:8088/asterisk/ws');
   }
 
   // Get Asterisk Host
@@ -201,10 +201,7 @@ class ConfigService {
     return this.get('asterisk.host', '172.20.10.2');
   }
 
-  // Get Asterisk host
-  getAsteriskHost() {
-    return this.get('asterisk.host', 'asterisk.local');
-  }
+
 
   // Check if debug mode is enabled
   isDebugMode() {
