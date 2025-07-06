@@ -51,8 +51,8 @@ const CreateUserModal = ({ isOpen, onClose, onCreateUser, darkMode }) => {
     // Extension validation
     if (!formData.extension.trim()) {
       newErrors.extension = 'Extension is required';
-    } else if (!/^\d{3,5}$/.test(formData.extension)) {
-      newErrors.extension = 'Extension must be 3-5 digits';
+    } else if (!/^\d{4,6}$/.test(formData.extension)) {
+      newErrors.extension = 'Extension must be 4-6 digits';
     }
 
     // Password validation
@@ -306,7 +306,7 @@ const CreateUserModal = ({ isOpen, onClose, onCreateUser, darkMode }) => {
                     )}
                     placeholder="Enter extension (e.g., 1001)"
                     disabled={isSubmitting}
-                    maxLength={5}
+                    maxLength={6}
                   />
                 </div>
                 {errors.extension && (

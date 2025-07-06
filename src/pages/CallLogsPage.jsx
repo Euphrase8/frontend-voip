@@ -19,10 +19,11 @@ import {
   FiAlertTriangle as AlertTriangle,
   FiInfo as Info
 } from 'react-icons/fi';
-import { getDetailedCallLogs, deleteCallLog, bulkDeleteCallLogs, exportCallLogs } from '../services/logs';
+import { getDetailedCallLogs, deleteCallLog, bulkDeleteCallLogs, clearAllCallLogs, bulkDeleteCallLogsByFilter, exportCallLogs } from '../services/logs';
 import { cn } from '../utils/ui';
 import notificationService from '../utils/notificationService';
 import toast from 'react-hot-toast';
+import BulkDeleteLogsModal from '../components/BulkDeleteLogsModal';
 
 // Enhanced Call Log Item Component
 const CallLogItem = ({ log, index, darkMode, onCall, onDelete, isAdmin, isSelected, onSelect }) => {
@@ -264,6 +265,7 @@ const CallLogsPage = ({ darkMode = false, user, onCall }) => {
   const [directionFilter, setDirectionFilter] = useState('all');
   const [selectedLogs, setSelectedLogs] = useState(new Set());
   const [showFilters, setShowFilters] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const scrollContainerRef = useRef(null);
 
   const isAdmin = user?.role === 'admin';
@@ -356,10 +358,6 @@ const CallLogsPage = ({ darkMode = false, user, onCall }) => {
       return;
     }
 
-    if (!window.confirm(`Are you sure you want to delete ${selectedLogs.size} call logs?`)) {
-      return;
-    }
-
     try {
       await bulkDeleteCallLogs(Array.from(selectedLogs));
       await fetchLogs();
@@ -370,12 +368,60 @@ const CallLogsPage = ({ darkMode = false, user, onCall }) => {
         'Bulk Delete Completed',
         `Successfully deleted ${selectedLogs.size} call logs`
       );
+      toast.success(`${selectedLogs.size} call logs deleted successfully`);
     } catch (error) {
       notificationService.addNotification(
         'error',
         'Bulk Delete Failed',
         error.message || 'Failed to delete call logs'
       );
+      toast.error(error.message || 'Failed to delete call logs');
+    }
+  };
+
+  const handleClearAllLogs = async () => {
+    try {
+      const result = await clearAllCallLogs();
+      await fetchLogs();
+      setSelectedLogs(new Set());
+
+      notificationService.addNotification(
+        'success',
+        'All call logs cleared',
+        `${result.deleted_count} call logs have been deleted`
+      );
+      toast.success(`All call logs cleared (${result.deleted_count} deleted)`);
+    } catch (error) {
+      console.error('Error clearing all logs:', error);
+      notificationService.addNotification(
+        'error',
+        'Failed to clear all logs',
+        error.message || 'An error occurred while clearing logs'
+      );
+      toast.error(error.message || 'Failed to clear all logs');
+    }
+  };
+
+  const handleDeleteByFilter = async (filters) => {
+    try {
+      const result = await bulkDeleteCallLogsByFilter(filters);
+      await fetchLogs();
+      setSelectedLogs(new Set());
+
+      notificationService.addNotification(
+        'success',
+        'Filtered logs deleted',
+        `${result.deleted_count} call logs have been deleted`
+      );
+      toast.success(`${result.deleted_count} call logs deleted by filter`);
+    } catch (error) {
+      console.error('Error deleting logs by filter:', error);
+      notificationService.addNotification(
+        'error',
+        'Failed to delete filtered logs',
+        error.message || 'An error occurred while deleting filtered logs'
+      );
+      toast.error(error.message || 'Failed to delete filtered logs');
     }
   };
 
@@ -456,13 +502,13 @@ const CallLogsPage = ({ darkMode = false, user, onCall }) => {
                 <span>Export CSV</span>
               </button>
 
-              {selectedLogs.size > 0 && (
+              {isAdmin && (
                 <button
-                  onClick={handleBulkDelete}
+                  onClick={() => setShowBulkDeleteModal(true)}
                   className="flex items-center space-x-2 px-3 py-2 bg-danger-600 hover:bg-danger-700 text-white rounded-lg transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
-                  <span>Delete ({selectedLogs.size})</span>
+                  <span>Bulk Delete</span>
                 </button>
               )}
             </>
@@ -668,6 +714,18 @@ const CallLogsPage = ({ darkMode = false, user, onCall }) => {
           </div>
         </div>
       </div>
+
+      {/* Bulk Delete Modal */}
+      <BulkDeleteLogsModal
+        isOpen={showBulkDeleteModal}
+        onClose={() => setShowBulkDeleteModal(false)}
+        onDeleteSelected={handleBulkDelete}
+        onClearAll={handleClearAllLogs}
+        onDeleteByFilter={handleDeleteByFilter}
+        selectedCount={selectedLogs.size}
+        totalCount={filteredLogs.length}
+        darkMode={darkMode}
+      />
     </div>
   );
 };

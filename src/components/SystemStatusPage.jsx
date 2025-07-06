@@ -69,7 +69,7 @@ const SystemStatusPage = ({ darkMode, className }) => {
     loadSystemHealth();
 
     if (autoRefresh) {
-      intervalRef.current = setInterval(loadSystemHealth, 30000); // 30 seconds
+      intervalRef.current = setInterval(loadSystemHealth, 10000); // 10 seconds for real-time updates
     }
 
     return () => {

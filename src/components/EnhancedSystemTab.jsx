@@ -905,6 +905,18 @@ const EnhancedSystemTab = ({ systemStatus, darkMode, systemHealth }) => {
                 </div>
 
                 <div className="text-center">
+                  <div className="text-base sm:text-lg font-bold text-orange-600">
+                    {allUsers.filter(user => user.actual_status === 'busy').length}
+                  </div>
+                  <div className={cn(
+                    'text-xs',
+                    darkMode ? 'text-secondary-400' : 'text-secondary-600'
+                  )}>
+                    Busy
+                  </div>
+                </div>
+
+                <div className="text-center">
                   <div className="text-base sm:text-lg font-bold text-secondary-600">
                     {allUsers.filter(user => user.actual_status === 'offline').length}
                   </div>
@@ -1046,31 +1058,68 @@ const EnhancedSystemTab = ({ systemStatus, darkMode, systemHealth }) => {
                   {allUsers.map((user) => {
                     const StatusIcon = user.actual_status === 'online' ? UserCheck :
                                      user.actual_status === 'away' ? Clock :
+                                     user.actual_status === 'busy' ? Minus :
                                      UserX;
+
+                    const getStatusColor = (status) => {
+                      switch (status) {
+                        case 'online': return 'text-success-500';
+                        case 'away': return 'text-warning-500';
+                        case 'busy': return 'text-orange-500';
+                        default: return 'text-secondary-400';
+                      }
+                    };
+
+                    const getStatusBgColor = (status) => {
+                      switch (status) {
+                        case 'online': return 'bg-success-500';
+                        case 'away': return 'bg-warning-500';
+                        case 'busy': return 'bg-orange-500';
+                        default: return 'bg-secondary-400';
+                      }
+                    };
+
+                    const getLastSeenText = (lastSeen) => {
+                      if (!lastSeen) return 'Never';
+                      const now = new Date();
+                      const lastSeenDate = new Date(lastSeen);
+                      const diffMs = now - lastSeenDate;
+                      const diffMins = Math.floor(diffMs / (1000 * 60));
+
+                      if (diffMins < 1) return 'Just now';
+                      if (diffMins < 60) return `${diffMins}m ago`;
+                      const diffHours = Math.floor(diffMins / 60);
+                      if (diffHours < 24) return `${diffHours}h ago`;
+                      const diffDays = Math.floor(diffHours / 24);
+                      return `${diffDays}d ago`;
+                    };
 
                     return (
                       <div
                         key={user.id}
                         className={cn(
-                          'p-3 rounded-lg border transition-all duration-200 hover:shadow-md',
+                          'p-3 rounded-lg border transition-all duration-200 hover:shadow-md relative',
                           darkMode
                             ? 'bg-secondary-700 border-secondary-600 hover:bg-secondary-600'
                             : 'bg-secondary-50 border-secondary-200 hover:bg-secondary-100'
                         )}
                       >
+                        {/* Status indicator in top-right corner */}
+                        <div className={cn(
+                          'absolute top-2 right-2 w-3 h-3 rounded-full border-2',
+                          getStatusBgColor(user.actual_status),
+                          darkMode ? 'border-secondary-700' : 'border-secondary-50'
+                        )} />
+
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center space-x-2">
                             <StatusIcon className={cn(
                               'w-4 h-4 flex-shrink-0',
-                              user.actual_status === 'online' ? 'text-success-500' :
-                              user.actual_status === 'away' ? 'text-warning-500' :
-                              'text-secondary-400'
+                              getStatusColor(user.actual_status)
                             )} />
                             <div className={cn(
                               'w-2 h-2 rounded-full flex-shrink-0',
-                              user.actual_status === 'online' ? 'bg-success-500' :
-                              user.actual_status === 'away' ? 'bg-warning-500' :
-                              'bg-secondary-400'
+                              getStatusBgColor(user.actual_status)
                             )} />
                           </div>
                           {user.role === 'admin' && (
@@ -1099,36 +1148,60 @@ const EnhancedSystemTab = ({ systemStatus, darkMode, systemHealth }) => {
                             Extension: {user.extension}
                           </div>
                           <div className={cn(
-                            'text-xs capitalize',
-                            user.actual_status === 'online' ? 'text-success-600' :
-                            user.actual_status === 'away' ? 'text-warning-600' :
-                            'text-secondary-500'
+                            'text-xs capitalize font-medium',
+                            getStatusColor(user.actual_status)
                           )}>
                             {user.actual_status}
                           </div>
-                        </div>
-
-                        {user.ws_connected && (
                           <div className={cn(
-                            'text-xs mt-2 flex items-center space-x-1 pt-2 border-t border-opacity-50',
-                            darkMode ? 'text-secondary-400 border-secondary-600' : 'text-secondary-600 border-secondary-300'
-                          )}>
-                            <Wifi className="w-3 h-3" />
-                            <span>WebSocket Connected</span>
-                            {user.client_count > 0 && (
-                              <span className="font-medium">({user.client_count})</span>
-                            )}
-                          </div>
-                        )}
-
-                        {user.last_seen && (
-                          <div className={cn(
-                            'text-xs mt-1',
+                            'text-xs',
                             darkMode ? 'text-secondary-500' : 'text-secondary-500'
                           )}>
-                            Last seen: {new Date(user.last_seen).toLocaleString()}
+                            Last seen: {getLastSeenText(user.last_seen)}
                           </div>
-                        )}
+                        </div>
+
+                        {/* Connection status and additional info */}
+                        <div className="mt-2 pt-2 border-t border-opacity-50 border-secondary-300 dark:border-secondary-600">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              {user.ws_connected ? (
+                                <div className={cn(
+                                  'flex items-center space-x-1 text-xs',
+                                  darkMode ? 'text-success-400' : 'text-success-600'
+                                )}>
+                                  <Wifi className="w-3 h-3" />
+                                  <span>Connected</span>
+                                  {user.client_count > 1 && (
+                                    <span className="text-xs opacity-75">({user.client_count})</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className={cn(
+                                  'flex items-center space-x-1 text-xs',
+                                  darkMode ? 'text-secondary-500' : 'text-secondary-500'
+                                )}>
+                                  <XCircle className="w-3 h-3" />
+                                  <span>Disconnected</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Status badge */}
+                            <div className={cn(
+                              'px-2 py-1 rounded-full text-xs font-medium',
+                              user.actual_status === 'online'
+                                ? 'bg-success-100 text-success-700 dark:bg-success-900/30 dark:text-success-400'
+                                : user.actual_status === 'away'
+                                ? 'bg-warning-100 text-warning-700 dark:bg-warning-900/30 dark:text-warning-400'
+                                : user.actual_status === 'busy'
+                                ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                                : 'bg-secondary-100 text-secondary-700 dark:bg-secondary-800 dark:text-secondary-400'
+                            )}>
+                              {user.actual_status}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     );
                   })}

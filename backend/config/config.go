@@ -160,11 +160,12 @@ func (c *Config) resolveAsteriskHost() string {
 
 	// List of possible Asterisk hosts to try if not explicitly set
 	candidates := []string{
+		"localhost",
+		"127.0.0.1",
 		"asterisk.local",
 		"asterisk",
 		"voip-asterisk",
-		"172.20.10.5", // Updated to your new Asterisk IP
-		"172.20.10.5", // Old fallback
+		"172.20.10.5", // Legacy fallback
 	}
 
 	for _, host := range candidates {
@@ -175,8 +176,10 @@ func (c *Config) resolveAsteriskHost() string {
 		}
 	}
 
-	// If nothing works, return the first candidate
-	return "172.20.10.5"
+	// If nothing works, default to localhost for development
+	log.Printf("[Config] ⚠ No Asterisk host reachable, defaulting to localhost")
+	log.Printf("[Config] Please ensure Asterisk is installed and running, or configure ASTERISK_HOST")
+	return "localhost"
 }
 
 // getPublicHost determines the best public host for frontend connections

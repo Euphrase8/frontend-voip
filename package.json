@@ -40,6 +40,7 @@
     "framer-motion": "^12.23.0",
     "jssip": "^3.10.1",
     "lucide-react": "^0.509.0",
+    "node-fetch": "^3.3.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-hot-toast": "^2.5.2",
@@ -59,7 +60,17 @@
     "discover-asterisk": "node scripts/configure-asterisk.js discover",
     "show-config": "node scripts/configure-asterisk.js show",
     "check-errors": "node scripts/fix-errors.js check",
-    "fix-errors": "node scripts/fix-errors.js fix"
+    "fix-errors": "node scripts/fix-errors.js fix",
+    "test-asterisk": "node scripts/test-asterisk-connection.js",
+    "test-backend": "node scripts/test-backend-health.js",
+    "update-status": "node scripts/update-system-status.js",
+    "health-check": "npm run test-asterisk && npm run test-backend",
+    "status": "node scripts/force-status-refresh.js",
+    "test-health-service": "node scripts/test-system-health-service.js",
+    "fix-admin": "node scripts/fix-admin-dashboard.js",
+    "diagnose-health": "node scripts/diagnose-unhealthy-status.js",
+    "test-stability": "node scripts/test-stable-health.js",
+    "health-improvements": "node scripts/system-health-improvements.js"
   },
   "eslintConfig": {
     "extends": [

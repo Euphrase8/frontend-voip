@@ -25,11 +25,51 @@ func main() {
 	// Initialize WebSocket hub
 	websocket.InitHub()
 
-	// Initialize Asterisk AMI connection
-	if err := asterisk.InitAMI(); err != nil {
-		log.Printf("Warning: Failed to initialize AMI connection: %v", err)
-		log.Println("Call functionality may be limited")
+	// Set up the user disconnect callback
+	hub := websocket.GetHub()
+	if hub != nil {
+		hub.OnUserDisconnect = handlers.SetUserOfflineByExtension
 	}
+
+	// Start background status cleanup
+	go func() {
+		ticker := time.NewTicker(2 * time.Minute) // Run every 2 minutes
+		defer ticker.Stop()
+
+		for range ticker.C {
+			handlers.CleanupStaleUsers()
+		}
+	}()
+
+	// Initialize Asterisk AMI connection asynchronously with timeout
+	go func() {
+		// Wait a bit for the server to start first
+		time.Sleep(2 * time.Second)
+
+		log.Println("Starting AMI connection initialization...")
+
+		// Create a channel to receive the result
+		done := make(chan error, 1)
+
+		// Run AMI initialization in a separate goroutine
+		go func() {
+			done <- asterisk.InitAMI()
+		}()
+
+		// Wait for initialization or timeout
+		select {
+		case err := <-done:
+			if err != nil {
+				log.Printf("Warning: Failed to initialize AMI connection: %v", err)
+				log.Println("Call functionality may be limited. Will retry in background.")
+			} else {
+				log.Println("AMI connection initialized successfully")
+			}
+		case <-time.After(8 * time.Second):
+			log.Println("Warning: AMI initialization timed out after 8 seconds")
+			log.Println("Call functionality may be limited. Will retry in background.")
+		}
+	}()
 
 	// Set Gin mode
 	if !config.AppConfig.Debug {
@@ -157,15 +197,46 @@ func main() {
 		protected.GET("/diagnostics", handlers.GetSystemDiagnostics)
 		protected.GET("/test-asterisk", handlers.TestAsteriskConnections)
 
+		// System Health endpoints (accessible to all authenticated users)
+		protected.GET("/health", handlers.GetFastSystemHealth)
+		protected.GET("/health/detailed", handlers.GetSystemHealth)
+
+		// Debug endpoint to check user authentication and role
+		protected.GET("/debug/auth", func(c *gin.Context) {
+			userID, exists1 := c.Get("user_id")
+			username, exists2 := c.Get("username")
+			extension, exists3 := c.Get("extension")
+			role, exists4 := c.Get("role")
+
+			c.JSON(200, gin.H{
+				"success": true,
+				"auth_info": gin.H{
+					"user_id_exists":   exists1,
+					"username_exists":  exists2,
+					"extension_exists": exists3,
+					"role_exists":      exists4,
+					"user_id":          userID,
+					"username":         username,
+					"extension":        extension,
+					"role":             role,
+					"is_admin":         role == "admin",
+				},
+			})
+		})
+
 		// Admin routes
 		admin := protected.Group("/admin")
 		admin.Use(middleware.AdminMiddleware())
 		{
 			admin.GET("/users", handlers.GetUsers)
+			admin.POST("/users", handlers.CreateUser)
+			admin.PUT("/users/:id", handlers.UpdateUser)
 			admin.DELETE("/users/:id", handlers.DeleteUser)
 			admin.GET("/stats", handlers.GetSystemStats)
 			admin.DELETE("/call-logs/:id", handlers.DeleteCallLog)
 			admin.DELETE("/call-logs/bulk-delete", handlers.BulkDeleteCallLogs)
+			admin.DELETE("/call-logs/clear-all", handlers.ClearAllCallLogs)
+			admin.DELETE("/call-logs/bulk-delete-filter", handlers.BulkDeleteCallLogsByFilter)
 			admin.GET("/export/call-logs", handlers.ExportCallLogs)
 			admin.GET("/metrics/realtime", handlers.GetRealTimeMetrics)
 

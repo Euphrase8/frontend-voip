@@ -183,11 +183,32 @@ func (c *Client) handleMessage(msg Message) {
 	case "user_status":
 		// Handle user status updates
 		statusMsg := Message{
-			Type:   "user_status",
-			From:   c.Extension,
-			Status: msg.Status,
+			Type:      "user_status",
+			From:      c.Extension,
+			Status:    msg.Status,
+			Timestamp: time.Now().Unix(),
 		}
 		c.hub.BroadcastMessage(statusMsg)
+
+	case "user_online":
+		// Handle user coming online
+		onlineMsg := Message{
+			Type:      "user_status_changed",
+			From:      c.Extension,
+			Status:    "online",
+			Timestamp: time.Now().Unix(),
+		}
+		c.hub.BroadcastMessage(onlineMsg)
+
+	case "user_offline":
+		// Handle user going offline
+		offlineMsg := Message{
+			Type:      "user_status_changed",
+			From:      c.Extension,
+			Status:    "offline",
+			Timestamp: time.Now().Unix(),
+		}
+		c.hub.BroadcastMessage(offlineMsg)
 
 	// WebRTC message types
 	case "webrtc_call_accepted":

@@ -356,14 +356,18 @@ class AdminService {
         body: JSON.stringify(userData),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        // Extract error message from response
+        const errorMessage = data.error || `HTTP error! status: ${response.status}`;
+        throw new Error(errorMessage);
       }
 
-      const data = await response.json();
       return data;
     } catch (error) {
       console.error('Failed to create user:', error);
+      // Re-throw with original message if it's already a proper error
       throw error;
     }
   }
@@ -377,14 +381,18 @@ class AdminService {
         body: JSON.stringify(userData),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        // Extract error message from response
+        const errorMessage = data.error || `HTTP error! status: ${response.status}`;
+        throw new Error(errorMessage);
       }
 
-      const data = await response.json();
       return data;
     } catch (error) {
       console.error('Failed to update user:', error);
+      // Re-throw with original message if it's already a proper error
       throw error;
     }
   }

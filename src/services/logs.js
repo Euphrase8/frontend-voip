@@ -134,6 +134,39 @@ export const bulkDeleteCallLogs = async (logIds) => {
   }
 };
 
+// Clear all call logs (admin only)
+export const clearAllCallLogs = async () => {
+  try {
+    const token = getToken();
+    const response = await axios.delete(`${API_URL}/protected/admin/call-logs/clear-all?confirm=true`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error clearing all call logs:", error);
+    throw error;
+  }
+};
+
+// Bulk delete call logs by filter (admin only)
+export const bulkDeleteCallLogsByFilter = async (filters) => {
+  try {
+    const token = getToken();
+    const response = await axios.delete(`${API_URL}/protected/admin/call-logs/bulk-delete-filter`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      data: filters
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error bulk deleting call logs by filter:", error);
+    throw error;
+  }
+};
+
 // Export call logs (admin only)
 export const exportCallLogs = async (format = 'csv') => {
   try {

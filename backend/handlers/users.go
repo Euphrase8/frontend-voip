@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -10,6 +12,7 @@ import (
 	"voip-backend/websocket"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -389,14 +392,28 @@ func UpdateUserStatus(c *gin.Context) {
 	// Broadcast status change to other users
 	hub := websocket.GetHub()
 	if hub != nil {
-		hub.BroadcastMessage(gin.H{
+		// Broadcast comprehensive status update
+		statusUpdate := gin.H{
 			"type":      "user_status_changed",
 			"user_id":   user.ID,
 			"username":  user.Username,
 			"extension": user.Extension,
 			"status":    user.Status,
 			"is_online": user.IsOnline,
-		})
+			"last_seen": user.LastSeen,
+			"timestamp": time.Now().Unix(),
+		}
+
+		// Add WebSocket connection info
+		if extensionStatus := hub.GetExtensionStatus(user.Extension); extensionStatus != nil {
+			statusUpdate["ws_connected"] = extensionStatus["ws_connected"]
+			statusUpdate["client_count"] = extensionStatus["client_count"]
+		}
+
+		hub.BroadcastMessage(statusUpdate)
+
+		// Also notify the specific user's extension
+		hub.NotifyUserStatus(user.Extension, user.Status)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -416,9 +433,41 @@ func HeartbeatUser(c *gin.Context) {
 		return
 	}
 
-	// Update last_seen timestamp
+	// Get user extension for WebSocket status check
+	userIDUint, ok := userID.(uint)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Invalid user ID",
+		})
+		return
+	}
+
+	// Get user info
+	var user models.User
+	if err := database.GetDB().First(&user, userIDUint).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to fetch user",
+		})
+		return
+	}
+
+	// Update last_seen timestamp and ensure user is marked as online if they have WebSocket connection
 	now := time.Now()
-	if err := database.GetDB().Model(&models.User{}).Where("id = ?", userID).Update("last_seen", now).Error; err != nil {
+	updates := map[string]interface{}{
+		"last_seen": now,
+	}
+
+	// Check if user has active WebSocket connection
+	hub := websocket.GetHub()
+	if hub != nil && hub.IsExtensionConnected(user.Extension) {
+		// User has active WebSocket connection, ensure they're marked as online
+		if user.Status == "offline" {
+			updates["status"] = "online"
+			updates["is_online"] = true
+		}
+	}
+
+	if err := database.GetDB().Model(&models.User{}).Where("id = ?", userID).Updates(updates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to update heartbeat",
 		})
@@ -428,5 +477,336 @@ func HeartbeatUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success":   true,
 		"timestamp": now,
+		"status":    user.Status,
+		"is_online": user.IsOnline,
 	})
+}
+
+// SetUserOfflineByExtension sets a user offline by their extension (called from WebSocket disconnect)
+func SetUserOfflineByExtension(extension string) error {
+	if extension == "" {
+		return fmt.Errorf("extension cannot be empty")
+	}
+
+	// Find user by extension
+	var user models.User
+	if err := database.GetDB().Where("extension = ?", extension).First(&user).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			log.Printf("User with extension %s not found", extension)
+			return nil // Not an error if user doesn't exist
+		}
+		return fmt.Errorf("failed to find user: %v", err)
+	}
+
+	// Update user status to offline
+	now := time.Now()
+	updates := map[string]interface{}{
+		"status":    "offline",
+		"is_online": false,
+		"last_seen": now,
+	}
+
+	if err := database.GetDB().Model(&user).Updates(updates).Error; err != nil {
+		return fmt.Errorf("failed to update user status: %v", err)
+	}
+
+	log.Printf("Set user %s (extension: %s) offline due to WebSocket disconnection", user.Username, extension)
+
+	// Broadcast status change to other users
+	hub := websocket.GetHub()
+	if hub != nil {
+		statusUpdate := gin.H{
+			"type":         "user_status_changed",
+			"user_id":      user.ID,
+			"username":     user.Username,
+			"extension":    user.Extension,
+			"status":       "offline",
+			"is_online":    false,
+			"last_seen":    now,
+			"timestamp":    time.Now().Unix(),
+			"ws_connected": false,
+			"client_count": 0,
+		}
+
+		hub.BroadcastMessage(statusUpdate)
+	}
+
+	return nil
+}
+
+// CreateUser creates a new user (admin only)
+func CreateUser(c *gin.Context) {
+	var req struct {
+		Username  string `json:"username" binding:"required,min=3,max=50"`
+		Email     string `json:"email" binding:"required,email"`
+		Password  string `json:"password" binding:"required,min=6"`
+		Extension string `json:"extension" binding:"required,min=4,max=6"`
+		Role      string `json:"role"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request format",
+		})
+		return
+	}
+
+	// Validate role
+	if req.Role == "" {
+		req.Role = "user"
+	}
+	if req.Role != "user" && req.Role != "admin" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Role must be 'user' or 'admin'",
+		})
+		return
+	}
+
+	// Check if username already exists
+	var existingUser models.User
+	if err := database.GetDB().Where("username = ?", req.Username).First(&existingUser).Error; err == nil {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "Username already exists",
+		})
+		return
+	}
+
+	// Check if email already exists
+	if err := database.GetDB().Where("email = ?", req.Email).First(&existingUser).Error; err == nil {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "Email already exists",
+		})
+		return
+	}
+
+	// Check if extension already exists
+	if err := database.GetDB().Where("extension = ?", req.Extension).First(&existingUser).Error; err == nil {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "Extension already exists",
+		})
+		return
+	}
+
+	// Hash password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to hash password",
+		})
+		return
+	}
+
+	// Create new user
+	user := models.User{
+		Username:  req.Username,
+		Email:     req.Email,
+		Password:  string(hashedPassword),
+		Extension: req.Extension,
+		Status:    "offline",
+		Role:      req.Role,
+		IsOnline:  false,
+	}
+
+	if err := database.GetDB().Create(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to create user",
+		})
+		return
+	}
+
+	log.Printf("Admin created new user: %s (extension: %s, role: %s)", user.Username, user.Extension, user.Role)
+
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"message": "User created successfully",
+		"user":    user.ToResponse(),
+	})
+}
+
+// UpdateUser updates an existing user (admin only)
+func UpdateUser(c *gin.Context) {
+	userIDParam := c.Param("id")
+	userID, err := strconv.ParseUint(userIDParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid user ID",
+		})
+		return
+	}
+
+	var req struct {
+		Username  string `json:"username"`
+		Email     string `json:"email"`
+		Extension string `json:"extension"`
+		Role      string `json:"role"`
+		Status    string `json:"status"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request format",
+		})
+		return
+	}
+
+	// Find the user
+	var user models.User
+	if err := database.GetDB().First(&user, uint(userID)).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "User not found",
+			})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Database error",
+			})
+		}
+		return
+	}
+
+	// Prepare updates
+	updates := make(map[string]interface{})
+
+	if req.Username != "" && req.Username != user.Username {
+		// Check if new username already exists
+		var existingUser models.User
+		if err := database.GetDB().Where("username = ? AND id != ?", req.Username, userID).First(&existingUser).Error; err == nil {
+			c.JSON(http.StatusConflict, gin.H{
+				"error": "Username already exists",
+			})
+			return
+		}
+		updates["username"] = req.Username
+	}
+
+	if req.Email != "" && req.Email != user.Email {
+		// Check if new email already exists
+		var existingUser models.User
+		if err := database.GetDB().Where("email = ? AND id != ?", req.Email, userID).First(&existingUser).Error; err == nil {
+			c.JSON(http.StatusConflict, gin.H{
+				"error": "Email already exists",
+			})
+			return
+		}
+		updates["email"] = req.Email
+	}
+
+	if req.Extension != "" && req.Extension != user.Extension {
+		// Check if new extension already exists
+		var existingUser models.User
+		if err := database.GetDB().Where("extension = ? AND id != ?", req.Extension, userID).First(&existingUser).Error; err == nil {
+			c.JSON(http.StatusConflict, gin.H{
+				"error": "Extension already exists",
+			})
+			return
+		}
+		updates["extension"] = req.Extension
+	}
+
+	if req.Role != "" && req.Role != user.Role {
+		if req.Role != "user" && req.Role != "admin" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Role must be 'user' or 'admin'",
+			})
+			return
+		}
+		updates["role"] = req.Role
+	}
+
+	if req.Status != "" && req.Status != user.Status {
+		validStatuses := map[string]bool{
+			"online":  true,
+			"offline": true,
+			"busy":    true,
+			"away":    true,
+		}
+		if !validStatuses[req.Status] {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Invalid status. Must be one of: online, offline, busy, away",
+			})
+			return
+		}
+		updates["status"] = req.Status
+		if req.Status == "online" {
+			updates["is_online"] = true
+		} else if req.Status == "offline" {
+			updates["is_online"] = false
+		}
+	}
+
+	// Apply updates if any
+	if len(updates) > 0 {
+		if err := database.GetDB().Model(&user).Updates(updates).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to update user",
+			})
+			return
+		}
+
+		// Reload user to get updated data
+		if err := database.GetDB().First(&user, uint(userID)).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to reload user data",
+			})
+			return
+		}
+
+		log.Printf("Admin updated user: %s (ID: %d)", user.Username, user.ID)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "User updated successfully",
+		"user":    user.ToResponse(),
+	})
+}
+
+// CleanupStaleUsers sets users offline if they haven't been seen recently and have no WebSocket connection
+func CleanupStaleUsers() {
+	log.Println("Running status cleanup...")
+
+	// Define stale threshold (5 minutes without activity)
+	staleThreshold := time.Now().Add(-5 * time.Minute)
+
+	// Get all users who are marked as online but haven't been seen recently
+	var staleUsers []models.User
+	if err := database.GetDB().Where(
+		"(status = ? OR is_online = ?) AND (last_seen IS NULL OR last_seen < ?)",
+		"online", true, staleThreshold,
+	).Find(&staleUsers).Error; err != nil {
+		log.Printf("Error fetching stale users: %v", err)
+		return
+	}
+
+	hub := websocket.GetHub()
+	if hub == nil {
+		log.Println("WebSocket hub not available for status cleanup")
+		return
+	}
+
+	cleanedCount := 0
+	for _, user := range staleUsers {
+		// Check if user has active WebSocket connection
+		if hub.IsExtensionConnected(user.Extension) {
+			// User has active connection, update their last_seen
+			now := time.Now()
+			if err := database.GetDB().Model(&user).Update("last_seen", now).Error; err != nil {
+				log.Printf("Error updating last_seen for user %s: %v", user.Username, err)
+			}
+			continue
+		}
+
+		// User has no active connection and is stale, set them offline
+		if err := SetUserOfflineByExtension(user.Extension); err != nil {
+			log.Printf("Error setting user %s offline during cleanup: %v", user.Username, err)
+			continue
+		}
+
+		cleanedCount++
+		log.Printf("Set stale user %s (extension: %s) offline", user.Username, user.Extension)
+	}
+
+	if cleanedCount > 0 {
+		log.Printf("Status cleanup completed: %d users set offline", cleanedCount)
+	}
 }

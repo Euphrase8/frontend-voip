@@ -143,21 +143,8 @@ func GetFastSystemHealth(c *gin.Context) {
 		}
 	}
 
-	// Quick Asterisk check (without AMI command)
-	client := asterisk.GetAMIClient()
-	if client != nil {
-		health.Services["asterisk"] = ServiceInfo{
-			Status:       "healthy",
-			LastCheck:    time.Now(),
-			ResponseTime: 0,
-		}
-	} else {
-		health.Services["asterisk"] = ServiceInfo{
-			Status:    "warning",
-			Error:     "AMI client not available",
-			LastCheck: time.Now(),
-		}
-	}
+	// Real-time Asterisk check with AMI command
+	health.Services["asterisk"] = checkAsteriskHealthRealTime()
 
 	// Get real system metrics (lightweight version)
 	health.SystemMetrics = getSystemMetrics()
@@ -298,7 +285,59 @@ func GetSystemHealth(c *gin.Context) {
 	})
 }
 
-// Check Asterisk service health
+// Check Asterisk service health with real-time AMI test (fast version)
+func checkAsteriskHealthRealTime() ServiceInfo {
+	startTime := time.Now()
+	service := ServiceInfo{
+		LastCheck: startTime,
+		Details:   make(map[string]interface{}),
+	}
+
+	// Check AMI connection
+	client := asterisk.GetAMIClient()
+	if client == nil {
+		service.Status = "unhealthy"
+		service.Error = "AMI client not initialized - connection to Asterisk server failed"
+		service.ResponseTime = time.Since(startTime).Milliseconds()
+		service.Details["asterisk_host"] = "172.20.10.5:5038"
+		service.Details["connection_status"] = "failed"
+		return service
+	}
+
+	// Check if client is connected
+	if !client.IsConnected() {
+		service.Status = "unhealthy"
+		service.Error = "AMI client not connected"
+		service.Details["ami_connected"] = false
+		service.Details["last_ping"] = client.GetLastPing().Format(time.RFC3339)
+		service.ResponseTime = time.Since(startTime).Milliseconds()
+		return service
+	}
+
+	// Quick AMI test with timeout
+	response, err := client.SendCommand("Ping", nil)
+	if err != nil {
+		service.Status = "unhealthy"
+		service.Error = fmt.Sprintf("AMI ping failed: %v", err)
+		service.Details["ami_connected"] = false
+	} else if !response.Success {
+		service.Status = "warning"
+		service.Error = "AMI ping returned error"
+		service.Details["ami_connected"] = true
+		service.Details["ping_error"] = response.Error
+	} else {
+		service.Status = "healthy"
+		service.Details["ami_connected"] = true
+		service.Details["ping_success"] = true
+		service.Details["last_ping"] = time.Now().Format(time.RFC3339)
+		service.Details["response_time_ms"] = time.Since(startTime).Milliseconds()
+	}
+
+	service.ResponseTime = time.Since(startTime).Milliseconds()
+	return service
+}
+
+// Check Asterisk service health (comprehensive version)
 func checkAsteriskHealth() ServiceInfo {
 	startTime := time.Now()
 	service := ServiceInfo{
@@ -309,20 +348,22 @@ func checkAsteriskHealth() ServiceInfo {
 	// Check AMI connection
 	client := asterisk.GetAMIClient()
 	if client == nil {
-		// Try to initialize AMI connection
-		if err := asterisk.InitAMI(); err != nil {
-			service.Status = "unhealthy"
-			service.Error = "AMI client not available: " + err.Error()
-			service.ResponseTime = time.Since(startTime).Milliseconds()
-			return service
-		}
-		client = asterisk.GetAMIClient()
-		if client == nil {
-			service.Status = "unhealthy"
-			service.Error = "AMI client initialization failed"
-			service.ResponseTime = time.Since(startTime).Milliseconds()
-			return service
-		}
+		service.Status = "unhealthy"
+		service.Error = "AMI client not initialized - connection to Asterisk server failed"
+		service.ResponseTime = time.Since(startTime).Milliseconds()
+		service.Details["asterisk_host"] = "172.20.10.5:5038"
+		service.Details["connection_status"] = "failed"
+		return service
+	}
+
+	// Check if client is connected
+	if !client.IsConnected() {
+		service.Status = "unhealthy"
+		service.Error = "AMI client not connected"
+		service.Details["ami_connected"] = false
+		service.Details["last_ping"] = client.GetLastPing().Format(time.RFC3339)
+		service.ResponseTime = time.Since(startTime).Milliseconds()
+		return service
 	}
 
 	// Test AMI command

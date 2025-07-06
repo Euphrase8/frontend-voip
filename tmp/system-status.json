@@ -1,0 +1,45 @@
+{
+  "timestamp": "2025-07-06T12:15:11.791Z",
+  "overall_status": "healthy",
+  "services": {
+    "asterisk": {
+      "status": "healthy",
+      "host": "172.20.10.5",
+      "ami_port": 5038,
+      "websocket_port": 8088,
+      "last_check": "2025-07-06T12:15:11.792Z",
+      "details": {
+        "ami_connected": true,
+        "core_status": "running",
+        "endpoints_configured": 6,
+        "manager_users": 3
+      }
+    },
+    "backend": {
+      "status": "healthy",
+      "host": "172.20.10.4",
+      "port": 8080,
+      "last_check": "2025-07-06T12:15:11.792Z"
+    },
+    "database": {
+      "status": "healthy",
+      "type": "sqlite",
+      "last_check": "2025-07-06T12:15:11.792Z"
+    },
+    "websocket": {
+      "status": "healthy",
+      "last_check": "2025-07-06T12:15:11.792Z"
+    }
+  },
+  "network": {
+    "asterisk_reachable": true,
+    "ami_port_open": true,
+    "websocket_port_open": true
+  },
+  "configuration": {
+    "asterisk_configured": true,
+    "endpoints_ready": true,
+    "manager_users_configured": true
+  },
+  "last_update": "2025-07-06T12:15:11.792Z"
+}

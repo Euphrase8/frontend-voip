@@ -24,6 +24,9 @@ type Hub struct {
 	// Extension to multiple clients mapping (supports multiple devices per extension)
 	extensionClients map[string][]*Client
 	mutex            sync.RWMutex
+
+	// Callback for when user disconnects (to update database)
+	OnUserDisconnect func(extension string) error
 }
 
 // Message represents a WebSocket message
@@ -104,9 +107,11 @@ func (h *Hub) Run() {
 							break
 						}
 					}
-					// If no more clients for this extension, remove the entry
+					// If no more clients for this extension, remove the entry and set user offline
 					if len(h.extensionClients[client.Extension]) == 0 {
 						delete(h.extensionClients, client.Extension)
+						// Set user offline in database and broadcast status change
+						go h.SetUserOfflineOnDisconnect(client.Extension)
 					}
 					log.Printf("Client unregistered: %s (extension: %s) - Remaining clients for extension: %d",
 						client.ID, client.Extension, len(h.extensionClients[client.Extension]))
@@ -336,4 +341,48 @@ func (h *Hub) NotifyUserStatus(extension, status string) error {
 	}
 
 	return h.BroadcastMessage(statusMsg)
+}
+
+// SetUserOfflineOnDisconnect sets a user offline when they disconnect
+func (h *Hub) SetUserOfflineOnDisconnect(extension string) {
+	if extension == "" {
+		return
+	}
+
+	log.Printf("Setting user %s offline due to WebSocket disconnection", extension)
+
+	// Call the callback function to update database if available
+	if h.OnUserDisconnect != nil {
+		if err := h.OnUserDisconnect(extension); err != nil {
+			log.Printf("Error setting user %s offline: %v", extension, err)
+		}
+	} else {
+		// Fallback: just broadcast the status change
+		h.NotifyUserStatus(extension, "offline")
+	}
+}
+
+// GetExtensionStatus returns detailed status for an extension
+func (h *Hub) GetExtensionStatus(extension string) map[string]interface{} {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+
+	clients, exists := h.extensionClients[extension]
+	status := map[string]interface{}{
+		"extension":    extension,
+		"ws_connected": exists && len(clients) > 0,
+		"client_count": 0,
+		"clients":      []string{},
+	}
+
+	if exists {
+		status["client_count"] = len(clients)
+		clientIDs := make([]string, len(clients))
+		for i, client := range clients {
+			clientIDs[i] = client.ID
+		}
+		status["clients"] = clientIDs
+	}
+
+	return status
 }

@@ -906,6 +906,135 @@ func BulkDeleteCallLogs(c *gin.Context) {
 	})
 }
 
+// ClearAllCallLogs deletes all call logs (admin only)
+func ClearAllCallLogs(c *gin.Context) {
+	// Optional: Add confirmation parameter
+	confirm := c.Query("confirm")
+	if confirm != "true" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "This action requires confirmation. Add ?confirm=true to proceed.",
+		})
+		return
+	}
+
+	// Count logs before deletion for reporting
+	var totalCount int64
+	if err := database.GetDB().Model(&models.CallLog{}).Count(&totalCount).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to count call logs",
+		})
+		return
+	}
+
+	// Delete all call logs
+	result := database.GetDB().Where("1 = 1").Delete(&models.CallLog{})
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to clear all call logs",
+		})
+		return
+	}
+
+	log.Printf("Admin cleared all call logs: %d logs deleted", totalCount)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":       true,
+		"message":       fmt.Sprintf("Successfully cleared all call logs (%d logs deleted)", totalCount),
+		"deleted_count": totalCount,
+	})
+}
+
+// BulkDeleteCallLogsByFilter deletes call logs based on filters (admin only)
+func BulkDeleteCallLogsByFilter(c *gin.Context) {
+	var req struct {
+		Status    string `json:"status"`     // Filter by status
+		Direction string `json:"direction"`  // Filter by direction (incoming/outgoing)
+		DateFrom  string `json:"date_from"`  // Filter from date (YYYY-MM-DD)
+		DateTo    string `json:"date_to"`    // Filter to date (YYYY-MM-DD)
+		CallerID  uint   `json:"caller_id"`  // Filter by caller ID
+		CalleeID  uint   `json:"callee_id"`  // Filter by callee ID
+		OlderThan int    `json:"older_than"` // Delete logs older than X days
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request format: " + err.Error(),
+		})
+		return
+	}
+
+	// Build query based on filters
+	query := database.GetDB().Model(&models.CallLog{})
+
+	if req.Status != "" {
+		query = query.Where("status = ?", req.Status)
+	}
+
+	if req.Direction != "" {
+		query = query.Where("direction = ?", req.Direction)
+	}
+
+	if req.DateFrom != "" {
+		if dateFrom, err := time.Parse("2006-01-02", req.DateFrom); err == nil {
+			query = query.Where("DATE(created_at) >= ?", dateFrom)
+		}
+	}
+
+	if req.DateTo != "" {
+		if dateTo, err := time.Parse("2006-01-02", req.DateTo); err == nil {
+			query = query.Where("DATE(created_at) <= ?", dateTo)
+		}
+	}
+
+	if req.CallerID > 0 {
+		query = query.Where("caller_id = ?", req.CallerID)
+	}
+
+	if req.CalleeID > 0 {
+		query = query.Where("callee_id = ?", req.CalleeID)
+	}
+
+	if req.OlderThan > 0 {
+		cutoffDate := time.Now().AddDate(0, 0, -req.OlderThan)
+		query = query.Where("created_at < ?", cutoffDate)
+	}
+
+	// Count logs that will be deleted
+	var count int64
+	if err := query.Count(&count).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to count matching call logs",
+		})
+		return
+	}
+
+	if count == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"success":       true,
+			"message":       "No call logs match the specified filters",
+			"deleted_count": 0,
+		})
+		return
+	}
+
+	// Delete matching logs
+	result := query.Delete(&models.CallLog{})
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to delete call logs",
+		})
+		return
+	}
+
+	log.Printf("Admin deleted %d call logs using filters: %+v", result.RowsAffected, req)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":       true,
+		"message":       fmt.Sprintf("Successfully deleted %d call logs", result.RowsAffected),
+		"deleted_count": result.RowsAffected,
+	})
+}
+
 // ExportCallLogs exports call logs in various formats (admin only)
 func ExportCallLogs(c *gin.Context) {
 	format := c.DefaultQuery("format", "csv")

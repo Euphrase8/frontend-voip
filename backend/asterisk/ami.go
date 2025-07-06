@@ -12,12 +12,17 @@ import (
 )
 
 type AMIClient struct {
-	conn     net.Conn
-	reader   *bufio.Reader
-	mutex    sync.Mutex
-	events   chan AMIEvent
-	commands chan AMICommand
-	quit     chan bool
+	conn           net.Conn
+	reader         *bufio.Reader
+	mutex          sync.Mutex
+	events         chan AMIEvent
+	commands       chan AMICommand
+	quit           chan bool
+	connected      bool
+	reconnecting   bool
+	lastPing       time.Time
+	reconnectMutex sync.Mutex
+	healthMutex    sync.RWMutex
 }
 
 type AMIEvent struct {
@@ -38,18 +43,74 @@ type AMIResponse struct {
 }
 
 var amiClient *AMIClient
+var amiMutex sync.Mutex
 
-// InitAMI initializes the AMI connection
+// InitAMI initializes the AMI connection with retry logic
 func InitAMI() error {
+	amiMutex.Lock()
+	defer amiMutex.Unlock()
+
+	log.Printf("Initializing AMI connection to %s:%s...", config.AppConfig.AsteriskHost, config.AppConfig.AsteriskAMIPort)
+
 	client, err := NewAMIClient()
 	if err != nil {
-		return fmt.Errorf("failed to create AMI client: %v", err)
+		log.Printf("Failed to create AMI client: %v", err)
+		log.Printf("AMI connection will be retried in background every 30 seconds")
+		log.Printf("VoIP functionality will be limited until Asterisk connection is established")
+
+		// Start background reconnection loop
+		go startReconnectionLoop()
+
+		// Don't return error - let the application start without AMI
+		return nil
 	}
 
 	amiClient = client
 	go amiClient.handleEvents()
+	go amiClient.startHealthMonitoring()
 
 	log.Println("AMI client initialized successfully")
+	return nil
+}
+
+// startReconnectionLoop continuously tries to reconnect
+func startReconnectionLoop() {
+	for {
+		time.Sleep(10 * time.Second) // Wait 10 seconds between attempts
+
+		if amiClient != nil && amiClient.IsConnected() {
+			return // Connection restored, exit loop
+		}
+
+		log.Println("Attempting to reconnect AMI...")
+		if err := reconnectAMI(); err != nil {
+			log.Printf("AMI reconnection failed: %v", err)
+		} else {
+			log.Println("AMI reconnection successful")
+			return
+		}
+	}
+}
+
+// reconnectAMI attempts to reconnect the AMI client
+func reconnectAMI() error {
+	amiMutex.Lock()
+	defer amiMutex.Unlock()
+
+	// Close existing connection if any
+	if amiClient != nil {
+		amiClient.Close()
+	}
+
+	client, err := NewAMIClient()
+	if err != nil {
+		return err
+	}
+
+	amiClient = client
+	go amiClient.handleEvents()
+	go amiClient.startHealthMonitoring()
+
 	return nil
 }
 
@@ -57,17 +118,20 @@ func InitAMI() error {
 func NewAMIClient() (*AMIClient, error) {
 	address := fmt.Sprintf("%s:%s", config.AppConfig.AsteriskHost, config.AppConfig.AsteriskAMIPort)
 
-	conn, err := net.DialTimeout("tcp", address, 10*time.Second)
+	log.Printf("Attempting to connect to Asterisk AMI at %s...", address)
+	conn, err := net.DialTimeout("tcp", address, 5*time.Second) // Reduced timeout to 5 seconds
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to Asterisk AMI: %v", err)
+		return nil, fmt.Errorf("failed to connect to Asterisk AMI at %s: %v", address, err)
 	}
 
 	client := &AMIClient{
-		conn:     conn,
-		reader:   bufio.NewReader(conn),
-		events:   make(chan AMIEvent, 100),
-		commands: make(chan AMICommand, 10),
-		quit:     make(chan bool),
+		conn:      conn,
+		reader:    bufio.NewReader(conn),
+		events:    make(chan AMIEvent, 100),
+		commands:  make(chan AMICommand, 10),
+		quit:      make(chan bool),
+		connected: false,
+		lastPing:  time.Now(),
 	}
 
 	// Read the initial greeting
@@ -85,6 +149,12 @@ func NewAMIClient() (*AMIClient, error) {
 	}
 
 	go client.handleConnection()
+
+	// Mark as connected after successful login
+	client.healthMutex.Lock()
+	client.connected = true
+	client.lastPing = time.Now()
+	client.healthMutex.Unlock()
 
 	log.Printf("Connected to Asterisk AMI at %s", address)
 	return client, nil
@@ -135,7 +205,17 @@ func (c *AMIClient) handleEvents() {
 		response, err := c.readResponse()
 		if err != nil {
 			log.Printf("Error reading AMI response: %v", err)
-			continue
+			// Mark as disconnected on read errors
+			c.healthMutex.Lock()
+			c.connected = false
+			c.healthMutex.Unlock()
+
+			// Trigger reconnection
+			go func() {
+				time.Sleep(5 * time.Second)
+				startReconnectionLoop()
+			}()
+			return
 		}
 
 		if response.Fields["Event"] != "" {
@@ -257,10 +337,77 @@ func (c *AMIClient) GetEvents() <-chan AMIEvent {
 	return c.events
 }
 
+// IsConnected returns the connection status
+func (c *AMIClient) IsConnected() bool {
+	c.healthMutex.RLock()
+	defer c.healthMutex.RUnlock()
+	return c.connected
+}
+
+// startHealthMonitoring monitors the connection health
+func (c *AMIClient) startHealthMonitoring() {
+	ticker := time.NewTicker(30 * time.Second) // Check every 30 seconds
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			c.performHealthCheck()
+		case <-c.quit:
+			return
+		}
+	}
+}
+
+// performHealthCheck sends a ping to verify connection
+func (c *AMIClient) performHealthCheck() {
+	if !c.IsConnected() {
+		return
+	}
+
+	// Send a simple ping command
+	_, err := c.SendCommand("Ping", nil)
+	if err != nil {
+		log.Printf("AMI health check failed: %v", err)
+		c.healthMutex.Lock()
+		c.connected = false
+		c.healthMutex.Unlock()
+
+		// Trigger reconnection
+		go func() {
+			time.Sleep(5 * time.Second)
+			startReconnectionLoop()
+		}()
+	} else {
+		c.healthMutex.Lock()
+		c.lastPing = time.Now()
+		c.healthMutex.Unlock()
+	}
+}
+
+// GetLastPing returns the last successful ping time
+func (c *AMIClient) GetLastPing() time.Time {
+	c.healthMutex.RLock()
+	defer c.healthMutex.RUnlock()
+	return c.lastPing
+}
+
 // Close closes the AMI connection
 func (c *AMIClient) Close() {
+	if c == nil {
+		return
+	}
+
+	c.healthMutex.Lock()
+	c.connected = false
+	c.healthMutex.Unlock()
+
+	select {
+	case c.quit <- true:
+	default:
+	}
+
 	if c.conn != nil {
-		c.quit <- true
 		c.conn.Close()
 	}
 }
